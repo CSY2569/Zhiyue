@@ -1,0 +1,12 @@
+# flutter_rust_bridge v2 configuration (v2.12 syntax)
+# Docs: https://cjycode.com/flutter_rust_bridge/v2/guides/develop
+#
+# Run codegen with:
+#   flutter_rust_bridge_codegen generate
+# Regenerates rust/src/frb_generated* and lib/src/rust/*.
+
+rust_root: rust/
+rust_input: crate::api
+dart_output: lib/src/rust
+rust_output: rust/src/frb_generated.rs
+dart_enums_style: true

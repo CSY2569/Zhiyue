@@ -1,0 +1,88 @@
+[package]
+name = "rbwa_core"
+version = "0.1.0"
+edition = "2021"
+description = "RBWA Rust core layer - PDF/OCR/AI/DB heavy lifting for the Flutter UI"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[lib]
+name = "rbwa_core"
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+# ---------------------------------------------------------------------------
+# Dependency strategy
+# ---------------------------------------------------------------------------
+# Skeleton stage: declare dependencies that are actually exercised by the
+# skeleton code (flutter_rust_bridge, rusqlite, tokio, anyhow, thiserror,
+# tracing, serde, dirs). Heavy subsystem crates (pdfium-render, async-openai,
+# jieba-rs, image) are declared here so they are pinned in the lockfile and
+# compile-checked, but are NOT deeply called yet -- real integration happens
+# per milestone (M2-M6). rapidocr-core is intentionally omitted until M5
+# because its API is still young; we will pin a version then.
+# ---------------------------------------------------------------------------
+
+[dependencies]
+# FFI bridge - version MUST match pubspec.yaml flutter_rust_bridge + codegen 2.12.0
+flutter_rust_bridge = "=2.12.0"
+
+# Async runtime
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "fs"] }
+tokio-stream = "0.1"
+futures-core = "0.3"
+
+# Database - bundled SQLite (WAL) + FTS5
+rusqlite = { version = "0.32", features = ["bundled", "blob"] }
+
+# PDF rendering / text extraction (M2)
+pdfium-render = { version = "0.9", features = ["image_latest", "thread_safe"], optional = true }
+
+# AI client - OpenAI-compatible streaming + vision (M4)
+async-openai = { version = "0.27", optional = true }
+
+# Chinese tokenization for FTS5 (M6)
+jieba-rs = { version = "0.7", optional = true }
+
+# Image processing - thumbnails (M2)
+image = { version = "0.25", optional = true }
+
+# HTTP - AI fallback / model download (M4/M5)
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"], optional = true }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Error handling
+anyhow = "1"
+thiserror = "2"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# App data directory resolution
+dirs = "5"
+
+# Misc
+once_cell = "1"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+[features]
+default = []
+# Opt-in subsystem crates, enabled per milestone to keep skeleton lean.
+pdf = ["dep:pdfium-render", "dep:image"]
+ai = ["dep:async-openai", "dep:reqwest"]
+search = ["dep:jieba-rs"]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[profile.dev]
+opt-level = 0
+debug = true
