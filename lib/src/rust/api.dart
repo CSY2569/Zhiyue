@@ -4,13 +4,14 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import 'frb_generated.dart';
+import 'models/ai.dart';
+import 'models/annotation.dart';
+import 'models/book.dart';
+import 'models/progress.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'pdf/types.dart';
 
-// These functions are ignored because they are not marked as `pub`: `try_init`
-
-/// Pipeline smoke test. Flutter calls this on startup to confirm the FRB
-/// bridge is wired correctly; the UI shows the returned string.
-Future<String> ping() => RustLib.instance.api.crateApiPing();
+// These functions are ignored because they are not marked as `pub`: `ai_client`, `builtin_search_stream`, `drain_stream`, `err`, `import_book_inner`, `ok`, `save_rgba_as_png`, `search_system_prompt`, `system_prompt_for`, `try_init_at`, `try_init`
 
 /// Crate version, surfaced in the About / settings UI.
 Future<String> appVersion() => RustLib.instance.api.crateApiAppVersion();
@@ -19,6 +20,13 @@ Future<String> appVersion() => RustLib.instance.api.crateApiAppVersion();
 /// other command. Opens SQLite, applies the schema (idempotent), and sets up
 /// tracing. Safe to call again; returns the cached result.
 Future<InitResult> initCore() => RustLib.instance.api.crateApiInitCore();
+
+/// Test hook: initialize the core against an explicit database path so
+/// integration tests never touch the user's real data (all test writes --
+/// books, annotations, AI config -- land in the isolated DB). Mirrors
+/// [init_core] otherwise. Not used in production.
+Future<InitResult> initCoreWithDbPath({required String dbPath}) =>
+    RustLib.instance.api.crateApiInitCoreWithDbPath(dbPath: dbPath);
 
 /// Read a setting value by key (skeleton: direct KV read).
 /// Returns empty string if the key is absent. Real subsystem repos wrap
@@ -37,12 +45,383 @@ Future<String?> getSetting({required String key}) =>
 Future<int> setSetting({required String key, required String value}) =>
     RustLib.instance.api.crateApiSetSetting(key: key, value: value);
 
-/// Count tables in the DB -- used by the skeleton's diagnostics page to
-/// prove the schema was applied. Expects 10 content tables + 1 FTS + version.
+/// List every book in the library, most-recently-opened first (FEATURES 2.2/2.3).
+/// Returns an empty vec on error (the UI shows the empty-state guide).
+Future<List<Book>> listBooks() => RustLib.instance.api.crateApiListBooks();
+
+/// Fetch a single book by id. Returns `None` if not found (FEATURES 2.3:
+/// the reader needs the book's stored_path and page_count to open it).
+Future<Book?> getBook({required PlatformInt64 id}) =>
+    RustLib.instance.api.crateApiGetBook(id: id);
+
+/// Import a single file into the library (FEATURES 2.1).
 ///
-/// # Panics
-/// Panics if called before `init_core()` (programming error).
-Future<PlatformInt64> tableCount() => RustLib.instance.api.crateApiTableCount();
+/// Steps: validate path → infer type → de-dup by `original_path` → copy file
+/// into `~/.local/share/RBWA/documents/` → insert row. The DB lock is released
+/// during the file copy so concurrent reads are not blocked.
+///
+/// Async: pdfium open + cover rendering are heavyweight; running them off the
+/// UI thread (FRB executes `async fn` on a worker) keeps the UI responsive.
+Future<ImportResult> importBook({required String path}) =>
+    RustLib.instance.api.crateApiImportBook(path: path);
+
+/// Delete a book by id (FEATURES 2.4). Removes the row (cascading to progress,
+/// annotations, OCR cache, text index via FK) and deletes the stored file
+/// and cover thumbnail. Returns 1 on success, 0 if the book was not found.
+Future<int> deleteBook({required PlatformInt64 id}) =>
+    RustLib.instance.api.crateApiDeleteBook(id: id);
+
+/// Toggle the favorite flag on a book (FEATURES 2.5). Returns the updated
+/// book, or `None` if the id was not found.
+Future<Book?> toggleFavorite({required PlatformInt64 id}) =>
+    RustLib.instance.api.crateApiToggleFavorite(id: id);
+
+/// Record that a book was opened (FEATURES 2.3: recent-open sort).
+/// Returns 1 on success, 0 if the book was not found.
+Future<int> touchLastOpened({required PlatformInt64 id}) =>
+    RustLib.instance.api.crateApiTouchLastOpened(id: id);
+
+/// Assign a book to a category, or unclassify it (`category_id = None`)
+/// (FEATURES 2.8). Returns 1 on success, 0 if the book was not found.
+Future<int> assignCategory({
+  required PlatformInt64 bookId,
+  PlatformInt64? categoryId,
+}) => RustLib.instance.api.crateApiAssignCategory(
+  bookId: bookId,
+  categoryId: categoryId,
+);
+
+/// List all categories (FEATURES 2.8). Empty vec on error.
+Future<List<Category>> listCategories() =>
+    RustLib.instance.api.crateApiListCategories();
+
+/// Create a new category (FEATURES 2.8). Returns the new category, or `None`
+/// if the name is already taken or creation failed.
+Future<Category?> createCategory({required String name}) =>
+    RustLib.instance.api.crateApiCreateCategory(name: name);
+
+/// Rename a category (FEATURES 2.8). Returns 1 on success, 0 if not found or
+/// the new name collides.
+Future<int> renameCategory({required PlatformInt64 id, required String name}) =>
+    RustLib.instance.api.crateApiRenameCategory(id: id, name: name);
+
+/// Delete a category (FEATURES 2.8). Books referencing it fall back to
+/// unclassified (`category_id` set to NULL via the FK rule). Returns 1 on
+/// success, 0 if not found.
+Future<int> deleteCategory({required PlatformInt64 id}) =>
+    RustLib.instance.api.crateApiDeleteCategory(id: id);
+
+/// Open a book's PDF for reading (FEATURES 3.1). Must be called before
+/// `render_page`, `get_outline`, etc. The document stays open until another
+/// book is opened or `close_book` is called.
+///
+/// Async: pdfium document open is heavyweight and must not block the UI.
+Future<OpenBookResult> openBook({required String storedPath}) =>
+    RustLib.instance.api.crateApiOpenBook(storedPath: storedPath);
+
+/// Close the currently-open document, freeing its memory.
+Future<void> closeBook() => RustLib.instance.api.crateApiCloseBook();
+
+/// Render a page (0-indexed) to an RGBA bitmap (FEATURES 3.6.2).
+/// `zoom` is the user zoom factor (1.0 = 100%); `dpi_scale` is the device
+/// pixel ratio for high-DPI rendering.
+///
+/// Async: pdfium rendering is heavyweight and must not block the UI.
+Future<PageRenderResult> renderPage({
+  required PlatformInt64 bookId,
+  required PlatformInt64 page,
+  required double zoom,
+  required double dpiScale,
+}) => RustLib.instance.api.crateApiRenderPage(
+  bookId: bookId,
+  page: page,
+  zoom: zoom,
+  dpiScale: dpiScale,
+);
+
+/// Render a small thumbnail for the sidebar (FEATURES 3.4.1).
+///
+/// Async: pdfium rendering is heavyweight and must not block the UI.
+Future<PageRenderResult> renderThumbnail({
+  required PlatformInt64 bookId,
+  required PlatformInt64 page,
+  required int maxSize,
+}) => RustLib.instance.api.crateApiRenderThumbnail(
+  bookId: bookId,
+  page: page,
+  maxSize: maxSize,
+);
+
+/// Fetch the document outline (FEATURES 3.4.2).
+///
+/// Async: pdfium bookmark traversal can be slow on large documents.
+Future<OutlineResult> getOutline({required PlatformInt64 bookId}) =>
+    RustLib.instance.api.crateApiGetOutline(bookId: bookId);
+
+/// Whether a page has a text layer (FEATURES 7.1.2: empty -> scanned).
+///
+/// Async: pdfium text loading is heavyweight.
+Future<bool> pageHasText({
+  required PlatformInt64 bookId,
+  required PlatformInt64 page,
+}) => RustLib.instance.api.crateApiPageHasText(bookId: bookId, page: page);
+
+/// Load the saved reading position for a book. Returns `None` on first open.
+Future<ReadingProgress?> getProgress({required PlatformInt64 bookId}) =>
+    RustLib.instance.api.crateApiGetProgress(bookId: bookId);
+
+/// Save the reading position (upsert). `view_mode` is the string form
+/// ("single" / "double_scroll" / "double_page"). Returns 1 on success.
+Future<int> saveProgress({
+  required PlatformInt64 bookId,
+  required PlatformInt64 page,
+  required double zoom,
+  required String viewMode,
+}) => RustLib.instance.api.crateApiSaveProgress(
+  bookId: bookId,
+  page: page,
+  zoom: zoom,
+  viewMode: viewMode,
+);
+
+/// Extract per-character boxes for a page (0-indexed), normalized to [0,1]
+/// with a top-left origin (Flutter coordinate space). Empty `boxes` means the
+/// page has no text layer (scanned page -- OCR selection lands in M5).
+///
+/// Async: pdfium text traversal is heavyweight and must not block the UI.
+Future<CharBoxResult> extractText({
+  required PlatformInt64 bookId,
+  required PlatformInt64 page,
+}) => RustLib.instance.api.crateApiExtractText(bookId: bookId, page: page);
+
+/// List all annotations of a book, ordered by page then creation (FEATURES
+/// 4.5.1: the sidebar groups them by page).
+Future<List<TextAnnotation>> listAnnotations({required PlatformInt64 bookId}) =>
+    RustLib.instance.api.crateApiListAnnotations(bookId: bookId);
+
+/// Create a text-layer annotation (highlight / underline / strikethrough /
+/// note). `rects` holds one normalized rect per selected line (FEATURES
+/// 4.3.1); `text` is the selected text; `content` the note body (notes only).
+Future<AnnotationCreateResult> createAnnotation({
+  required PlatformInt64 bookId,
+  required PlatformInt64 page,
+  required TextAnnotationKind kind,
+  String? text,
+  String? content,
+  required List<NormRect> rects,
+  String? color,
+}) => RustLib.instance.api.crateApiCreateAnnotation(
+  bookId: bookId,
+  page: page,
+  kind: kind,
+  text: text,
+  content: content,
+  rects: rects,
+  color: color,
+);
+
+/// Update a note's body text (FEATURES 4.4.2). Returns 1 on success.
+Future<int> updateAnnotationContent({
+  required PlatformInt64 annotationId,
+  String? content,
+}) => RustLib.instance.api.crateApiUpdateAnnotationContent(
+  annotationId: annotationId,
+  content: content,
+);
+
+/// Delete an annotation by id (FEATURES 4.4.2 / 4.5.1). Returns 1 on success.
+Future<int> deleteAnnotation({required PlatformInt64 annotationId}) =>
+    RustLib.instance.api.crateApiDeleteAnnotation(annotationId: annotationId);
+
+/// Export all annotations of a book as Markdown (FEATURES 4.5.2): `# 阅读标注`
+/// -> `## 第 N 页` -> one bullet per annotation, notes quoted underneath.
+Future<ExportResult> exportAnnotationsMarkdown({
+  required PlatformInt64 bookId,
+}) => RustLib.instance.api.crateApiExportAnnotationsMarkdown(bookId: bookId);
+
+/// Export all annotations of a book as pretty-printed JSON, including
+/// coordinates and style (FEATURES 4.5.3).
+Future<ExportResult> exportAnnotationsJson({required PlatformInt64 bookId}) =>
+    RustLib.instance.api.crateApiExportAnnotationsJson(bookId: bookId);
+
+/// Load the BYOK AI configuration (FEATURES 6.1), or defaults on first run.
+Future<AiConfig> getAiConfig() => RustLib.instance.api.crateApiGetAiConfig();
+
+/// Persist the AI configuration (FEATURES 6.1.1-6.1.5). Returns 1 on success.
+Future<int> setAiConfig({required AiConfig config}) =>
+    RustLib.instance.api.crateApiSetAiConfig(config: config);
+
+/// List all persisted conversation threads, most recently updated first
+/// (FEATURES 6.5.3 / 6.5.4). Empty vec on failure.
+Future<List<AiThread>> listAiThreads() =>
+    RustLib.instance.api.crateApiListAiThreads();
+
+/// List one thread's messages in conversation order (6.5.4).
+Future<List<AiMessage>> listAiMessages({required PlatformInt64 threadId}) =>
+    RustLib.instance.api.crateApiListAiMessages(threadId: threadId);
+
+/// Persist a new conversation window; returns its id (-1 on failure).
+/// `book_id` binds the window to a book (null = the no-book window); one
+/// window per book is enforced by a unique partial index (6.5.4).
+Future<AiThreadCreateResult> createAiThread({
+  required String title,
+  required AiActionType actionType,
+  PlatformInt64? bookId,
+}) => RustLib.instance.api.crateApiCreateAiThread(
+  title: title,
+  actionType: actionType,
+  bookId: bookId,
+);
+
+/// Append a message to a window and bump its `updated_at`; `action_type`
+/// (when set) becomes the window's latest action for the history icon.
+/// Returns 1 on success (0 if the window does not exist).
+Future<int> appendAiMessage({
+  required PlatformInt64 threadId,
+  required AiRole role,
+  required String content,
+  AiActionType? actionType,
+}) => RustLib.instance.api.crateApiAppendAiMessage(
+  threadId: threadId,
+  role: role,
+  content: content,
+  actionType: actionType,
+);
+
+/// Delete one conversation window (its messages cascade). Returns 1 if the
+/// window existed, 0 otherwise (6.5.3 per-window deletion).
+Future<int> deleteAiThread({required PlatformInt64 threadId}) =>
+    RustLib.instance.api.crateApiDeleteAiThread(threadId: threadId);
+
+/// Delete all threads (and their messages) -- "清空" in the panel (6.5.3).
+Future<int> clearAiThreads() => RustLib.instance.api.crateApiClearAiThreads();
+
+/// Streaming text action (translate / explain / search / chat, FEATURES
+/// 6.2). `history` carries the thread's prior turns (6.5.2); the action's
+/// system prompt is prepended here. Emits SSE chunks; errors (including
+/// "not configured", 10.4) arrive on the stream's error channel.
+Stream<String> streamChat({
+  required AiActionType action,
+  required String text,
+  required List<AiMessage> history,
+}) => RustLib.instance.api.crateApiStreamChat(
+  action: action,
+  text: text,
+  history: history,
+);
+
+/// Streaming vision analysis of a captured region screenshot (识图, FEATURES
+/// 6.6.2 / 7.2): the PNG is sent to the vision model as a data URL and the
+/// answer streams back like [stream_chat]. Cancellation is implicit (6.3.2).
+/// The screenshot itself is pixel-exact (captured straight from the window's
+/// composited layer), so what the model sees is exactly what was selected.
+Stream<String> streamVisionPng({required List<int> png}) =>
+    RustLib.instance.api.crateApiStreamVisionPng(png: png);
+
+/// Result of creating a persisted thread (FEATURES 6.5.4). `id` is -1 and
+/// `error` set on failure (sentinel convention: no `Result` across FRB).
+class AiThreadCreateResult {
+  final PlatformInt64 id;
+  final String? error;
+
+  const AiThreadCreateResult({required this.id, this.error});
+
+  @override
+  int get hashCode => id.hashCode ^ error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AiThreadCreateResult &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          error == other.error;
+}
+
+/// Result of creating an annotation: the new row id, or -1 on error.
+class AnnotationCreateResult {
+  final PlatformInt64 id;
+  final String? error;
+
+  const AnnotationCreateResult({required this.id, this.error});
+
+  @override
+  int get hashCode => id.hashCode ^ error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AnnotationCreateResult &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          error == other.error;
+}
+
+/// Per-character boxes of one page for selection hit-testing (FEATURES 4.1.1).
+/// Coordinates are normalized [0,1] with a *top-left* origin (Flutter space).
+class CharBoxResult {
+  final List<CharBox> boxes;
+  final String? error;
+
+  const CharBoxResult({required this.boxes, this.error});
+
+  @override
+  int get hashCode => boxes.hashCode ^ error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CharBoxResult &&
+          runtimeType == other.runtimeType &&
+          boxes == other.boxes &&
+          error == other.error;
+}
+
+/// Text produced by an export command (Markdown / JSON, FEATURES 4.5.2/4.5.3).
+class ExportResult {
+  final String content;
+  final String? error;
+
+  const ExportResult({required this.content, this.error});
+
+  @override
+  int get hashCode => content.hashCode ^ error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ExportResult &&
+          runtimeType == other.runtimeType &&
+          content == other.content &&
+          error == other.error;
+}
+
+/// Outcome of importing one file (FEATURES 2.1).
+class ImportResult {
+  /// The imported (or already-existing) book record. `None` on failure.
+  final Book? book;
+
+  /// `true` if the original path was already in the library; the existing
+  /// record is returned unchanged (de-dup by `original_path`).
+  final bool alreadyExisted;
+
+  /// Human-readable error message when import failed; `None` on success.
+  final String? error;
+
+  const ImportResult({this.book, required this.alreadyExisted, this.error});
+
+  @override
+  int get hashCode => book.hashCode ^ alreadyExisted.hashCode ^ error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ImportResult &&
+          runtimeType == other.runtimeType &&
+          book == other.book &&
+          alreadyExisted == other.alreadyExisted &&
+          error == other.error;
+}
 
 /// Result of core initialization, returned to Flutter.
 class InitResult {
@@ -76,5 +455,85 @@ class InitResult {
           ok == other.ok &&
           dbPath == other.dbPath &&
           schemaVersion == other.schemaVersion &&
+          error == other.error;
+}
+
+/// Result of opening a book for reading.
+class OpenBookResult {
+  /// Total page count (0 if the document could not be opened).
+  final PlatformInt64 pageCount;
+
+  /// Whether the document has a bookmark outline (FEATURES 3.4.2).
+  final bool hasOutline;
+
+  /// Error message if opening failed; `None` on success.
+  final String? error;
+
+  const OpenBookResult({
+    required this.pageCount,
+    required this.hasOutline,
+    this.error,
+  });
+
+  @override
+  int get hashCode => pageCount.hashCode ^ hasOutline.hashCode ^ error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is OpenBookResult &&
+          runtimeType == other.runtimeType &&
+          pageCount == other.pageCount &&
+          hasOutline == other.hasOutline &&
+          error == other.error;
+}
+
+/// The document outline / table of contents (FEATURES 3.4.2).
+class OutlineResult {
+  final List<OutlineEntry> entries;
+  final String? error;
+
+  const OutlineResult({required this.entries, this.error});
+
+  @override
+  int get hashCode => entries.hashCode ^ error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is OutlineResult &&
+          runtimeType == other.runtimeType &&
+          entries == other.entries &&
+          error == other.error;
+}
+
+/// A rendered page bitmap returned to Flutter for texture display (FEATURES 3.6).
+class PageRenderResult {
+  final int width;
+  final int height;
+
+  /// RGBA pixels, row-major, length = width * height * 4.
+  final Uint8List rgba;
+  final String? error;
+
+  const PageRenderResult({
+    required this.width,
+    required this.height,
+    required this.rgba,
+    this.error,
+  });
+
+  @override
+  int get hashCode =>
+      width.hashCode ^ height.hashCode ^ rgba.hashCode ^ error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PageRenderResult &&
+          runtimeType == other.runtimeType &&
+          width == other.width &&
+          height == other.height &&
+          rgba == other.rgba &&
           error == other.error;
 }

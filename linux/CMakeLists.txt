@@ -148,6 +148,17 @@ install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
 install(FILES "${RBWA_RUST_LIB}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
+# pdfium dynamic library (bundled, BSD-3). Fetched by scripts/fetch_pdfium.sh
+# into rust/libpdfium/. Placed alongside librbwa_core.so so the RPATH
+# $ORIGIN/lib lets pdfium-render's libloading find it at runtime.
+set(RBWA_PDFIUM_LIB "${CMAKE_CURRENT_SOURCE_DIR}/../rust/libpdfium/libpdfium.so")
+if(EXISTS "${RBWA_PDFIUM_LIB}")
+  install(FILES "${RBWA_PDFIUM_LIB}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+    COMPONENT Runtime)
+else()
+  message(WARNING "libpdfium.so not found at ${RBWA_PDFIUM_LIB} -- run scripts/fetch_pdfium.sh before building")
+endif()
+
 foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})
   install(FILES "${bundled_library}"
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"

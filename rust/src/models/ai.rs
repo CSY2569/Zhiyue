@@ -25,6 +25,18 @@ impl AiActionType {
             AiActionType::Vision => "vision",
         }
     }
+
+    /// Inverse of [AiActionType::as_str] for DB rows (schema stores TEXT).
+    pub fn from_db_str(s: &str) -> Option<Self> {
+        match s {
+            "translate" => Some(Self::Translate),
+            "explain" => Some(Self::Explain),
+            "search" => Some(Self::Search),
+            "chat" => Some(Self::Chat),
+            "vision" => Some(Self::Vision),
+            _ => None,
+        }
+    }
 }
 
 /// Chat message role (OpenAI-compatible).
@@ -43,14 +55,31 @@ impl AiRole {
             AiRole::System => "system",
         }
     }
+
+    /// Inverse of [AiRole::as_str] for DB rows.
+    pub fn from_db_str(s: &str) -> Option<Self> {
+        match s {
+            "user" => Some(Self::User),
+            "assistant" => Some(Self::Assistant),
+            "system" => Some(Self::System),
+            _ => None,
+        }
+    }
 }
 
-/// A persisted AI conversation thread (table: ai_threads).
+/// A persisted AI conversation window (table: ai_threads). One window per
+/// book (FEATURES 6.5.4): every AI exchange inside a book shares its window;
+/// `book_id` is null for conversations started without an open book.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AiThread {
     pub id: i64,
+    /// Window title: the book title snapshot (or "未打开书籍" without one).
     pub title: String,
+    /// Latest action performed in the window (icon in the history list).
     pub action_type: AiActionType,
+    /// The book this window belongs to; null = no-book window. No FK: the
+    /// conversation survives book deletion (deletion is a user choice).
+    pub book_id: Option<i64>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -68,7 +97,12 @@ pub struct AiMessage {
 
 /// BYOK AI configuration (FEATURES 6.1). Stored in the `settings` table;
 /// API keys never leave the local machine (FEATURES 9.2.2).
+///
+/// `#[serde(default)]`: JSON stored by older builds may lack newer fields.
+/// Without it, a missing non-Option field (e.g. `search_use_builtin`) fails
+/// the whole read and the UI would show an empty config.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AiConfig {
     /// Base URL for the text model (OpenAI-compatible).
     pub base_url: String,
@@ -78,8 +112,101 @@ pub struct AiConfig {
     /// Optional independent vision config; falls back to the above when empty (6.1.2).
     pub vision_base_url: Option<String>,
     pub vision_api_key: Option<String>,
+    /// Web-search provider config (6.1.4): two modes -- built-in search via
+    /// the Responses API (`search_use_builtin`, DeepSeek web_search tool,
+    /// reuses the text config) or a third-party Bocha-compatible endpoint.
+    /// Empty `search_base_url` uses the Bocha default; empty `search_api_key`
+    /// disables real web search.
+    pub search_use_builtin: bool,
+    pub search_base_url: Option<String>,
+    pub search_api_key: Option<String>,
     /// Translation target language, default "中文" (6.1.3).
     pub translate_target_lang: String,
     /// Web search toggle (6.1.4).
     pub web_search_enabled: bool,
+}
+
+impl Default for AiConfig {
+    fn default() -> Self {
+        Self {
+            base_url: String::new(), // empty -> provider default endpoint
+            api_key: String::new(),
+            text_model: String::new(),
+            vision_model: String::new(),
+            vision_base_url: None,
+            vision_api_key: None,
+            search_use_builtin: false,
+            search_base_url: None,
+            search_api_key: None,
+            translate_target_lang: "中文".to_string(),
+            web_search_enabled: false,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// JSON persisted by an older build (before search fields existed) must
+    /// still deserialize; missing fields fall back to their defaults instead
+    /// of failing the whole read (regression: config vanished after adding
+    /// the non-Option `search_use_builtin` field).
+    #[test]
+    fn ai_config_deserializes_legacy_json_without_new_fields() {
+        let legacy = r#"{
+            "base_url": "https://api.deepseek.com/v1",
+            "api_key": "sk-test",
+            "text_model": "deepseek-chat",
+            "vision_model": "deepseek-vl",
+            "vision_base_url": null,
+            "vision_api_key": null,
+            "translate_target_lang": "中文",
+            "web_search_enabled": true
+        }"#;
+        let cfg: AiConfig = serde_json::from_str(legacy).expect("legacy json must load");
+        assert_eq!(cfg.api_key, "sk-test");
+        assert_eq!(cfg.base_url, "https://api.deepseek.com/v1");
+        assert!(cfg.web_search_enabled);
+        // Newer fields default rather than error.
+        assert!(!cfg.search_use_builtin);
+        assert!(cfg.search_base_url.is_none());
+        assert!(cfg.search_api_key.is_none());
+
+        // Round-trip through the current serializer keeps working.
+        let back: AiConfig =
+            serde_json::from_str(&serde_json::to_string(&cfg).unwrap()).unwrap();
+        assert_eq!(back.api_key, "sk-test");
+        assert_eq!(back.translate_target_lang, "中文");
+        assert!(!back.search_use_builtin);
+    }
+
+    #[test]
+    fn ai_config_roundtrip_preserves_all_fields() {
+        let cfg = AiConfig {
+            base_url: "https://api.openai.com/v1".into(),
+            api_key: "sk-1".into(),
+            text_model: "gpt-4o-mini".into(),
+            vision_model: "qwen-vl-max".into(),
+            vision_base_url: Some("https://v.example/v1".into()),
+            vision_api_key: Some("sk-v".into()),
+            search_use_builtin: true,
+            search_base_url: Some("https://s.example/search".into()),
+            search_api_key: Some("sk-s".into()),
+            translate_target_lang: "中文".into(),
+            web_search_enabled: true,
+        };
+        let back: AiConfig = serde_json::from_str(&serde_json::to_string(&cfg).unwrap()).unwrap();
+        assert_eq!(back.base_url, cfg.base_url);
+        assert_eq!(back.api_key, cfg.api_key);
+        assert_eq!(back.text_model, cfg.text_model);
+        assert_eq!(back.vision_model, cfg.vision_model);
+        assert_eq!(back.vision_base_url, cfg.vision_base_url);
+        assert_eq!(back.vision_api_key, cfg.vision_api_key);
+        assert!(back.search_use_builtin);
+        assert_eq!(back.search_base_url, cfg.search_base_url);
+        assert_eq!(back.search_api_key, cfg.search_api_key);
+        assert_eq!(back.translate_target_lang, "中文");
+        assert!(back.web_search_enabled);
+    }
 }

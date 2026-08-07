@@ -30,6 +30,7 @@ flutter_rust_bridge = "=2.12.0"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "fs"] }
 tokio-stream = "0.1"
 futures-core = "0.3"
+futures-util = "0.3"
 
 # Database - bundled SQLite (WAL) + FTS5
 rusqlite = { version = "0.32", features = ["bundled", "blob"] }
@@ -37,8 +38,11 @@ rusqlite = { version = "0.32", features = ["bundled", "blob"] }
 # PDF rendering / text extraction (M2)
 pdfium-render = { version = "0.9", features = ["image_latest", "thread_safe"], optional = true }
 
-# AI client - OpenAI-compatible streaming + vision (M4)
-async-openai = { version = "0.27", optional = true }
+# AI client - OpenAI-compatible streaming + vision (M4).
+# Transport is a hand-written reqwest SSE client (TECH_ROADMAP fallback:
+# async-openai's request types serialize fields providers reject, e.g.
+# `image_url.detail: null`), so only reqwest is needed.
+# async-openai = { version = "0.27", optional = true }
 
 # Chinese tokenization for FTS5 (M6)
 jieba-rs = { version = "0.7", optional = true }
@@ -52,6 +56,14 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "str
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# Base64 for vision screenshots (data URL, M4)
+base64 = "0.22"
+
+# SHA-256 for region OCR cache keys (7.2.3: screenshot content de-dup)
+
+# SSE byte stream chunks for the hand-written streaming client (M4)
+bytes = "1"
 
 # Error handling
 anyhow = "1"
@@ -70,10 +82,11 @@ uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 
 [features]
-default = []
+default = ["pdf", "ai"]
 # Opt-in subsystem crates, enabled per milestone to keep skeleton lean.
 pdf = ["dep:pdfium-render", "dep:image"]
-ai = ["dep:async-openai", "dep:reqwest"]
+# M4: AI streaming client. `image` provides PNG encoding for vision screenshots.
+ai = ["dep:reqwest", "dep:image"]
 search = ["dep:jieba-rs"]
 
 [profile.release]

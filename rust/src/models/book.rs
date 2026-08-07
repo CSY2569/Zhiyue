@@ -21,6 +21,28 @@ impl BookType {
             BookType::Image => "image",
         }
     }
+
+    /// Parse the `file_type` column value back into the enum.
+    /// Returns `None` for unknown strings (treated as a data-integrity issue).
+    pub fn from_db_str(s: &str) -> Option<Self> {
+        match s {
+            "pdf" => Some(BookType::Pdf),
+            "image" => Some(BookType::Image),
+            _ => None,
+        }
+    }
+
+    /// Infer the document type from a file extension (case-insensitive).
+    /// Returns `None` for unsupported extensions.
+    pub fn from_extension(ext: &str) -> Option<Self> {
+        match ext.to_lowercase().as_str() {
+            "pdf" => Some(BookType::Pdf),
+            "png" | "jpg" | "jpeg" | "webp" | "bmp" | "gif" | "tiff" | "tif" => {
+                Some(BookType::Image)
+            }
+            _ => None,
+        }
+    }
 }
 
 /// A library entry. Maps to the `books` table.

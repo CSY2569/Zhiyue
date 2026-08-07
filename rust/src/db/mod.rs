@@ -6,8 +6,10 @@
 //! full schema so the DB is structurally ready on first launch.
 
 pub mod connection;
+pub mod repository;
 pub mod schema;
 
-// Re-export the init entrypoint used by `api::init_core`, plus the shared
-// connection accessor used by subsystem repositories.
-pub use connection::{app_data_dir, db, db_path, init_database};
+// Re-export the init entrypoints used by `api` (production path + the
+// test-isolation hook), plus the shared connection accessor used by
+// subsystem repositories.
+pub use connection::{app_data_dir, db, db_path, init_database, init_database_at};

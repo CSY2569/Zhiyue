@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:window_manager/window_manager.dart';
+
+import 'package:rbwa/router/app_router.dart';
 
 /// Custom frameless title bar (FEATURES 8.1).
 ///
@@ -11,6 +12,11 @@ import 'package:window_manager/window_manager.dart';
 ///   - a "back to library" affordance when in the reader
 ///
 /// Wired to [WindowManager] which must be initialized in main.dart.
+///
+/// Note: this widget is rendered inside `MaterialApp.router`'s `builder`,
+/// which is *above* the GoRouter sub-tree. Therefore it must not use
+/// `context.go()` (no GoRouterState is available); it uses the [appRouter]
+/// singleton directly.
 class AppTitleBar extends StatelessWidget {
   const AppTitleBar({
     super.key,
@@ -36,7 +42,7 @@ class AppTitleBar extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.arrow_back, size: 18),
               tooltip: '返回书库',
-              onPressed: () => context.go('/library'),
+              onPressed: () => appRouter.go('/library'),
             )
           else
             const SizedBox(width: 8),

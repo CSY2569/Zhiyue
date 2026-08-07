@@ -10,7 +10,12 @@ import 'api.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';
+import 'models/ai.dart';
+import 'models/annotation.dart';
+import 'models/book.dart';
+import 'models/progress.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated_web.dart';
+import 'pdf/types.dart';
 
 abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustLibApiImplPlatform({
@@ -21,10 +26,79 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   });
 
   @protected
+  AnyhowException dco_decode_AnyhowException(dynamic raw);
+
+  @protected
+  RustStreamSink<String> dco_decode_StreamSink_String_Sse(dynamic raw);
+
+  @protected
   String dco_decode_String(dynamic raw);
 
   @protected
+  AiActionType dco_decode_ai_action_type(dynamic raw);
+
+  @protected
+  AiConfig dco_decode_ai_config(dynamic raw);
+
+  @protected
+  AiMessage dco_decode_ai_message(dynamic raw);
+
+  @protected
+  AiRole dco_decode_ai_role(dynamic raw);
+
+  @protected
+  AiThread dco_decode_ai_thread(dynamic raw);
+
+  @protected
+  AiThreadCreateResult dco_decode_ai_thread_create_result(dynamic raw);
+
+  @protected
+  AnnotationCreateResult dco_decode_annotation_create_result(dynamic raw);
+
+  @protected
+  Book dco_decode_book(dynamic raw);
+
+  @protected
+  BookType dco_decode_book_type(dynamic raw);
+
+  @protected
   bool dco_decode_bool(dynamic raw);
+
+  @protected
+  AiActionType dco_decode_box_autoadd_ai_action_type(dynamic raw);
+
+  @protected
+  AiConfig dco_decode_box_autoadd_ai_config(dynamic raw);
+
+  @protected
+  Book dco_decode_box_autoadd_book(dynamic raw);
+
+  @protected
+  Category dco_decode_box_autoadd_category(dynamic raw);
+
+  @protected
+  PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
+
+  @protected
+  ReadingProgress dco_decode_box_autoadd_reading_progress(dynamic raw);
+
+  @protected
+  Category dco_decode_category(dynamic raw);
+
+  @protected
+  CharBox dco_decode_char_box(dynamic raw);
+
+  @protected
+  CharBoxResult dco_decode_char_box_result(dynamic raw);
+
+  @protected
+  ExportResult dco_decode_export_result(dynamic raw);
+
+  @protected
+  double dco_decode_f_32(dynamic raw);
+
+  @protected
+  double dco_decode_f_64(dynamic raw);
 
   @protected
   int dco_decode_i_32(dynamic raw);
@@ -33,13 +107,82 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 dco_decode_i_64(dynamic raw);
 
   @protected
+  ImportResult dco_decode_import_result(dynamic raw);
+
+  @protected
   InitResult dco_decode_init_result(dynamic raw);
+
+  @protected
+  List<AiMessage> dco_decode_list_ai_message(dynamic raw);
+
+  @protected
+  List<AiThread> dco_decode_list_ai_thread(dynamic raw);
+
+  @protected
+  List<Book> dco_decode_list_book(dynamic raw);
+
+  @protected
+  List<Category> dco_decode_list_category(dynamic raw);
+
+  @protected
+  List<CharBox> dco_decode_list_char_box(dynamic raw);
+
+  @protected
+  List<NormRect> dco_decode_list_norm_rect(dynamic raw);
+
+  @protected
+  List<OutlineEntry> dco_decode_list_outline_entry(dynamic raw);
+
+  @protected
+  List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<TextAnnotation> dco_decode_list_text_annotation(dynamic raw);
+
+  @protected
+  NormRect dco_decode_norm_rect(dynamic raw);
+
+  @protected
+  OpenBookResult dco_decode_open_book_result(dynamic raw);
+
+  @protected
   String? dco_decode_opt_String(dynamic raw);
+
+  @protected
+  AiActionType? dco_decode_opt_box_autoadd_ai_action_type(dynamic raw);
+
+  @protected
+  Book? dco_decode_opt_box_autoadd_book(dynamic raw);
+
+  @protected
+  Category? dco_decode_opt_box_autoadd_category(dynamic raw);
+
+  @protected
+  PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw);
+
+  @protected
+  ReadingProgress? dco_decode_opt_box_autoadd_reading_progress(dynamic raw);
+
+  @protected
+  OutlineEntry dco_decode_outline_entry(dynamic raw);
+
+  @protected
+  OutlineResult dco_decode_outline_result(dynamic raw);
+
+  @protected
+  PageRenderResult dco_decode_page_render_result(dynamic raw);
+
+  @protected
+  ReadingProgress dco_decode_reading_progress(dynamic raw);
+
+  @protected
+  TextAnnotation dco_decode_text_annotation(dynamic raw);
+
+  @protected
+  TextAnnotationKind dco_decode_text_annotation_kind(dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
@@ -51,10 +194,92 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void dco_decode_unit(dynamic raw);
 
   @protected
+  ViewMode dco_decode_view_mode(dynamic raw);
+
+  @protected
+  AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
+
+  @protected
+  RustStreamSink<String> sse_decode_StreamSink_String_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
+  AiActionType sse_decode_ai_action_type(SseDeserializer deserializer);
+
+  @protected
+  AiConfig sse_decode_ai_config(SseDeserializer deserializer);
+
+  @protected
+  AiMessage sse_decode_ai_message(SseDeserializer deserializer);
+
+  @protected
+  AiRole sse_decode_ai_role(SseDeserializer deserializer);
+
+  @protected
+  AiThread sse_decode_ai_thread(SseDeserializer deserializer);
+
+  @protected
+  AiThreadCreateResult sse_decode_ai_thread_create_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AnnotationCreateResult sse_decode_annotation_create_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  Book sse_decode_book(SseDeserializer deserializer);
+
+  @protected
+  BookType sse_decode_book_type(SseDeserializer deserializer);
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer);
+
+  @protected
+  AiActionType sse_decode_box_autoadd_ai_action_type(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AiConfig sse_decode_box_autoadd_ai_config(SseDeserializer deserializer);
+
+  @protected
+  Book sse_decode_box_autoadd_book(SseDeserializer deserializer);
+
+  @protected
+  Category sse_decode_box_autoadd_category(SseDeserializer deserializer);
+
+  @protected
+  PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
+
+  @protected
+  ReadingProgress sse_decode_box_autoadd_reading_progress(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  Category sse_decode_category(SseDeserializer deserializer);
+
+  @protected
+  CharBox sse_decode_char_box(SseDeserializer deserializer);
+
+  @protected
+  CharBoxResult sse_decode_char_box_result(SseDeserializer deserializer);
+
+  @protected
+  ExportResult sse_decode_export_result(SseDeserializer deserializer);
+
+  @protected
+  double sse_decode_f_32(SseDeserializer deserializer);
+
+  @protected
+  double sse_decode_f_64(SseDeserializer deserializer);
 
   @protected
   int sse_decode_i_32(SseDeserializer deserializer);
@@ -63,13 +288,92 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
 
   @protected
+  ImportResult sse_decode_import_result(SseDeserializer deserializer);
+
+  @protected
   InitResult sse_decode_init_result(SseDeserializer deserializer);
+
+  @protected
+  List<AiMessage> sse_decode_list_ai_message(SseDeserializer deserializer);
+
+  @protected
+  List<AiThread> sse_decode_list_ai_thread(SseDeserializer deserializer);
+
+  @protected
+  List<Book> sse_decode_list_book(SseDeserializer deserializer);
+
+  @protected
+  List<Category> sse_decode_list_category(SseDeserializer deserializer);
+
+  @protected
+  List<CharBox> sse_decode_list_char_box(SseDeserializer deserializer);
+
+  @protected
+  List<NormRect> sse_decode_list_norm_rect(SseDeserializer deserializer);
+
+  @protected
+  List<OutlineEntry> sse_decode_list_outline_entry(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<TextAnnotation> sse_decode_list_text_annotation(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  NormRect sse_decode_norm_rect(SseDeserializer deserializer);
+
+  @protected
+  OpenBookResult sse_decode_open_book_result(SseDeserializer deserializer);
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
+
+  @protected
+  AiActionType? sse_decode_opt_box_autoadd_ai_action_type(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  Book? sse_decode_opt_box_autoadd_book(SseDeserializer deserializer);
+
+  @protected
+  Category? sse_decode_opt_box_autoadd_category(SseDeserializer deserializer);
+
+  @protected
+  PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
+
+  @protected
+  ReadingProgress? sse_decode_opt_box_autoadd_reading_progress(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  OutlineEntry sse_decode_outline_entry(SseDeserializer deserializer);
+
+  @protected
+  OutlineResult sse_decode_outline_result(SseDeserializer deserializer);
+
+  @protected
+  PageRenderResult sse_decode_page_render_result(SseDeserializer deserializer);
+
+  @protected
+  ReadingProgress sse_decode_reading_progress(SseDeserializer deserializer);
+
+  @protected
+  TextAnnotation sse_decode_text_annotation(SseDeserializer deserializer);
+
+  @protected
+  TextAnnotationKind sse_decode_text_annotation_kind(
+    SseDeserializer deserializer,
+  );
 
   @protected
   int sse_decode_u_32(SseDeserializer deserializer);
@@ -81,10 +385,106 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
+  ViewMode sse_decode_view_mode(SseDeserializer deserializer);
+
+  @protected
+  void sse_encode_AnyhowException(
+    AnyhowException self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_StreamSink_String_Sse(
+    RustStreamSink<String> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
+  void sse_encode_ai_action_type(AiActionType self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ai_config(AiConfig self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ai_message(AiMessage self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ai_role(AiRole self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ai_thread(AiThread self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ai_thread_create_result(
+    AiThreadCreateResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_annotation_create_result(
+    AnnotationCreateResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_book(Book self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_book_type(BookType self, SseSerializer serializer);
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_ai_action_type(
+    AiActionType self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_ai_config(
+    AiConfig self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_book(Book self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_category(Category self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_i_64(
+    PlatformInt64 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_reading_progress(
+    ReadingProgress self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_category(Category self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_char_box(CharBox self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_char_box_result(CharBoxResult self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_export_result(ExportResult self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_f_32(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_f_64(double self, SseSerializer serializer);
 
   @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
@@ -93,7 +493,40 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
 
   @protected
+  void sse_encode_import_result(ImportResult self, SseSerializer serializer);
+
+  @protected
   void sse_encode_init_result(InitResult self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_ai_message(
+    List<AiMessage> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_ai_thread(List<AiThread> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_book(List<Book> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_category(List<Category> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_char_box(List<CharBox> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_norm_rect(List<NormRect> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_outline_entry(
+    List<OutlineEntry> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_prim_u_8_strict(
@@ -102,7 +535,79 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_text_annotation(
+    List<TextAnnotation> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_norm_rect(NormRect self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_open_book_result(
+    OpenBookResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_ai_action_type(
+    AiActionType? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_book(Book? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_category(
+    Category? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_i_64(
+    PlatformInt64? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_reading_progress(
+    ReadingProgress? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_outline_entry(OutlineEntry self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_outline_result(OutlineResult self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_page_render_result(
+    PageRenderResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_reading_progress(
+    ReadingProgress self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_text_annotation(
+    TextAnnotation self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_text_annotation_kind(
+    TextAnnotationKind self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_u_32(int self, SseSerializer serializer);
@@ -112,6 +617,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_unit(void self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_view_mode(ViewMode self, SseSerializer serializer);
 }
 
 // Section: wire_class

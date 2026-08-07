@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:rbwa/src/rust/api.dart' as rust;
+import 'package:rbwa/data/repositories/settings_repository.dart';
 
 /// Theme mode preference (FEATURES 8.2 / 8.3).
 ///
-/// Persisted to the `settings` table via the Rust core (`theme` key). The
-/// skeleton reads/writes through the FRB `getSetting` / `setSetting` helpers;
-/// M1 will replace these with a proper settings repository.
+/// Persisted to the `settings` table via the Rust core (`theme` key) through
+/// the [SettingsRepository] (ARCHITECTURE §1: UI only talks to repositories).
 class ThemeController extends Notifier<ThemeMode> {
   static const _key = 'theme';
 
@@ -20,7 +19,7 @@ class ThemeController extends Notifier<ThemeMode> {
 
   Future<void> _hydrate() async {
     try {
-      final raw = await rust.getSetting(key: _key);
+      final raw = await ref.read(settingsRepositoryProvider).getSetting(_key);
       if (raw != null) {
         state = _parse(raw) ?? ThemeMode.system;
       }
@@ -32,9 +31,9 @@ class ThemeController extends Notifier<ThemeMode> {
   Future<void> set(ThemeMode mode) async {
     state = mode;
     try {
-      await rust.setSetting(key: _key, value: mode.name);
+      await ref.read(settingsRepositoryProvider).setSetting(_key, mode.name);
     } catch (_) {
-      // Persistence failure is non-fatal for the skeleton.
+      // Persistence failure is non-fatal.
     }
   }
 

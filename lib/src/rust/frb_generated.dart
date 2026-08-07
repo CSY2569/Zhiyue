@@ -9,7 +9,12 @@ import 'dart:convert';
 import 'frb_generated.dart';
 import 'frb_generated.io.dart'
     if (dart.library.js_interop) 'frb_generated.web.dart';
+import 'models/ai.dart';
+import 'models/annotation.dart';
+import 'models/book.dart';
+import 'models/progress.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'pdf/types.dart';
 
 /// Main entrypoint of the Rust API
 class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
@@ -64,7 +69,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => -1569926680;
+  int get rustContentHash => -929978549;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -78,15 +83,143 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 abstract class RustLibApi extends BaseApi {
   Future<String> crateApiAppVersion();
 
+  Future<int> crateApiAppendAiMessage({
+    required PlatformInt64 threadId,
+    required AiRole role,
+    required String content,
+    AiActionType? actionType,
+  });
+
+  Future<int> crateApiAssignCategory({
+    required PlatformInt64 bookId,
+    PlatformInt64? categoryId,
+  });
+
+  Future<int> crateApiClearAiThreads();
+
+  Future<void> crateApiCloseBook();
+
+  Future<AiThreadCreateResult> crateApiCreateAiThread({
+    required String title,
+    required AiActionType actionType,
+    PlatformInt64? bookId,
+  });
+
+  Future<AnnotationCreateResult> crateApiCreateAnnotation({
+    required PlatformInt64 bookId,
+    required PlatformInt64 page,
+    required TextAnnotationKind kind,
+    String? text,
+    String? content,
+    required List<NormRect> rects,
+    String? color,
+  });
+
+  Future<Category?> crateApiCreateCategory({required String name});
+
+  Future<int> crateApiDeleteAiThread({required PlatformInt64 threadId});
+
+  Future<int> crateApiDeleteAnnotation({required PlatformInt64 annotationId});
+
+  Future<int> crateApiDeleteBook({required PlatformInt64 id});
+
+  Future<int> crateApiDeleteCategory({required PlatformInt64 id});
+
+  Future<ExportResult> crateApiExportAnnotationsJson({
+    required PlatformInt64 bookId,
+  });
+
+  Future<ExportResult> crateApiExportAnnotationsMarkdown({
+    required PlatformInt64 bookId,
+  });
+
+  Future<CharBoxResult> crateApiExtractText({
+    required PlatformInt64 bookId,
+    required PlatformInt64 page,
+  });
+
+  Future<AiConfig> crateApiGetAiConfig();
+
+  Future<Book?> crateApiGetBook({required PlatformInt64 id});
+
+  Future<OutlineResult> crateApiGetOutline({required PlatformInt64 bookId});
+
+  Future<ReadingProgress?> crateApiGetProgress({required PlatformInt64 bookId});
+
   Future<String?> crateApiGetSetting({required String key});
+
+  Future<ImportResult> crateApiImportBook({required String path});
 
   Future<InitResult> crateApiInitCore();
 
-  Future<String> crateApiPing();
+  Future<InitResult> crateApiInitCoreWithDbPath({required String dbPath});
+
+  Future<List<AiMessage>> crateApiListAiMessages({
+    required PlatformInt64 threadId,
+  });
+
+  Future<List<AiThread>> crateApiListAiThreads();
+
+  Future<List<TextAnnotation>> crateApiListAnnotations({
+    required PlatformInt64 bookId,
+  });
+
+  Future<List<Book>> crateApiListBooks();
+
+  Future<List<Category>> crateApiListCategories();
+
+  Future<OpenBookResult> crateApiOpenBook({required String storedPath});
+
+  Future<bool> crateApiPageHasText({
+    required PlatformInt64 bookId,
+    required PlatformInt64 page,
+  });
+
+  Future<int> crateApiRenameCategory({
+    required PlatformInt64 id,
+    required String name,
+  });
+
+  Future<PageRenderResult> crateApiRenderPage({
+    required PlatformInt64 bookId,
+    required PlatformInt64 page,
+    required double zoom,
+    required double dpiScale,
+  });
+
+  Future<PageRenderResult> crateApiRenderThumbnail({
+    required PlatformInt64 bookId,
+    required PlatformInt64 page,
+    required int maxSize,
+  });
+
+  Future<int> crateApiSaveProgress({
+    required PlatformInt64 bookId,
+    required PlatformInt64 page,
+    required double zoom,
+    required String viewMode,
+  });
+
+  Future<int> crateApiSetAiConfig({required AiConfig config});
 
   Future<int> crateApiSetSetting({required String key, required String value});
 
-  Future<PlatformInt64> crateApiTableCount();
+  Stream<String> crateApiStreamChat({
+    required AiActionType action,
+    required String text,
+    required List<AiMessage> history,
+  });
+
+  Stream<String> crateApiStreamVisionPng({required List<int> png});
+
+  Future<Book?> crateApiToggleFavorite({required PlatformInt64 id});
+
+  Future<int> crateApiTouchLastOpened({required PlatformInt64 id});
+
+  Future<int> crateApiUpdateAnnotationContent({
+    required PlatformInt64 annotationId,
+    String? content,
+  });
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -125,6 +258,569 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "app_version", argNames: []);
 
   @override
+  Future<int> crateApiAppendAiMessage({
+    required PlatformInt64 threadId,
+    required AiRole role,
+    required String content,
+    AiActionType? actionType,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(threadId, serializer);
+          sse_encode_ai_role(role, serializer);
+          sse_encode_String(content, serializer);
+          sse_encode_opt_box_autoadd_ai_action_type(actionType, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 2,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_i_32,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiAppendAiMessageConstMeta,
+        argValues: [threadId, role, content, actionType],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAppendAiMessageConstMeta => const TaskConstMeta(
+    debugName: "append_ai_message",
+    argNames: ["threadId", "role", "content", "actionType"],
+  );
+
+  @override
+  Future<int> crateApiAssignCategory({
+    required PlatformInt64 bookId,
+    PlatformInt64? categoryId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(bookId, serializer);
+          sse_encode_opt_box_autoadd_i_64(categoryId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 3,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_i_32,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiAssignCategoryConstMeta,
+        argValues: [bookId, categoryId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAssignCategoryConstMeta => const TaskConstMeta(
+    debugName: "assign_category",
+    argNames: ["bookId", "categoryId"],
+  );
+
+  @override
+  Future<int> crateApiClearAiThreads() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 4,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_i_32,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiClearAiThreadsConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiClearAiThreadsConstMeta =>
+      const TaskConstMeta(debugName: "clear_ai_threads", argNames: []);
+
+  @override
+  Future<void> crateApiCloseBook() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 5,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiCloseBookConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCloseBookConstMeta =>
+      const TaskConstMeta(debugName: "close_book", argNames: []);
+
+  @override
+  Future<AiThreadCreateResult> crateApiCreateAiThread({
+    required String title,
+    required AiActionType actionType,
+    PlatformInt64? bookId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(title, serializer);
+          sse_encode_ai_action_type(actionType, serializer);
+          sse_encode_opt_box_autoadd_i_64(bookId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 6,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_ai_thread_create_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiCreateAiThreadConstMeta,
+        argValues: [title, actionType, bookId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCreateAiThreadConstMeta => const TaskConstMeta(
+    debugName: "create_ai_thread",
+    argNames: ["title", "actionType", "bookId"],
+  );
+
+  @override
+  Future<AnnotationCreateResult> crateApiCreateAnnotation({
+    required PlatformInt64 bookId,
+    required PlatformInt64 page,
+    required TextAnnotationKind kind,
+    String? text,
+    String? content,
+    required List<NormRect> rects,
+    String? color,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(bookId, serializer);
+          sse_encode_i_64(page, serializer);
+          sse_encode_text_annotation_kind(kind, serializer);
+          sse_encode_opt_String(text, serializer);
+          sse_encode_opt_String(content, serializer);
+          sse_encode_list_norm_rect(rects, serializer);
+          sse_encode_opt_String(color, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 7,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_annotation_create_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiCreateAnnotationConstMeta,
+        argValues: [bookId, page, kind, text, content, rects, color],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCreateAnnotationConstMeta => const TaskConstMeta(
+    debugName: "create_annotation",
+    argNames: ["bookId", "page", "kind", "text", "content", "rects", "color"],
+  );
+
+  @override
+  Future<Category?> crateApiCreateCategory({required String name}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(name, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 8,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_opt_box_autoadd_category,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiCreateCategoryConstMeta,
+        argValues: [name],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCreateCategoryConstMeta =>
+      const TaskConstMeta(debugName: "create_category", argNames: ["name"]);
+
+  @override
+  Future<int> crateApiDeleteAiThread({required PlatformInt64 threadId}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(threadId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 9,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_i_32,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiDeleteAiThreadConstMeta,
+        argValues: [threadId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiDeleteAiThreadConstMeta => const TaskConstMeta(
+    debugName: "delete_ai_thread",
+    argNames: ["threadId"],
+  );
+
+  @override
+  Future<int> crateApiDeleteAnnotation({required PlatformInt64 annotationId}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(annotationId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 10,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_i_32,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiDeleteAnnotationConstMeta,
+        argValues: [annotationId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiDeleteAnnotationConstMeta => const TaskConstMeta(
+    debugName: "delete_annotation",
+    argNames: ["annotationId"],
+  );
+
+  @override
+  Future<int> crateApiDeleteBook({required PlatformInt64 id}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(id, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 11,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_i_32,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiDeleteBookConstMeta,
+        argValues: [id],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiDeleteBookConstMeta =>
+      const TaskConstMeta(debugName: "delete_book", argNames: ["id"]);
+
+  @override
+  Future<int> crateApiDeleteCategory({required PlatformInt64 id}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(id, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 12,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_i_32,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiDeleteCategoryConstMeta,
+        argValues: [id],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiDeleteCategoryConstMeta =>
+      const TaskConstMeta(debugName: "delete_category", argNames: ["id"]);
+
+  @override
+  Future<ExportResult> crateApiExportAnnotationsJson({
+    required PlatformInt64 bookId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(bookId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 13,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_export_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiExportAnnotationsJsonConstMeta,
+        argValues: [bookId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiExportAnnotationsJsonConstMeta =>
+      const TaskConstMeta(
+        debugName: "export_annotations_json",
+        argNames: ["bookId"],
+      );
+
+  @override
+  Future<ExportResult> crateApiExportAnnotationsMarkdown({
+    required PlatformInt64 bookId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(bookId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 14,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_export_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiExportAnnotationsMarkdownConstMeta,
+        argValues: [bookId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiExportAnnotationsMarkdownConstMeta =>
+      const TaskConstMeta(
+        debugName: "export_annotations_markdown",
+        argNames: ["bookId"],
+      );
+
+  @override
+  Future<CharBoxResult> crateApiExtractText({
+    required PlatformInt64 bookId,
+    required PlatformInt64 page,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(bookId, serializer);
+          sse_encode_i_64(page, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 15,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_char_box_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiExtractTextConstMeta,
+        argValues: [bookId, page],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiExtractTextConstMeta => const TaskConstMeta(
+    debugName: "extract_text",
+    argNames: ["bookId", "page"],
+  );
+
+  @override
+  Future<AiConfig> crateApiGetAiConfig() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 16,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_ai_config,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiGetAiConfigConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiGetAiConfigConstMeta =>
+      const TaskConstMeta(debugName: "get_ai_config", argNames: []);
+
+  @override
+  Future<Book?> crateApiGetBook({required PlatformInt64 id}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(id, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 17,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_opt_box_autoadd_book,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiGetBookConstMeta,
+        argValues: [id],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiGetBookConstMeta =>
+      const TaskConstMeta(debugName: "get_book", argNames: ["id"]);
+
+  @override
+  Future<OutlineResult> crateApiGetOutline({required PlatformInt64 bookId}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(bookId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 18,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_outline_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiGetOutlineConstMeta,
+        argValues: [bookId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiGetOutlineConstMeta =>
+      const TaskConstMeta(debugName: "get_outline", argNames: ["bookId"]);
+
+  @override
+  Future<ReadingProgress?> crateApiGetProgress({
+    required PlatformInt64 bookId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(bookId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 19,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_opt_box_autoadd_reading_progress,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiGetProgressConstMeta,
+        argValues: [bookId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiGetProgressConstMeta =>
+      const TaskConstMeta(debugName: "get_progress", argNames: ["bookId"]);
+
+  @override
   Future<String?> crateApiGetSetting({required String key}) {
     return handler.executeNormal(
       NormalTask(
@@ -134,7 +830,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 2,
+            funcId: 20,
             port: port_,
           );
         },
@@ -153,6 +849,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "get_setting", argNames: ["key"]);
 
   @override
+  Future<ImportResult> crateApiImportBook({required String path}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(path, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 21,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_import_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiImportBookConstMeta,
+        argValues: [path],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiImportBookConstMeta =>
+      const TaskConstMeta(debugName: "import_book", argNames: ["path"]);
+
+  @override
   Future<InitResult> crateApiInitCore() {
     return handler.executeNormal(
       NormalTask(
@@ -161,7 +885,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 3,
+            funcId: 22,
             port: port_,
           );
         },
@@ -180,7 +904,69 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "init_core", argNames: []);
 
   @override
-  Future<String> crateApiPing() {
+  Future<InitResult> crateApiInitCoreWithDbPath({required String dbPath}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(dbPath, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 23,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_init_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiInitCoreWithDbPathConstMeta,
+        argValues: [dbPath],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiInitCoreWithDbPathConstMeta => const TaskConstMeta(
+    debugName: "init_core_with_db_path",
+    argNames: ["dbPath"],
+  );
+
+  @override
+  Future<List<AiMessage>> crateApiListAiMessages({
+    required PlatformInt64 threadId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(threadId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 24,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_ai_message,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiListAiMessagesConstMeta,
+        argValues: [threadId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiListAiMessagesConstMeta => const TaskConstMeta(
+    debugName: "list_ai_messages",
+    argNames: ["threadId"],
+  );
+
+  @override
+  Future<List<AiThread>> crateApiListAiThreads() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -188,23 +974,343 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 4,
+            funcId: 25,
             port: port_,
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_String,
+          decodeSuccessData: sse_decode_list_ai_thread,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiPingConstMeta,
+        constMeta: kCrateApiListAiThreadsConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPingConstMeta =>
-      const TaskConstMeta(debugName: "ping", argNames: []);
+  TaskConstMeta get kCrateApiListAiThreadsConstMeta =>
+      const TaskConstMeta(debugName: "list_ai_threads", argNames: []);
+
+  @override
+  Future<List<TextAnnotation>> crateApiListAnnotations({
+    required PlatformInt64 bookId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(bookId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 26,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_text_annotation,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiListAnnotationsConstMeta,
+        argValues: [bookId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiListAnnotationsConstMeta =>
+      const TaskConstMeta(debugName: "list_annotations", argNames: ["bookId"]);
+
+  @override
+  Future<List<Book>> crateApiListBooks() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 27,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_book,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiListBooksConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiListBooksConstMeta =>
+      const TaskConstMeta(debugName: "list_books", argNames: []);
+
+  @override
+  Future<List<Category>> crateApiListCategories() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 28,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_category,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiListCategoriesConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiListCategoriesConstMeta =>
+      const TaskConstMeta(debugName: "list_categories", argNames: []);
+
+  @override
+  Future<OpenBookResult> crateApiOpenBook({required String storedPath}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(storedPath, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 29,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_open_book_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiOpenBookConstMeta,
+        argValues: [storedPath],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiOpenBookConstMeta =>
+      const TaskConstMeta(debugName: "open_book", argNames: ["storedPath"]);
+
+  @override
+  Future<bool> crateApiPageHasText({
+    required PlatformInt64 bookId,
+    required PlatformInt64 page,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(bookId, serializer);
+          sse_encode_i_64(page, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 30,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiPageHasTextConstMeta,
+        argValues: [bookId, page],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPageHasTextConstMeta => const TaskConstMeta(
+    debugName: "page_has_text",
+    argNames: ["bookId", "page"],
+  );
+
+  @override
+  Future<int> crateApiRenameCategory({
+    required PlatformInt64 id,
+    required String name,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(id, serializer);
+          sse_encode_String(name, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 31,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_i_32,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiRenameCategoryConstMeta,
+        argValues: [id, name],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiRenameCategoryConstMeta => const TaskConstMeta(
+    debugName: "rename_category",
+    argNames: ["id", "name"],
+  );
+
+  @override
+  Future<PageRenderResult> crateApiRenderPage({
+    required PlatformInt64 bookId,
+    required PlatformInt64 page,
+    required double zoom,
+    required double dpiScale,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(bookId, serializer);
+          sse_encode_i_64(page, serializer);
+          sse_encode_f_64(zoom, serializer);
+          sse_encode_f_64(dpiScale, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 32,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_page_render_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiRenderPageConstMeta,
+        argValues: [bookId, page, zoom, dpiScale],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiRenderPageConstMeta => const TaskConstMeta(
+    debugName: "render_page",
+    argNames: ["bookId", "page", "zoom", "dpiScale"],
+  );
+
+  @override
+  Future<PageRenderResult> crateApiRenderThumbnail({
+    required PlatformInt64 bookId,
+    required PlatformInt64 page,
+    required int maxSize,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(bookId, serializer);
+          sse_encode_i_64(page, serializer);
+          sse_encode_u_32(maxSize, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 33,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_page_render_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiRenderThumbnailConstMeta,
+        argValues: [bookId, page, maxSize],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiRenderThumbnailConstMeta => const TaskConstMeta(
+    debugName: "render_thumbnail",
+    argNames: ["bookId", "page", "maxSize"],
+  );
+
+  @override
+  Future<int> crateApiSaveProgress({
+    required PlatformInt64 bookId,
+    required PlatformInt64 page,
+    required double zoom,
+    required String viewMode,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(bookId, serializer);
+          sse_encode_i_64(page, serializer);
+          sse_encode_f_64(zoom, serializer);
+          sse_encode_String(viewMode, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 34,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_i_32,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSaveProgressConstMeta,
+        argValues: [bookId, page, zoom, viewMode],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSaveProgressConstMeta => const TaskConstMeta(
+    debugName: "save_progress",
+    argNames: ["bookId", "page", "zoom", "viewMode"],
+  );
+
+  @override
+  Future<int> crateApiSetAiConfig({required AiConfig config}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_ai_config(config, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 35,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_i_32,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSetAiConfigConstMeta,
+        argValues: [config],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSetAiConfigConstMeta =>
+      const TaskConstMeta(debugName: "set_ai_config", argNames: ["config"]);
 
   @override
   Future<int> crateApiSetSetting({required String key, required String value}) {
@@ -217,7 +1323,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 36,
             port: port_,
           );
         },
@@ -236,31 +1342,183 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "set_setting", argNames: ["key", "value"]);
 
   @override
-  Future<PlatformInt64> crateApiTableCount() {
+  Stream<String> crateApiStreamChat({
+    required AiActionType action,
+    required String text,
+    required List<AiMessage> history,
+  }) {
+    final sink = RustStreamSink<String>();
+    unawaited(
+      handler.executeNormal(
+        NormalTask(
+          callFfi: (port_) {
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            sse_encode_ai_action_type(action, serializer);
+            sse_encode_String(text, serializer);
+            sse_encode_list_ai_message(history, serializer);
+            sse_encode_StreamSink_String_Sse(sink, serializer);
+            pdeCallFfi(
+              generalizedFrbRustBinding,
+              serializer,
+              funcId: 37,
+              port: port_,
+            );
+          },
+          codec: SseCodec(
+            decodeSuccessData: sse_decode_unit,
+            decodeErrorData: null,
+          ),
+          constMeta: kCrateApiStreamChatConstMeta,
+          argValues: [action, text, history, sink],
+          apiImpl: this,
+        ),
+      ),
+    );
+    return sink.stream;
+  }
+
+  TaskConstMeta get kCrateApiStreamChatConstMeta => const TaskConstMeta(
+    debugName: "stream_chat",
+    argNames: ["action", "text", "history", "sink"],
+  );
+
+  @override
+  Stream<String> crateApiStreamVisionPng({required List<int> png}) {
+    final sink = RustStreamSink<String>();
+    unawaited(
+      handler.executeNormal(
+        NormalTask(
+          callFfi: (port_) {
+            final serializer = SseSerializer(generalizedFrbRustBinding);
+            sse_encode_list_prim_u_8_loose(png, serializer);
+            sse_encode_StreamSink_String_Sse(sink, serializer);
+            pdeCallFfi(
+              generalizedFrbRustBinding,
+              serializer,
+              funcId: 38,
+              port: port_,
+            );
+          },
+          codec: SseCodec(
+            decodeSuccessData: sse_decode_unit,
+            decodeErrorData: null,
+          ),
+          constMeta: kCrateApiStreamVisionPngConstMeta,
+          argValues: [png, sink],
+          apiImpl: this,
+        ),
+      ),
+    );
+    return sink.stream;
+  }
+
+  TaskConstMeta get kCrateApiStreamVisionPngConstMeta => const TaskConstMeta(
+    debugName: "stream_vision_png",
+    argNames: ["png", "sink"],
+  );
+
+  @override
+  Future<Book?> crateApiToggleFavorite({required PlatformInt64 id}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(id, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 39,
             port: port_,
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_i_64,
+          decodeSuccessData: sse_decode_opt_box_autoadd_book,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiTableCountConstMeta,
-        argValues: [],
+        constMeta: kCrateApiToggleFavoriteConstMeta,
+        argValues: [id],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiTableCountConstMeta =>
-      const TaskConstMeta(debugName: "table_count", argNames: []);
+  TaskConstMeta get kCrateApiToggleFavoriteConstMeta =>
+      const TaskConstMeta(debugName: "toggle_favorite", argNames: ["id"]);
+
+  @override
+  Future<int> crateApiTouchLastOpened({required PlatformInt64 id}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(id, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 40,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_i_32,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiTouchLastOpenedConstMeta,
+        argValues: [id],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTouchLastOpenedConstMeta =>
+      const TaskConstMeta(debugName: "touch_last_opened", argNames: ["id"]);
+
+  @override
+  Future<int> crateApiUpdateAnnotationContent({
+    required PlatformInt64 annotationId,
+    String? content,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(annotationId, serializer);
+          sse_encode_opt_String(content, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 41,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_i_32,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiUpdateAnnotationContentConstMeta,
+        argValues: [annotationId, content],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiUpdateAnnotationContentConstMeta =>
+      const TaskConstMeta(
+        debugName: "update_annotation_content",
+        argNames: ["annotationId", "content"],
+      );
+
+  @protected
+  AnyhowException dco_decode_AnyhowException(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return AnyhowException(raw as String);
+  }
+
+  @protected
+  RustStreamSink<String> dco_decode_StreamSink_String_Sse(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    throw UnimplementedError();
+  }
 
   @protected
   String dco_decode_String(dynamic raw) {
@@ -269,9 +1527,225 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AiActionType dco_decode_ai_action_type(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return AiActionType.values[raw as int];
+  }
+
+  @protected
+  AiConfig dco_decode_ai_config(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 11)
+      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    return AiConfig(
+      baseUrl: dco_decode_String(arr[0]),
+      apiKey: dco_decode_String(arr[1]),
+      textModel: dco_decode_String(arr[2]),
+      visionModel: dco_decode_String(arr[3]),
+      visionBaseUrl: dco_decode_opt_String(arr[4]),
+      visionApiKey: dco_decode_opt_String(arr[5]),
+      searchUseBuiltin: dco_decode_bool(arr[6]),
+      searchBaseUrl: dco_decode_opt_String(arr[7]),
+      searchApiKey: dco_decode_opt_String(arr[8]),
+      translateTargetLang: dco_decode_String(arr[9]),
+      webSearchEnabled: dco_decode_bool(arr[10]),
+    );
+  }
+
+  @protected
+  AiMessage dco_decode_ai_message(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return AiMessage(
+      id: dco_decode_i_64(arr[0]),
+      threadId: dco_decode_i_64(arr[1]),
+      role: dco_decode_ai_role(arr[2]),
+      content: dco_decode_String(arr[3]),
+      createdAt: dco_decode_String(arr[4]),
+    );
+  }
+
+  @protected
+  AiRole dco_decode_ai_role(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return AiRole.values[raw as int];
+  }
+
+  @protected
+  AiThread dco_decode_ai_thread(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return AiThread(
+      id: dco_decode_i_64(arr[0]),
+      title: dco_decode_String(arr[1]),
+      actionType: dco_decode_ai_action_type(arr[2]),
+      bookId: dco_decode_opt_box_autoadd_i_64(arr[3]),
+      createdAt: dco_decode_String(arr[4]),
+      updatedAt: dco_decode_String(arr[5]),
+    );
+  }
+
+  @protected
+  AiThreadCreateResult dco_decode_ai_thread_create_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return AiThreadCreateResult(
+      id: dco_decode_i_64(arr[0]),
+      error: dco_decode_opt_String(arr[1]),
+    );
+  }
+
+  @protected
+  AnnotationCreateResult dco_decode_annotation_create_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return AnnotationCreateResult(
+      id: dco_decode_i_64(arr[0]),
+      error: dco_decode_opt_String(arr[1]),
+    );
+  }
+
+  @protected
+  Book dco_decode_book(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 11)
+      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    return Book(
+      id: dco_decode_i_64(arr[0]),
+      title: dco_decode_String(arr[1]),
+      originalPath: dco_decode_String(arr[2]),
+      storedPath: dco_decode_String(arr[3]),
+      fileType: dco_decode_book_type(arr[4]),
+      pageCount: dco_decode_i_64(arr[5]),
+      coverPath: dco_decode_opt_String(arr[6]),
+      favorite: dco_decode_bool(arr[7]),
+      categoryId: dco_decode_opt_box_autoadd_i_64(arr[8]),
+      lastOpenedAt: dco_decode_opt_String(arr[9]),
+      importedAt: dco_decode_String(arr[10]),
+    );
+  }
+
+  @protected
+  BookType dco_decode_book_type(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return BookType.values[raw as int];
+  }
+
+  @protected
   bool dco_decode_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as bool;
+  }
+
+  @protected
+  AiActionType dco_decode_box_autoadd_ai_action_type(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_ai_action_type(raw);
+  }
+
+  @protected
+  AiConfig dco_decode_box_autoadd_ai_config(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_ai_config(raw);
+  }
+
+  @protected
+  Book dco_decode_box_autoadd_book(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_book(raw);
+  }
+
+  @protected
+  Category dco_decode_box_autoadd_category(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_category(raw);
+  }
+
+  @protected
+  PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_i_64(raw);
+  }
+
+  @protected
+  ReadingProgress dco_decode_box_autoadd_reading_progress(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_reading_progress(raw);
+  }
+
+  @protected
+  Category dco_decode_category(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return Category(
+      id: dco_decode_i_64(arr[0]),
+      name: dco_decode_String(arr[1]),
+      sortOrder: dco_decode_i_64(arr[2]),
+      createdAt: dco_decode_String(arr[3]),
+    );
+  }
+
+  @protected
+  CharBox dco_decode_char_box(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return CharBox(
+      char: dco_decode_String(arr[0]),
+      x: dco_decode_f_32(arr[1]),
+      y: dco_decode_f_32(arr[2]),
+      w: dco_decode_f_32(arr[3]),
+      h: dco_decode_f_32(arr[4]),
+    );
+  }
+
+  @protected
+  CharBoxResult dco_decode_char_box_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return CharBoxResult(
+      boxes: dco_decode_list_char_box(arr[0]),
+      error: dco_decode_opt_String(arr[1]),
+    );
+  }
+
+  @protected
+  ExportResult dco_decode_export_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return ExportResult(
+      content: dco_decode_String(arr[0]),
+      error: dco_decode_opt_String(arr[1]),
+    );
+  }
+
+  @protected
+  double dco_decode_f_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as double;
+  }
+
+  @protected
+  double dco_decode_f_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as double;
   }
 
   @protected
@@ -284,6 +1758,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PlatformInt64 dco_decode_i_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dcoDecodeI64(raw);
+  }
+
+  @protected
+  ImportResult dco_decode_import_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return ImportResult(
+      book: dco_decode_opt_box_autoadd_book(arr[0]),
+      alreadyExisted: dco_decode_bool(arr[1]),
+      error: dco_decode_opt_String(arr[2]),
+    );
   }
 
   @protected
@@ -301,15 +1788,206 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<AiMessage> dco_decode_list_ai_message(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_ai_message).toList();
+  }
+
+  @protected
+  List<AiThread> dco_decode_list_ai_thread(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_ai_thread).toList();
+  }
+
+  @protected
+  List<Book> dco_decode_list_book(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_book).toList();
+  }
+
+  @protected
+  List<Category> dco_decode_list_category(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_category).toList();
+  }
+
+  @protected
+  List<CharBox> dco_decode_list_char_box(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_char_box).toList();
+  }
+
+  @protected
+  List<NormRect> dco_decode_list_norm_rect(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_norm_rect).toList();
+  }
+
+  @protected
+  List<OutlineEntry> dco_decode_list_outline_entry(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_outline_entry).toList();
+  }
+
+  @protected
+  List<int> dco_decode_list_prim_u_8_loose(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as List<int>;
+  }
+
+  @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as Uint8List;
   }
 
   @protected
+  List<TextAnnotation> dco_decode_list_text_annotation(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_text_annotation).toList();
+  }
+
+  @protected
+  NormRect dco_decode_norm_rect(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return NormRect(
+      x: dco_decode_f_64(arr[0]),
+      y: dco_decode_f_64(arr[1]),
+      w: dco_decode_f_64(arr[2]),
+      h: dco_decode_f_64(arr[3]),
+    );
+  }
+
+  @protected
+  OpenBookResult dco_decode_open_book_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return OpenBookResult(
+      pageCount: dco_decode_i_64(arr[0]),
+      hasOutline: dco_decode_bool(arr[1]),
+      error: dco_decode_opt_String(arr[2]),
+    );
+  }
+
+  @protected
   String? dco_decode_opt_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_String(raw);
+  }
+
+  @protected
+  AiActionType? dco_decode_opt_box_autoadd_ai_action_type(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_ai_action_type(raw);
+  }
+
+  @protected
+  Book? dco_decode_opt_box_autoadd_book(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_book(raw);
+  }
+
+  @protected
+  Category? dco_decode_opt_box_autoadd_category(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_category(raw);
+  }
+
+  @protected
+  PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_i_64(raw);
+  }
+
+  @protected
+  ReadingProgress? dco_decode_opt_box_autoadd_reading_progress(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_reading_progress(raw);
+  }
+
+  @protected
+  OutlineEntry dco_decode_outline_entry(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return OutlineEntry(
+      title: dco_decode_String(arr[0]),
+      page: dco_decode_i_64(arr[1]),
+      children: dco_decode_list_outline_entry(arr[2]),
+    );
+  }
+
+  @protected
+  OutlineResult dco_decode_outline_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return OutlineResult(
+      entries: dco_decode_list_outline_entry(arr[0]),
+      error: dco_decode_opt_String(arr[1]),
+    );
+  }
+
+  @protected
+  PageRenderResult dco_decode_page_render_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return PageRenderResult(
+      width: dco_decode_u_32(arr[0]),
+      height: dco_decode_u_32(arr[1]),
+      rgba: dco_decode_list_prim_u_8_strict(arr[2]),
+      error: dco_decode_opt_String(arr[3]),
+    );
+  }
+
+  @protected
+  ReadingProgress dco_decode_reading_progress(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return ReadingProgress(
+      bookId: dco_decode_i_64(arr[0]),
+      page: dco_decode_i_64(arr[1]),
+      zoom: dco_decode_f_64(arr[2]),
+      viewMode: dco_decode_view_mode(arr[3]),
+      updatedAt: dco_decode_String(arr[4]),
+    );
+  }
+
+  @protected
+  TextAnnotation dco_decode_text_annotation(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    return TextAnnotation(
+      id: dco_decode_i_64(arr[0]),
+      bookId: dco_decode_i_64(arr[1]),
+      page: dco_decode_i_64(arr[2]),
+      kind: dco_decode_text_annotation_kind(arr[3]),
+      text: dco_decode_opt_String(arr[4]),
+      content: dco_decode_opt_String(arr[5]),
+      rects: dco_decode_list_norm_rect(arr[6]),
+      color: dco_decode_opt_String(arr[7]),
+      createdAt: dco_decode_String(arr[8]),
+      updatedAt: dco_decode_String(arr[9]),
+    );
+  }
+
+  @protected
+  TextAnnotationKind dco_decode_text_annotation_kind(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return TextAnnotationKind.values[raw as int];
   }
 
   @protected
@@ -331,6 +2009,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ViewMode dco_decode_view_mode(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return ViewMode.values[raw as int];
+  }
+
+  @protected
+  AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_String(deserializer);
+    return AnyhowException(inner);
+  }
+
+  @protected
+  RustStreamSink<String> sse_decode_StreamSink_String_Sse(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    throw UnimplementedError('Unreachable ()');
+  }
+
+  @protected
   String sse_decode_String(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_list_prim_u_8_strict(deserializer);
@@ -338,9 +2037,238 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AiActionType sse_decode_ai_action_type(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return AiActionType.values[inner];
+  }
+
+  @protected
+  AiConfig sse_decode_ai_config(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_baseUrl = sse_decode_String(deserializer);
+    var var_apiKey = sse_decode_String(deserializer);
+    var var_textModel = sse_decode_String(deserializer);
+    var var_visionModel = sse_decode_String(deserializer);
+    var var_visionBaseUrl = sse_decode_opt_String(deserializer);
+    var var_visionApiKey = sse_decode_opt_String(deserializer);
+    var var_searchUseBuiltin = sse_decode_bool(deserializer);
+    var var_searchBaseUrl = sse_decode_opt_String(deserializer);
+    var var_searchApiKey = sse_decode_opt_String(deserializer);
+    var var_translateTargetLang = sse_decode_String(deserializer);
+    var var_webSearchEnabled = sse_decode_bool(deserializer);
+    return AiConfig(
+      baseUrl: var_baseUrl,
+      apiKey: var_apiKey,
+      textModel: var_textModel,
+      visionModel: var_visionModel,
+      visionBaseUrl: var_visionBaseUrl,
+      visionApiKey: var_visionApiKey,
+      searchUseBuiltin: var_searchUseBuiltin,
+      searchBaseUrl: var_searchBaseUrl,
+      searchApiKey: var_searchApiKey,
+      translateTargetLang: var_translateTargetLang,
+      webSearchEnabled: var_webSearchEnabled,
+    );
+  }
+
+  @protected
+  AiMessage sse_decode_ai_message(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_i_64(deserializer);
+    var var_threadId = sse_decode_i_64(deserializer);
+    var var_role = sse_decode_ai_role(deserializer);
+    var var_content = sse_decode_String(deserializer);
+    var var_createdAt = sse_decode_String(deserializer);
+    return AiMessage(
+      id: var_id,
+      threadId: var_threadId,
+      role: var_role,
+      content: var_content,
+      createdAt: var_createdAt,
+    );
+  }
+
+  @protected
+  AiRole sse_decode_ai_role(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return AiRole.values[inner];
+  }
+
+  @protected
+  AiThread sse_decode_ai_thread(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_i_64(deserializer);
+    var var_title = sse_decode_String(deserializer);
+    var var_actionType = sse_decode_ai_action_type(deserializer);
+    var var_bookId = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_createdAt = sse_decode_String(deserializer);
+    var var_updatedAt = sse_decode_String(deserializer);
+    return AiThread(
+      id: var_id,
+      title: var_title,
+      actionType: var_actionType,
+      bookId: var_bookId,
+      createdAt: var_createdAt,
+      updatedAt: var_updatedAt,
+    );
+  }
+
+  @protected
+  AiThreadCreateResult sse_decode_ai_thread_create_result(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_i_64(deserializer);
+    var var_error = sse_decode_opt_String(deserializer);
+    return AiThreadCreateResult(id: var_id, error: var_error);
+  }
+
+  @protected
+  AnnotationCreateResult sse_decode_annotation_create_result(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_i_64(deserializer);
+    var var_error = sse_decode_opt_String(deserializer);
+    return AnnotationCreateResult(id: var_id, error: var_error);
+  }
+
+  @protected
+  Book sse_decode_book(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_i_64(deserializer);
+    var var_title = sse_decode_String(deserializer);
+    var var_originalPath = sse_decode_String(deserializer);
+    var var_storedPath = sse_decode_String(deserializer);
+    var var_fileType = sse_decode_book_type(deserializer);
+    var var_pageCount = sse_decode_i_64(deserializer);
+    var var_coverPath = sse_decode_opt_String(deserializer);
+    var var_favorite = sse_decode_bool(deserializer);
+    var var_categoryId = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_lastOpenedAt = sse_decode_opt_String(deserializer);
+    var var_importedAt = sse_decode_String(deserializer);
+    return Book(
+      id: var_id,
+      title: var_title,
+      originalPath: var_originalPath,
+      storedPath: var_storedPath,
+      fileType: var_fileType,
+      pageCount: var_pageCount,
+      coverPath: var_coverPath,
+      favorite: var_favorite,
+      categoryId: var_categoryId,
+      lastOpenedAt: var_lastOpenedAt,
+      importedAt: var_importedAt,
+    );
+  }
+
+  @protected
+  BookType sse_decode_book_type(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return BookType.values[inner];
+  }
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getUint8() != 0;
+  }
+
+  @protected
+  AiActionType sse_decode_box_autoadd_ai_action_type(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_ai_action_type(deserializer));
+  }
+
+  @protected
+  AiConfig sse_decode_box_autoadd_ai_config(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_ai_config(deserializer));
+  }
+
+  @protected
+  Book sse_decode_box_autoadd_book(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_book(deserializer));
+  }
+
+  @protected
+  Category sse_decode_box_autoadd_category(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_category(deserializer));
+  }
+
+  @protected
+  PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_i_64(deserializer));
+  }
+
+  @protected
+  ReadingProgress sse_decode_box_autoadd_reading_progress(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_reading_progress(deserializer));
+  }
+
+  @protected
+  Category sse_decode_category(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_i_64(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_sortOrder = sse_decode_i_64(deserializer);
+    var var_createdAt = sse_decode_String(deserializer);
+    return Category(
+      id: var_id,
+      name: var_name,
+      sortOrder: var_sortOrder,
+      createdAt: var_createdAt,
+    );
+  }
+
+  @protected
+  CharBox sse_decode_char_box(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_char = sse_decode_String(deserializer);
+    var var_x = sse_decode_f_32(deserializer);
+    var var_y = sse_decode_f_32(deserializer);
+    var var_w = sse_decode_f_32(deserializer);
+    var var_h = sse_decode_f_32(deserializer);
+    return CharBox(char: var_char, x: var_x, y: var_y, w: var_w, h: var_h);
+  }
+
+  @protected
+  CharBoxResult sse_decode_char_box_result(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_boxes = sse_decode_list_char_box(deserializer);
+    var var_error = sse_decode_opt_String(deserializer);
+    return CharBoxResult(boxes: var_boxes, error: var_error);
+  }
+
+  @protected
+  ExportResult sse_decode_export_result(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_content = sse_decode_String(deserializer);
+    var var_error = sse_decode_opt_String(deserializer);
+    return ExportResult(content: var_content, error: var_error);
+  }
+
+  @protected
+  double sse_decode_f_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getFloat32();
+  }
+
+  @protected
+  double sse_decode_f_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getFloat64();
   }
 
   @protected
@@ -353,6 +2281,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getPlatformInt64();
+  }
+
+  @protected
+  ImportResult sse_decode_import_result(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_book = sse_decode_opt_box_autoadd_book(deserializer);
+    var var_alreadyExisted = sse_decode_bool(deserializer);
+    var var_error = sse_decode_opt_String(deserializer);
+    return ImportResult(
+      book: var_book,
+      alreadyExisted: var_alreadyExisted,
+      error: var_error,
+    );
   }
 
   @protected
@@ -371,10 +2312,140 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<AiMessage> sse_decode_list_ai_message(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <AiMessage>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_ai_message(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<AiThread> sse_decode_list_ai_thread(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <AiThread>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_ai_thread(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<Book> sse_decode_list_book(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <Book>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_book(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<Category> sse_decode_list_category(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <Category>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_category(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<CharBox> sse_decode_list_char_box(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <CharBox>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_char_box(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<NormRect> sse_decode_list_norm_rect(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <NormRect>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_norm_rect(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<OutlineEntry> sse_decode_list_outline_entry(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <OutlineEntry>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_outline_entry(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getUint8List(len_);
+  }
+
+  @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
     return deserializer.buffer.getUint8List(len_);
+  }
+
+  @protected
+  List<TextAnnotation> sse_decode_list_text_annotation(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <TextAnnotation>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_text_annotation(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  NormRect sse_decode_norm_rect(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_x = sse_decode_f_64(deserializer);
+    var var_y = sse_decode_f_64(deserializer);
+    var var_w = sse_decode_f_64(deserializer);
+    var var_h = sse_decode_f_64(deserializer);
+    return NormRect(x: var_x, y: var_y, w: var_w, h: var_h);
+  }
+
+  @protected
+  OpenBookResult sse_decode_open_book_result(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_pageCount = sse_decode_i_64(deserializer);
+    var var_hasOutline = sse_decode_bool(deserializer);
+    var var_error = sse_decode_opt_String(deserializer);
+    return OpenBookResult(
+      pageCount: var_pageCount,
+      hasOutline: var_hasOutline,
+      error: var_error,
+    );
   }
 
   @protected
@@ -386,6 +2457,154 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     } else {
       return null;
     }
+  }
+
+  @protected
+  AiActionType? sse_decode_opt_box_autoadd_ai_action_type(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_ai_action_type(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  Book? sse_decode_opt_box_autoadd_book(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_book(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  Category? sse_decode_opt_box_autoadd_category(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_category(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_i_64(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  ReadingProgress? sse_decode_opt_box_autoadd_reading_progress(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_reading_progress(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  OutlineEntry sse_decode_outline_entry(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_title = sse_decode_String(deserializer);
+    var var_page = sse_decode_i_64(deserializer);
+    var var_children = sse_decode_list_outline_entry(deserializer);
+    return OutlineEntry(
+      title: var_title,
+      page: var_page,
+      children: var_children,
+    );
+  }
+
+  @protected
+  OutlineResult sse_decode_outline_result(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_entries = sse_decode_list_outline_entry(deserializer);
+    var var_error = sse_decode_opt_String(deserializer);
+    return OutlineResult(entries: var_entries, error: var_error);
+  }
+
+  @protected
+  PageRenderResult sse_decode_page_render_result(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_width = sse_decode_u_32(deserializer);
+    var var_height = sse_decode_u_32(deserializer);
+    var var_rgba = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_error = sse_decode_opt_String(deserializer);
+    return PageRenderResult(
+      width: var_width,
+      height: var_height,
+      rgba: var_rgba,
+      error: var_error,
+    );
+  }
+
+  @protected
+  ReadingProgress sse_decode_reading_progress(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_bookId = sse_decode_i_64(deserializer);
+    var var_page = sse_decode_i_64(deserializer);
+    var var_zoom = sse_decode_f_64(deserializer);
+    var var_viewMode = sse_decode_view_mode(deserializer);
+    var var_updatedAt = sse_decode_String(deserializer);
+    return ReadingProgress(
+      bookId: var_bookId,
+      page: var_page,
+      zoom: var_zoom,
+      viewMode: var_viewMode,
+      updatedAt: var_updatedAt,
+    );
+  }
+
+  @protected
+  TextAnnotation sse_decode_text_annotation(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_i_64(deserializer);
+    var var_bookId = sse_decode_i_64(deserializer);
+    var var_page = sse_decode_i_64(deserializer);
+    var var_kind = sse_decode_text_annotation_kind(deserializer);
+    var var_text = sse_decode_opt_String(deserializer);
+    var var_content = sse_decode_opt_String(deserializer);
+    var var_rects = sse_decode_list_norm_rect(deserializer);
+    var var_color = sse_decode_opt_String(deserializer);
+    var var_createdAt = sse_decode_String(deserializer);
+    var var_updatedAt = sse_decode_String(deserializer);
+    return TextAnnotation(
+      id: var_id,
+      bookId: var_bookId,
+      page: var_page,
+      kind: var_kind,
+      text: var_text,
+      content: var_content,
+      rects: var_rects,
+      color: var_color,
+      createdAt: var_createdAt,
+      updatedAt: var_updatedAt,
+    );
+  }
+
+  @protected
+  TextAnnotationKind sse_decode_text_annotation_kind(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return TextAnnotationKind.values[inner];
   }
 
   @protected
@@ -406,15 +2625,238 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ViewMode sse_decode_view_mode(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return ViewMode.values[inner];
+  }
+
+  @protected
+  void sse_encode_AnyhowException(
+    AnyhowException self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.message, serializer);
+  }
+
+  @protected
+  void sse_encode_StreamSink_String_Sse(
+    RustStreamSink<String> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(
+      self.setupAndSerialize(
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: sse_decode_AnyhowException,
+        ),
+      ),
+      serializer,
+    );
+  }
+
+  @protected
   void sse_encode_String(String self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_list_prim_u_8_strict(utf8.encoder.convert(self), serializer);
   }
 
   @protected
+  void sse_encode_ai_action_type(AiActionType self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_ai_config(AiConfig self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.baseUrl, serializer);
+    sse_encode_String(self.apiKey, serializer);
+    sse_encode_String(self.textModel, serializer);
+    sse_encode_String(self.visionModel, serializer);
+    sse_encode_opt_String(self.visionBaseUrl, serializer);
+    sse_encode_opt_String(self.visionApiKey, serializer);
+    sse_encode_bool(self.searchUseBuiltin, serializer);
+    sse_encode_opt_String(self.searchBaseUrl, serializer);
+    sse_encode_opt_String(self.searchApiKey, serializer);
+    sse_encode_String(self.translateTargetLang, serializer);
+    sse_encode_bool(self.webSearchEnabled, serializer);
+  }
+
+  @protected
+  void sse_encode_ai_message(AiMessage self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_i_64(self.threadId, serializer);
+    sse_encode_ai_role(self.role, serializer);
+    sse_encode_String(self.content, serializer);
+    sse_encode_String(self.createdAt, serializer);
+  }
+
+  @protected
+  void sse_encode_ai_role(AiRole self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_ai_thread(AiThread self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_String(self.title, serializer);
+    sse_encode_ai_action_type(self.actionType, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.bookId, serializer);
+    sse_encode_String(self.createdAt, serializer);
+    sse_encode_String(self.updatedAt, serializer);
+  }
+
+  @protected
+  void sse_encode_ai_thread_create_result(
+    AiThreadCreateResult self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_opt_String(self.error, serializer);
+  }
+
+  @protected
+  void sse_encode_annotation_create_result(
+    AnnotationCreateResult self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_opt_String(self.error, serializer);
+  }
+
+  @protected
+  void sse_encode_book(Book self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_String(self.title, serializer);
+    sse_encode_String(self.originalPath, serializer);
+    sse_encode_String(self.storedPath, serializer);
+    sse_encode_book_type(self.fileType, serializer);
+    sse_encode_i_64(self.pageCount, serializer);
+    sse_encode_opt_String(self.coverPath, serializer);
+    sse_encode_bool(self.favorite, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.categoryId, serializer);
+    sse_encode_opt_String(self.lastOpenedAt, serializer);
+    sse_encode_String(self.importedAt, serializer);
+  }
+
+  @protected
+  void sse_encode_book_type(BookType self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putUint8(self ? 1 : 0);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_ai_action_type(
+    AiActionType self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_ai_action_type(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_ai_config(
+    AiConfig self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_ai_config(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_book(Book self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_book(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_category(
+    Category self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_category(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_i_64(
+    PlatformInt64 self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_reading_progress(
+    ReadingProgress self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_reading_progress(self, serializer);
+  }
+
+  @protected
+  void sse_encode_category(Category self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_i_64(self.sortOrder, serializer);
+    sse_encode_String(self.createdAt, serializer);
+  }
+
+  @protected
+  void sse_encode_char_box(CharBox self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.char, serializer);
+    sse_encode_f_32(self.x, serializer);
+    sse_encode_f_32(self.y, serializer);
+    sse_encode_f_32(self.w, serializer);
+    sse_encode_f_32(self.h, serializer);
+  }
+
+  @protected
+  void sse_encode_char_box_result(
+    CharBoxResult self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_char_box(self.boxes, serializer);
+    sse_encode_opt_String(self.error, serializer);
+  }
+
+  @protected
+  void sse_encode_export_result(ExportResult self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.content, serializer);
+    sse_encode_opt_String(self.error, serializer);
+  }
+
+  @protected
+  void sse_encode_f_32(double self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putFloat32(self);
+  }
+
+  @protected
+  void sse_encode_f_64(double self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putFloat64(self);
   }
 
   @protected
@@ -430,12 +2872,107 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_import_result(ImportResult self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_box_autoadd_book(self.book, serializer);
+    sse_encode_bool(self.alreadyExisted, serializer);
+    sse_encode_opt_String(self.error, serializer);
+  }
+
+  @protected
   void sse_encode_init_result(InitResult self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_bool(self.ok, serializer);
     sse_encode_String(self.dbPath, serializer);
     sse_encode_u_32(self.schemaVersion, serializer);
     sse_encode_opt_String(self.error, serializer);
+  }
+
+  @protected
+  void sse_encode_list_ai_message(
+    List<AiMessage> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_ai_message(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_ai_thread(
+    List<AiThread> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_ai_thread(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_book(List<Book> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_book(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_category(List<Category> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_category(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_char_box(List<CharBox> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_char_box(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_norm_rect(
+    List<NormRect> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_norm_rect(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_outline_entry(
+    List<OutlineEntry> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_outline_entry(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_prim_u_8_loose(
+    List<int> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer.putUint8List(
+      self is Uint8List ? self : Uint8List.fromList(self),
+    );
   }
 
   @protected
@@ -449,6 +2986,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_text_annotation(
+    List<TextAnnotation> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_text_annotation(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_norm_rect(NormRect self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_64(self.x, serializer);
+    sse_encode_f_64(self.y, serializer);
+    sse_encode_f_64(self.w, serializer);
+    sse_encode_f_64(self.h, serializer);
+  }
+
+  @protected
+  void sse_encode_open_book_result(
+    OpenBookResult self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.pageCount, serializer);
+    sse_encode_bool(self.hasOutline, serializer);
+    sse_encode_opt_String(self.error, serializer);
+  }
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -456,6 +3025,135 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     if (self != null) {
       sse_encode_String(self, serializer);
     }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_ai_action_type(
+    AiActionType? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_ai_action_type(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_book(Book? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_book(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_category(
+    Category? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_category(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_i_64(
+    PlatformInt64? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_i_64(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_reading_progress(
+    ReadingProgress? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_reading_progress(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_outline_entry(OutlineEntry self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.title, serializer);
+    sse_encode_i_64(self.page, serializer);
+    sse_encode_list_outline_entry(self.children, serializer);
+  }
+
+  @protected
+  void sse_encode_outline_result(OutlineResult self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_outline_entry(self.entries, serializer);
+    sse_encode_opt_String(self.error, serializer);
+  }
+
+  @protected
+  void sse_encode_page_render_result(
+    PageRenderResult self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.width, serializer);
+    sse_encode_u_32(self.height, serializer);
+    sse_encode_list_prim_u_8_strict(self.rgba, serializer);
+    sse_encode_opt_String(self.error, serializer);
+  }
+
+  @protected
+  void sse_encode_reading_progress(
+    ReadingProgress self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.bookId, serializer);
+    sse_encode_i_64(self.page, serializer);
+    sse_encode_f_64(self.zoom, serializer);
+    sse_encode_view_mode(self.viewMode, serializer);
+    sse_encode_String(self.updatedAt, serializer);
+  }
+
+  @protected
+  void sse_encode_text_annotation(
+    TextAnnotation self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_i_64(self.bookId, serializer);
+    sse_encode_i_64(self.page, serializer);
+    sse_encode_text_annotation_kind(self.kind, serializer);
+    sse_encode_opt_String(self.text, serializer);
+    sse_encode_opt_String(self.content, serializer);
+    sse_encode_list_norm_rect(self.rects, serializer);
+    sse_encode_opt_String(self.color, serializer);
+    sse_encode_String(self.createdAt, serializer);
+    sse_encode_String(self.updatedAt, serializer);
+  }
+
+  @protected
+  void sse_encode_text_annotation_kind(
+    TextAnnotationKind self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
   }
 
   @protected
@@ -473,5 +3171,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   void sse_encode_unit(void self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+  }
+
+  @protected
+  void sse_encode_view_mode(ViewMode self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
   }
 }

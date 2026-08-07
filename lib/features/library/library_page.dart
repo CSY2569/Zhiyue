@@ -1,47 +1,45 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:rbwa/core/theme/theme_controller.dart';
+import 'package:rbwa/features/library/providers/library_providers.dart';
+import 'package:rbwa/features/library/widgets/book_grid.dart';
+import 'package:rbwa/features/library/widgets/category_assign_dialog.dart';
+import 'package:rbwa/features/library/widgets/category_rail.dart';
+import 'package:rbwa/features/library/widgets/library_toolbar.dart';
+import 'package:rbwa/src/rust/models/book.dart';
 
 /// Library / bookshelf page (FEATURES §2).
 ///
-/// Skeleton for M1: shows an empty-state guide (FEATURES 2.2) with an import
-/// button placeholder. Real grid view, import, categories, favorites, and
-/// search land in milestone M1.
+/// Layout: [CategoryRail] on the left, a [Scaffold] with [LibraryToolbar]
+/// and [BookGrid] (or the empty-state guide) on the right. The import FAB
+/// opens a multi-select file picker; books are copied into the app data dir
+/// and de-duplicated by original path in Rust.
 class LibraryPage extends ConsumerWidget {
   const LibraryPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('书库'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.brightness_6_outlined),
-            tooltip: '切换主题',
-            onPressed: () => _toggleTheme(ref),
+    return Row(
+      children: [
+        const CategoryRail(),
+        Expanded(
+          child: Scaffold(
+            appBar: LibraryToolbar(
+              onToggleTheme: () => _toggleTheme(ref),
+              onOpenSettings: () => context.go('/settings'),
+            ),
+            body: _Body(onBookTap: (b) => _openBook(context, ref, b)),
+            floatingActionButton: FloatingActionButton.extended(
+              icon: const Icon(Icons.add),
+              label: const Text('导入文档'),
+              onPressed: () => _import(context, ref),
+            ),
           ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: '设置',
-            onPressed: () => context.go('/settings'),
-          ),
-        ],
-      ),
-      body: _EmptyLibraryGuide(theme: theme),
-      floatingActionButton: FloatingActionButton.extended(
-        icon: const Icon(Icons.add),
-        label: const Text('导入文档'),
-        onPressed: () {
-          // M1: file_picker multi-select -> copy to documents/ -> dedup -> insert
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('导入功能将在 M1 实现')),
-          );
-        },
-      ),
+        ),
+      ],
     );
   }
 
@@ -52,16 +50,127 @@ class LibraryPage extends ConsumerWidget {
       current == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark,
     );
   }
+
+  Future<void> _openBook(BuildContext context, WidgetRef ref, Book book) async {
+    // Record the open for the recent-open sort (FEATURES 2.3).
+    ref.read(libraryBooksProvider.notifier).touchLastOpened(book.id);
+    if (context.mounted) {
+      context.go('/reader/${book.id}');
+    }
+  }
+
+  Future<void> _import(BuildContext context, WidgetRef ref) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const [
+        'pdf', 'png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif', 'tiff', 'tif',
+      ],
+      allowMultiple: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+
+    final paths =
+        result.files.where((f) => f.path != null).map((f) => f.path!).toList();
+    if (paths.isEmpty) return;
+
+    final summary =
+        await ref.read(libraryBooksProvider.notifier).importFiles(paths);
+    if (!context.mounted) return;
+
+    final parts = <String>[];
+    if (summary.imported > 0) parts.add('导入 ${summary.imported} 本');
+    if (summary.alreadyExisted > 0) parts.add('已存在 ${summary.alreadyExisted} 本');
+    if (summary.failed > 0) parts.add('失败 ${summary.failed} 本');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(parts.isEmpty ? '未导入任何文档' : parts.join('，'))),
+    );
+  }
+}
+
+/// Body: shows the empty-state guide when the library has no books, the grid
+/// when it does, or a loading indicator while fetching.
+class _Body extends ConsumerWidget {
+  const _Body({required this.onBookTap});
+
+  final void Function(Book book) onBookTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final booksAsync = ref.watch(libraryBooksProvider);
+
+    return booksAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text('加载书库失败：$e')),
+      data: (books) {
+        if (books.isEmpty) {
+          return const _EmptyLibraryGuide();
+        }
+        return BookGrid(
+          onBookTap: onBookTap,
+          onToggleFavorite: (b) =>
+              ref.read(libraryBooksProvider.notifier).toggleFavorite(b.id),
+          onAssignCategory: (b) => _assignCategory(context, ref, b),
+          onDelete: (b) => _confirmDelete(context, ref, b),
+        );
+      },
+    );
+  }
+
+  /// Assign (or clear) the category of a book via the context menu
+  /// (FEATURES 2.8).
+  Future<void> _assignCategory(
+    BuildContext context,
+    WidgetRef ref,
+    Book book,
+  ) async {
+    final result = await showCategoryAssignDialog(context, book);
+    if (result == null) return; // cancelled
+    await ref
+        .read(libraryBooksProvider.notifier)
+        .assignCategory(book.id, result.$1);
+  }
+
+  Future<void> _confirmDelete(
+    BuildContext context,
+    WidgetRef ref,
+    Book book,
+  ) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除书籍'),
+        content: Text(
+          '确定删除「${book.title}」？\n阅读进度、标注、OCR 缓存将一并清除。\n'
+          'AI 对话将保留，可在书库菜单或 AI 面板中查看。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await ref.read(libraryBooksProvider.notifier).deleteBook(book.id);
+    }
+  }
 }
 
 /// Empty-state guide (FEATURES 2.2): explains supported formats + import entry.
 class _EmptyLibraryGuide extends StatelessWidget {
-  const _EmptyLibraryGuide({required this.theme});
-
-  final ThemeData theme;
+  const _EmptyLibraryGuide();
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,

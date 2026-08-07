@@ -1,7 +1,7 @@
 //! SQLite schema definition for RBWA.
 //!
 //! Implements the 10 data structures listed in `docs/FEATURES.md` §9.1:
-//!   books, reading_progress, annotations, ocr_cache, page_ocr_cache,
+//!   books, reading_progress, annotations, page_ocr_cache,
 //!   page_text_index, ai_history, settings, categories, image_annotations.
 //!
 //! Conventions (per FEATURES §9.2.1):
@@ -13,7 +13,23 @@
 //! them and manages the schema version table.
 
 /// Schema version; bump on any breaking migration. Stored in `schema_version`.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 3;
+
+/// Indexes for per-book AI conversation windows (v3, FEATURES 6.5.4).
+///
+/// Created by [`crate::db::connection::migrate`] (idempotent), NOT from
+/// `SCHEMA_SQL`: on a v2 database the `book_id` column only exists after the
+/// ALTER in the migration chain, and `execute_batch(SCHEMA_SQL)` runs before
+/// it -- an index referencing a missing column would fail init. The unique
+/// partial index enforces one window per book at the DB level (null book_id =
+/// the no-book window, unlimited).
+pub fn ensure_ai_window_indexes(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_ai_threads_book ON ai_threads(book_id);
+         CREATE UNIQUE INDEX IF NOT EXISTS uq_ai_threads_book
+             ON ai_threads(book_id) WHERE book_id IS NOT NULL;",
+    )
+}
 
 /// All CREATE statements, in dependency order (referenced tables first).
 ///
@@ -77,6 +93,7 @@ CREATE TABLE IF NOT EXISTS annotations (
     book_id     INTEGER NOT NULL,
     page        INTEGER NOT NULL,
     kind        TEXT NOT NULL,                 -- 'highlight'|'underline'|'strikethrough'|'note'
+    text        TEXT,                          -- selected text the mark was created from
     content     TEXT,                          -- note text (nullable for mark-only)
     rects       TEXT NOT NULL,                 -- JSON array of normalized rects [{x,y,w,h}, ...]
     color       TEXT,                          -- hex color string
@@ -112,19 +129,7 @@ CREATE TABLE IF NOT EXISTS image_annotations (
 CREATE INDEX IF NOT EXISTS idx_image_ann_book_page ON image_annotations(book_id, page);
 
 -- ===========================================================================
--- 6. ocr_cache  (FEATURES 9.1.4 / 7.2.3)
---    Region OCR result cache, de-duped by screenshot hash.
--- ===========================================================================
-CREATE TABLE IF NOT EXISTS ocr_cache (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    region_hash TEXT NOT NULL UNIQUE,          -- screenshot content hash (de-dup key)
-    result_text TEXT NOT NULL,
-    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_ocr_cache_hash ON ocr_cache(region_hash);
-
--- ===========================================================================
--- 7. page_ocr_cache  (FEATURES 9.1.5 / 7.1.4)
+-- 6. page_ocr_cache  (FEATURES 9.1.5 / 7.1.4)
 --    Full-page OCR result cache, keyed by (book_id, page). Cascades on book delete.
 -- ===========================================================================
 CREATE TABLE IF NOT EXISTS page_ocr_cache (
@@ -163,13 +168,17 @@ CREATE VIRTUAL TABLE IF NOT EXISTS page_text_fts USING fts5(
 );
 
 -- ===========================================================================
--- 9. ai_history  (FEATURES 9.1.7 / 6.5)
---    Persisted AI conversation threads + messages. Threads grouped by action.
+-- 9. ai_history  (FEATURES 9.1.7 / 6.5.4)
+--    Persisted AI conversation windows + messages. One window per book:
+--    every AI exchange inside a book shares its window (book_id); null
+--    book_id = the no-book window. No FK to books -- deleting a book keeps
+--    its conversation (per-window deletion is a user choice in the AI panel).
 -- ===========================================================================
 CREATE TABLE IF NOT EXISTS ai_threads (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    title       TEXT NOT NULL,                 -- auto-derived from first message
-    action_type TEXT NOT NULL,                 -- 'translate'|'explain'|'search'|'chat'|'vision'
+    title       TEXT NOT NULL,                 -- book title snapshot / "未打开书籍"
+    action_type TEXT NOT NULL,                 -- 'translate'|'explain'|'search'|'chat'|'vision' (latest action)
+    book_id     INTEGER,                       -- owning book; null = no-book window
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );

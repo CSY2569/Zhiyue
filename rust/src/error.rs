@@ -76,3 +76,20 @@ impl From<anyhow::Error> for AppError {
         AppError::Internal(e.to_string())
     }
 }
+
+// pdfium-render's error type, gated behind the `pdf` feature so the crate
+// compiles without pdfium-render in its dependency graph.
+#[cfg(feature = "pdf")]
+impl From<pdfium_render::prelude::PdfiumError> for AppError {
+    fn from(e: pdfium_render::prelude::PdfiumError) -> Self {
+        AppError::Pdf(e.to_string())
+    }
+}
+
+// AI crate errors, gated behind the `ai` feature (M4).
+#[cfg(feature = "ai")]
+impl From<reqwest::Error> for AppError {
+    fn from(e: reqwest::Error) -> Self {
+        AppError::Ai(e.to_string())
+    }
+}

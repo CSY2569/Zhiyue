@@ -24,6 +24,17 @@ impl ViewMode {
             ViewMode::DoublePage => "double_page",
         }
     }
+
+    /// Parse the `view_mode` column value back into the enum.
+    /// Returns `None` for unknown strings (falls back to default).
+    pub fn from_db_str(s: &str) -> Option<Self> {
+        match s {
+            "single" => Some(ViewMode::Single),
+            "double_scroll" => Some(ViewMode::DoubleScroll),
+            "double_page" => Some(ViewMode::DoublePage),
+            _ => None,
+        }
+    }
 }
 
 /// Persisted reading position for a book.

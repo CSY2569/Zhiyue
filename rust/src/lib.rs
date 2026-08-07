@@ -23,6 +23,7 @@ pub mod ai;
 pub mod api;
 pub mod db;
 pub mod error;
+pub mod export;
 pub mod models;
 pub mod ocr;
 pub mod pdf;

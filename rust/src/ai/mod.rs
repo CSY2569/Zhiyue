@@ -1,63 +1,80 @@
 //! AI subsystem (FEATURES §6, TECH_ROADMAP §3.6).
 //!
 //! OpenAI-compatible client (BYOK): streaming chat + multimodal vision.
-//! Backed by `async-openai` (M4), with a `reqwest` hand-written fallback for
-//! providers whose multimodal format differs. At the skeleton stage the trait
-//! is defined with a stub impl returning `todo!()`.
+//! Backed by `async-openai` (M4). Prompt construction lives in [`prompts`]
+//! as pure functions; the wire client is [`OpenAiClient`] (gated behind the
+//! `ai` cargo feature -- a stub keeps the crate compiling without it).
 //!
-//! All calls stream (FEATURES 6.3.1) and are cancellable (6.3.2). API keys
-//! never leave the local machine (9.2.2).
+//! All calls stream (FEATURES 6.3.1) and are cancellable (6.3.2): cancelling
+//! the Dart-side subscription drops the Rust stream, aborting the request.
+//! API keys never leave the local machine (9.2.2).
 
+use std::future::Future;
 use std::pin::Pin;
 
 use futures_core::Stream;
-use tokio::sync::Mutex;
 
 use crate::error::AppResult;
 use crate::models::ai::{AiConfig, AiMessage};
+
+/// System prompts for the AI actions (FEATURES 6.2).
+pub mod prompts;
+
+#[cfg(feature = "ai")]
+mod openai;
+#[cfg(feature = "ai")]
+pub use openai::{web_search, web_search_builtin, OpenAiClient};
 
 /// A streamed text chunk from the model (FEATURES 6.3.1).
 pub type ChunkStream =
     Pin<Box<dyn Stream<Item = AppResult<String>> + Send>>;
 
 /// The AI client contract.
-#[allow(async_fn_in_trait)] // we keep it simple for the skeleton
+///
+/// Methods return `impl Future + Send` (RPITIT) so callers can run them on
+/// FRB's multi-threaded executor.
 pub trait AiClient: Send + Sync {
-    /// Streaming chat completion. `history` carries prior turns (6.5.2).
+    /// Streaming chat completion. `history` carries prior turns (6.5.2),
+    /// including any system prompt the caller prepended.
     /// Returns a stream of text chunks for incremental Markdown rendering.
-    async fn stream_chat(
+    fn stream_chat(
         &self,
         config: &AiConfig,
         history: &[AiMessage],
         user_input: &str,
-    ) -> AppResult<ChunkStream>;
+    ) -> impl Future<Output = AppResult<ChunkStream>> + Send;
 
-    /// Multimodal vision call: analyze an image region (6.6.1).
-    /// `image_rgba` + dims describe the cropped region screenshot.
-    async fn vision(
+    /// Streaming vision analysis (识图, FEATURES 6.6.2): `png` holds the
+    /// captured region screenshot, `prompt` the instruction that goes with
+    /// it. Streams text chunks like [Self::stream_chat].
+    fn stream_vision(
         &self,
         config: &AiConfig,
-        image_rgba: &[u8],
-        width: u32,
-        height: u32,
+        png: &[u8],
         prompt: &str,
-    ) -> AppResult<ChunkStream>;
+    ) -> impl Future<Output = AppResult<ChunkStream>> + Send;
 
     /// Cancel the in-flight call associated with `call_id` (6.3.2).
-    async fn cancel(&self, call_id: &str) -> AppResult<()>;
+    /// With the streaming implementation, cancellation is implicit (the
+    /// stream is dropped); kept on the trait for future long-running calls.
+    fn cancel(&self, call_id: &str) -> impl Future<Output = AppResult<()>> + Send;
 }
 
-/// Stub implementation. Real impl (`OpenAiClient`) lands in M4.
+/// Stub implementation, compiled only without the `ai` feature so the crate
+/// still builds when AI support is disabled.
+#[cfg(not(feature = "ai"))]
 pub struct StubAiClient {
-    pub _lock: Mutex<()>,
+    pub _lock: tokio::sync::Mutex<()>,
 }
 
+#[cfg(not(feature = "ai"))]
 impl StubAiClient {
     pub fn new() -> Self {
         Self { _lock: Mutex::new(()) }
     }
 }
 
+#[cfg(not(feature = "ai"))]
 impl AiClient for StubAiClient {
     async fn stream_chat(
         &self,
@@ -65,19 +82,21 @@ impl AiClient for StubAiClient {
         _history: &[AiMessage],
         _user_input: &str,
     ) -> AppResult<ChunkStream> {
-        todo!("M4: async-openai stream_chat")
+        Err(crate::error::AppError::Ai(
+            "AI support not compiled in (feature 'ai' disabled)".into(),
+        ))
     }
-    async fn vision(
+    async fn stream_vision(
         &self,
         _config: &AiConfig,
-        _image_rgba: &[u8],
-        _width: u32,
-        _height: u32,
+        _png: &[u8],
         _prompt: &str,
     ) -> AppResult<ChunkStream> {
-        todo!("M4: async-openai vision")
+        Err(crate::error::AppError::Ai(
+            "AI support not compiled in (feature 'ai' disabled)".into(),
+        ))
     }
     async fn cancel(&self, _call_id: &str) -> AppResult<()> {
-        todo!("M4: cancel in-flight call")
+        Ok(())
     }
 }
