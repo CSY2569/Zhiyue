@@ -70,6 +70,11 @@ final screenshotOutputDirProvider = Provider<Directory?>((_) => null);
 class ScreenshotNotifier extends Notifier<ScreenshotState> {
   OverlayEntry? _entry;
 
+  /// Book snapshot for the vision action (per-book conversation window,
+  /// 6.5.4); captured at [begin] so the notifier never reads the viewer.
+  int? _bookId;
+  String? _bookTitle;
+
   /// Drags smaller than this (logical px) are treated as a click -> cancel.
   static const double _minSize = 4;
 
@@ -77,7 +82,10 @@ class ScreenshotNotifier extends Notifier<ScreenshotState> {
   ScreenshotState build() => const ScreenshotState();
 
   /// Enter screenshot mode: a full-window overlay is inserted above everything.
-  void begin(OverlayState overlay) {
+  /// [bookId] / [bookTitle] snapshot the open book for the vision request.
+  void begin(OverlayState overlay, {int? bookId, String? bookTitle}) {
+    _bookId = bookId;
+    _bookTitle = bookTitle;
     _entry?.remove();
     _entry = OverlayEntry(builder: (_) => const FreeScreenshotOverlay());
     overlay.insert(_entry!);
@@ -101,7 +109,8 @@ class ScreenshotNotifier extends Notifier<ScreenshotState> {
     }
     // Hide the overlay visuals (dim + border) first and capture the frame
     // after it has painted, so the crop is the pristine app underneath --
-    // exactly what the user selected.
+    // exactly what the user selected. The capturing phase makes the overlay
+    // rebuild into an empty (mask-free) surface.
     state = state.copyWith(phase: ScreenshotPhase.capturing);
     try {
       await WidgetsBinding.instance.endOfFrame;
@@ -115,7 +124,11 @@ class ScreenshotNotifier extends Notifier<ScreenshotState> {
       await _savePng(png, w, h);
       // 识图: leave screenshot mode and send the capture to the vision model.
       _teardown();
-      await ref.read(aiProvider.notifier).startVision(png);
+      await ref.read(aiProvider.notifier).startVision(
+            png,
+            bookId: _bookId,
+            bookTitle: _bookTitle,
+          );
     } catch (_) {
       state = state.copyWith(phase: ScreenshotPhase.preview, error: '截图失败');
     }

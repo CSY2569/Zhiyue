@@ -127,6 +127,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(viewerProvider);
     final aiOpen = ref.watch(aiProvider.select((s) => s.aiPanelOpen));
+    // Book snapshot for the AI widgets (per-book conversation windows,
+    // 6.5.4); the AI notifier itself never reads the viewer state.
+    final book = state.book;
 
     if (state.loading) {
       return const Scaffold(
@@ -168,7 +171,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                     children: [
                       if (state.openSidebar != null) _buildSidebar(state),
                       Expanded(child: _buildContent(context, state)),
-                      if (aiOpen) const AiPanelSide(),
+                      if (aiOpen)
+                        AiPanelSide(
+                          bookId: book?.id,
+                          bookTitle: book?.title,
+                        ),
                     ],
                   ),
                 ),
@@ -178,7 +185,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             // app-level Overlay so they are never clipped).
             OverlayPortal(
               controller: _toolbarController,
-              overlayChildBuilder: (_) => const FloatingToolbar(),
+              overlayChildBuilder: (_) => FloatingToolbar(
+                bookId: book?.id,
+                bookTitle: book?.title,
+              ),
             ),
             OverlayPortal(
               controller: _composerController,
@@ -190,7 +200,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             ),
             OverlayPortal(
               controller: _aiCardController,
-              overlayChildBuilder: (_) => const ResultCard(),
+              overlayChildBuilder: (_) => ResultCard(
+                bookId: book?.id,
+                bookTitle: book?.title,
+              ),
             ),
           ],
         ),

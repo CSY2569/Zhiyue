@@ -1,12 +1,12 @@
 //! AI subsystem (FEATURES §6, TECH_ROADMAP §3.6).
 //!
 //! OpenAI-compatible client (BYOK): streaming chat + multimodal vision.
-//! Backed by `async-openai` (M4). Prompt construction lives in [`prompts`]
-//! as pure functions; the wire client is [`OpenAiClient`] (gated behind the
-//! `ai` cargo feature -- a stub keeps the crate compiling without it).
+//! Prompt construction lives in [`prompts`] as pure functions; the wire
+//! client is [`OpenAiClient`] (gated behind the `ai` cargo feature -- a stub
+//! keeps the crate compiling without it).
 //!
-//! All calls stream (FEATURES 6.3.1) and are cancellable (6.3.2): cancelling
-//! the Dart-side subscription drops the Rust stream, aborting the request.
+//! All calls stream (FEATURES 6.3.1); cancellation is implicit (dropping the
+//! Dart-side subscription drops the Rust stream, aborting the request, 6.3.2).
 //! API keys never leave the local machine (9.2.2).
 
 use std::future::Future;
@@ -53,11 +53,6 @@ pub trait AiClient: Send + Sync {
         png: &[u8],
         prompt: &str,
     ) -> impl Future<Output = AppResult<ChunkStream>> + Send;
-
-    /// Cancel the in-flight call associated with `call_id` (6.3.2).
-    /// With the streaming implementation, cancellation is implicit (the
-    /// stream is dropped); kept on the trait for future long-running calls.
-    fn cancel(&self, call_id: &str) -> impl Future<Output = AppResult<()>> + Send;
 }
 
 /// Stub implementation, compiled only without the `ai` feature so the crate
@@ -70,7 +65,7 @@ pub struct StubAiClient {
 #[cfg(not(feature = "ai"))]
 impl StubAiClient {
     pub fn new() -> Self {
-        Self { _lock: Mutex::new(()) }
+        Self { _lock: tokio::sync::Mutex::new(()) }
     }
 }
 
@@ -95,8 +90,5 @@ impl AiClient for StubAiClient {
         Err(crate::error::AppError::Ai(
             "AI support not compiled in (feature 'ai' disabled)".into(),
         ))
-    }
-    async fn cancel(&self, _call_id: &str) -> AppResult<()> {
-        Ok(())
     }
 }

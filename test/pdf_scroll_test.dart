@@ -28,6 +28,10 @@ class _FakeRepo extends ReaderRepository {
       error: null,
     );
   }
+
+  @override
+  Future<rust.CharBoxResult> extractText(int bookId, int page) async =>
+      rust.CharBoxResult(boxes: const [], error: null);
 }
 
 Book _book() => Book(
@@ -44,27 +48,41 @@ Book _book() => Book(
       importedAt: 'now',
     );
 
-Widget _app() => ProviderScope(
+/// PdfPageScroll in a [width]x600 box. A narrow width + high zoom makes the
+/// page wider than the viewport (regression: overflow / zebra stripes).
+Widget _app(ViewMode mode, {double zoom = 1.2, double width = 800}) =>
+    ProviderScope(
       overrides: [
         viewerProvider.overrideWith((ref) {
           final n = ViewerNotifier(ref);
           n.state = ViewerState(
             book: _book(),
-            pageCount: 3,
-            zoom: 1.2,
+            pageCount: 4,
+            zoom: zoom,
             loading: false,
+            mode: mode,
           );
           return n;
         }),
         readerRepositoryProvider.overrideWithValue(_FakeRepo()),
       ],
-      child: const MaterialApp(home: Scaffold(body: PdfPageScroll())),
+      child: MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: width,
+              height: 600,
+              child: PdfPageScroll(),
+            ),
+          ),
+        ),
+      ),
     );
 
 void main() {
   testWidgets('single mode renders pages without hang', (tester) async {
     await tester.runAsync(() async {
-      await tester.pumpWidget(_app());
+      await tester.pumpWidget(_app(ViewMode.single));
       await tester.pump();
       await Future.delayed(const Duration(milliseconds: 300));
       await tester.pump();
@@ -74,23 +92,7 @@ void main() {
 
   testWidgets('double-scroll mode renders without hang', (tester) async {
     await tester.runAsync(() async {
-      await tester.pumpWidget(ProviderScope(
-        overrides: [
-          viewerProvider.overrideWith((ref) {
-            final n = ViewerNotifier(ref);
-            n.state = ViewerState(
-              book: _book(),
-              pageCount: 4,
-              zoom: 1.2,
-              loading: false,
-              mode: ViewMode.doubleScroll,
-            );
-            return n;
-          }),
-          readerRepositoryProvider.overrideWithValue(_FakeRepo()),
-        ],
-        child: const MaterialApp(home: Scaffold(body: PdfPageScroll())),
-      ));
+      await tester.pumpWidget(_app(ViewMode.doubleScroll));
       await tester.pump();
       await Future.delayed(const Duration(milliseconds: 300));
       await tester.pump();
@@ -101,23 +103,7 @@ void main() {
 
   testWidgets('double-page mode renders without hang', (tester) async {
     await tester.runAsync(() async {
-      await tester.pumpWidget(ProviderScope(
-        overrides: [
-          viewerProvider.overrideWith((ref) {
-            final n = ViewerNotifier(ref);
-            n.state = ViewerState(
-              book: _book(),
-              pageCount: 4,
-              zoom: 1.2,
-              loading: false,
-              mode: ViewMode.doublePage,
-            );
-            return n;
-          }),
-          readerRepositoryProvider.overrideWithValue(_FakeRepo()),
-        ],
-        child: const MaterialApp(home: Scaffold(body: PdfPageScroll())),
-      ));
+      await tester.pumpWidget(_app(ViewMode.doublePage));
       await tester.pump();
       await Future.delayed(const Duration(milliseconds: 300));
       await tester.pump();
@@ -125,4 +111,32 @@ void main() {
           reason: 'double-page mode exception');
     });
   });
+
+  // Regression (originally overflow_repro_test): a 200px viewport with
+  // zoom 4.0 makes the page wider than the viewport (100 -> 400px), like
+  // zooming a doc against the sidebar.
+  for (final mode in ViewMode.values) {
+    testWidgets('$mode: page wider than viewport does not overflow',
+        (tester) async {
+      await tester.runAsync(() async {
+        await tester.pumpWidget(_app(mode, zoom: 4.0, width: 200));
+        await tester.pump();
+        await Future.delayed(const Duration(milliseconds: 300));
+        await tester.pump();
+        final e = tester.takeException();
+        expect(e, isNull, reason: '$mode overflow: $e');
+        if (mode == ViewMode.single) {
+          // Single mode uses UnconstrainedBox; Clip.hardEdge must be set so
+          // zooming past the viewport clips the page instead of painting the
+          // debug zebra-stripe overflow indicator.
+          final boxes = tester
+              .widgetList<UnconstrainedBox>(find.byType(UnconstrainedBox));
+          expect(boxes, isNotEmpty);
+          for (final ub in boxes) {
+            expect(ub.clipBehavior, Clip.hardEdge);
+          }
+        }
+      });
+    });
+  }
 }

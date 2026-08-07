@@ -19,7 +19,6 @@ class ViewerState {
   final ViewMode mode;
   final bool loading;
   final String? error;
-  final bool hasOutline;
   final SidebarType? openSidebar;
 
   const ViewerState({
@@ -30,7 +29,6 @@ class ViewerState {
     this.mode = ViewMode.single,
     this.loading = true,
     this.error,
-    this.hasOutline = false,
     this.openSidebar,
   });
 
@@ -42,8 +40,6 @@ class ViewerState {
     ViewMode? mode,
     bool? loading,
     String? error,
-    bool clearError = false,
-    bool? hasOutline,
     SidebarType? openSidebar,
     bool clearSidebar = false,
   }) {
@@ -54,8 +50,7 @@ class ViewerState {
       zoom: zoom ?? this.zoom,
       mode: mode ?? this.mode,
       loading: loading ?? this.loading,
-      error: clearError ? null : (error ?? this.error),
-      hasOutline: hasOutline ?? this.hasOutline,
+      error: error ?? this.error,
       openSidebar: clearSidebar ? null : (openSidebar ?? this.openSidebar),
     );
   }
@@ -87,7 +82,6 @@ class ViewerNotifier extends StateNotifier<ViewerState> {
 
       // For PDFs, open via pdfium; for images, page count is 1.
       int pageCount = book.pageCount;
-      bool hasOutline = false;
       if (book.fileType == BookType.pdf) {
         final result = await _readerRepo.openBook(book.storedPath);
         if (result.error != null) {
@@ -99,7 +93,6 @@ class ViewerNotifier extends StateNotifier<ViewerState> {
           return;
         }
         pageCount = result.pageCount;
-        hasOutline = result.hasOutline;
       }
 
       // Restore saved progress.
@@ -111,7 +104,6 @@ class ViewerNotifier extends StateNotifier<ViewerState> {
         zoom: progress?.zoom ?? 1.2,
         mode: progress?.viewMode ?? ViewMode.single,
         loading: false,
-        hasOutline: hasOutline,
       );
     } catch (e) {
       state = const ViewerState().copyWith(

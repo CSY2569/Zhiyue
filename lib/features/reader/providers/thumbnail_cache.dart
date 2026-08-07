@@ -1,10 +1,10 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:rbwa/data/repositories/reader_repository.dart';
+import 'package:rbwa/features/reader/providers/image_decoder.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
 
 /// LRU cache of decoded page thumbnails (FEATURES 3.4.1).
@@ -50,7 +50,8 @@ class ThumbnailCache extends Notifier<Map<int, ui.Image>> {
       final result =
           await ref.read(readerRepositoryProvider).renderThumbnail(bookId, page, 150);
       if (result.error != null || result.rgba.isEmpty) return null;
-      final image = await _decode(result.width, result.height, result.rgba);
+      final image =
+          await decodeRgbaImage(result.width, result.height, result.rgba);
       if (image == null) return null;
       // Re-insert at the tail to keep insertion order = LRU order.
       final next = Map<int, ui.Image>.from(state)
@@ -64,18 +65,6 @@ class ThumbnailCache extends Notifier<Map<int, ui.Image>> {
     } catch (_) {
       return null;
     }
-  }
-
-  Future<ui.Image?> _decode(int w, int h, Uint8List rgba) {
-    final completer = Completer<ui.Image>();
-    ui.decodeImageFromPixels(
-      rgba,
-      w,
-      h,
-      ui.PixelFormat.rgba8888,
-      completer.complete,
-    );
-    return completer.future;
   }
 }
 

@@ -28,16 +28,13 @@ class LibraryFilter {
     this.categoryId,
   });
 
-  LibraryFilter copyWith({
-    String? searchQuery,
-    LibraryView? view,
-    int? categoryId,
-    bool clearCategory = false,
-  }) {
+  /// Only [searchQuery] is ever copied (the view / category are replaced
+  /// wholesale by the rail's mutually-exclusive setters).
+  LibraryFilter copyWith({String? searchQuery}) {
     return LibraryFilter(
       searchQuery: searchQuery ?? this.searchQuery,
-      view: view ?? this.view,
-      categoryId: clearCategory ? null : (categoryId ?? this.categoryId),
+      view: view,
+      categoryId: categoryId,
     );
   }
 

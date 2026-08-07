@@ -19,27 +19,32 @@ class ImportSummary {
     required this.alreadyExisted,
     required this.failed,
   });
+}
 
-  bool get hasAny => imported + alreadyExisted + failed > 0;
+/// Shared reload pattern for the library's async lists: flip to loading,
+/// then re-fetch (AsyncValue.guard keeps errors in the state).
+mixin Reloadable<T> on AsyncNotifier<T> {
+  Future<void> reload(Future<T> Function() load) async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(load);
+  }
 }
 
 /// Async list of all books in the library (FEATURES 2.2).
 ///
 /// Mutations (import / delete / favorite / classify) update the DB via the
 /// repository and then refresh this provider so the grid stays in sync.
-class LibraryBooksNotifier extends AsyncNotifier<List<Book>> {
+class LibraryBooksNotifier extends AsyncNotifier<List<Book>>
+    with Reloadable<List<Book>> {
   @override
   Future<List<Book>> build() {
     return ref.read(libraryRepositoryProvider).listBooks();
   }
 
   /// Force a full reload from the DB.
-  Future<void> refresh() async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(
-      () => ref.read(libraryRepositoryProvider).listBooks(),
-    );
-  }
+  Future<void> refresh() => reload(
+        () => ref.read(libraryRepositoryProvider).listBooks(),
+      );
 
   /// Import a batch of files (FEATURES 2.1). Returns a summary so the caller
   /// can show a SnackBar (e.g. "导入 2 本，已存在 1 本").
@@ -132,18 +137,16 @@ final libraryBooksProvider =
 // =============================================================================
 
 /// Async list of user-defined categories (FEATURES 2.8).
-class CategoriesNotifier extends AsyncNotifier<List<Category>> {
+class CategoriesNotifier extends AsyncNotifier<List<Category>>
+    with Reloadable<List<Category>> {
   @override
   Future<List<Category>> build() {
     return ref.read(libraryRepositoryProvider).listCategories();
   }
 
-  Future<void> refresh() async {
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(
-      () => ref.read(libraryRepositoryProvider).listCategories(),
-    );
-  }
+  Future<void> refresh() => reload(
+        () => ref.read(libraryRepositoryProvider).listCategories(),
+      );
 
   /// Create a new category. Returns the created category, or null if the name
   /// was already taken.
@@ -217,8 +220,6 @@ class LibraryFilterNotifier extends StateNotifier<LibraryFilter> {
           view: LibraryView.category,
           categoryId: categoryId,
         );
-
-  void clear() => state = const LibraryFilter();
 }
 
 /// Derived provider: the book list after applying the current filter

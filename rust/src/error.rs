@@ -1,9 +1,9 @@
 //! Unified error type for the RBWA Rust core.
 //!
-//! All subsystems (pdf / ocr / ai / db / search) convert their errors into
-//! [`AppError`], which is exported to Flutter via `flutter_rust_bridge`.
-//! This keeps the FFI boundary error surface flat and decoupled from any
-//! single crate's error enum.
+//! All subsystems (pdf / ai / db) convert their errors into [`AppError`],
+//! which is exported to Flutter via `flutter_rust_bridge`. This keeps the
+//! FFI boundary error surface flat and decoupled from any single crate's
+//! error enum.
 
 use thiserror::Error;
 
@@ -20,26 +20,14 @@ pub enum AppError {
     #[error("pdf error: {0}")]
     Pdf(String),
 
-    #[error("ocr error: {0}")]
-    Ocr(String),
-
     #[error("ai error: {0}")]
     Ai(String),
-
-    #[error("search error: {0}")]
-    Search(String),
 
     #[error("io error: {0}")]
     Io(String),
 
-    #[error("config error: {0}")]
-    Config(String),
-
     #[error("not found: {0}")]
     NotFound(String),
-
-    #[error("invalid input: {0}")]
-    InvalidInput(String),
 
     #[error("internal error: {0}")]
     Internal(String),
@@ -68,12 +56,6 @@ impl From<rusqlite::Error> for AppError {
 impl From<serde_json::Error> for AppError {
     fn from(e: serde_json::Error) -> Self {
         AppError::Internal(format!("serde: {e}"))
-    }
-}
-
-impl From<anyhow::Error> for AppError {
-    fn from(e: anyhow::Error) -> Self {
-        AppError::Internal(e.to_string())
     }
 }
 

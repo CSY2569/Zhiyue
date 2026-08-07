@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
+import 'package:rbwa/features/ai/widgets/ai_utils.dart';
 import 'package:rbwa/features/ai/widgets/message_bubble.dart'
     show AiMessageBubble, aiActionIcon;
 import 'package:rbwa/src/rust/models/ai.dart';
@@ -11,8 +11,14 @@ import 'package:rbwa/src/rust/models/ai.dart';
 /// thread history list, or the active chat thread with streaming answers.
 /// The bottom input bar supports Enter to send / Shift+Enter for a newline
 /// (FEATURES 8.9).
+///
+/// [bookId] / [bookTitle] snapshot the open book for direct questions
+/// (null = the no-book window).
 class AiPanelSide extends ConsumerStatefulWidget {
-  const AiPanelSide({super.key});
+  const AiPanelSide({super.key, this.bookId, this.bookTitle});
+
+  final int? bookId;
+  final String? bookTitle;
 
   @override
   ConsumerState<AiPanelSide> createState() => _AiPanelSideState();
@@ -40,7 +46,11 @@ class _AiPanelSideState extends ConsumerState<AiPanelSide> {
     setState(() => _sending = false);
     if (active == null) {
       // No thread yet: asking directly creates a new chat thread (6.5.1).
-      ref.read(aiProvider.notifier).askQuestion(text);
+      ref.read(aiProvider.notifier).askQuestion(
+            text,
+            bookId: widget.bookId,
+            bookTitle: widget.bookTitle,
+          );
     } else {
       ref.read(aiProvider.notifier).sendMessage(active.id, text);
     }
@@ -49,9 +59,7 @@ class _AiPanelSideState extends ConsumerState<AiPanelSide> {
   /// Enter sends (when not shift); Shift+Enter falls through to the default
   /// newline behavior of the multiline field (FEATURES 8.9).
   KeyEventResult _onInputKey(FocusNode node, KeyEvent event) {
-    if (event is KeyDownEvent &&
-        event.logicalKey == LogicalKeyboardKey.enter &&
-        !HardwareKeyboard.instance.isShiftPressed) {
+    if (isEnterWithoutShift(event)) {
       _send();
       return KeyEventResult.handled;
     }

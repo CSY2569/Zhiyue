@@ -2,17 +2,17 @@
 //!
 //! This module is the single aggregation point for all functions exported to
 //! Dart. Each subsystem exposes higher-level commands here; the Dart side
-//! never calls into `pdf` / `ocr` / `ai` / `search` / `db` directly. This
-//! keeps the FFI boundary narrow and the architecture loosely coupled
-//! (TECH_ROADMAP §1: "命令调用 -> Rust").
+//! never calls into `pdf` / `ai` / `db` directly. This keeps the FFI boundary
+//! narrow and the architecture loosely coupled (TECH_ROADMAP §1:
+//! "命令调用 -> Rust").
 //!
 //! Core exports:
 //!   - `init_core()`      : open SQLite, apply schema, set up logging.
 //!   - `app_version()`    : return crate version for the About UI.
 //!   - `get_setting` / `set_setting`: persisted KV settings.
 //!
-//! Subsystem commands (book import, render, ocr, ai, search) are added per
-//! milestone, each delegating to the relevant service trait.
+//! Subsystem commands (book import, render, annotations, ai) are added per
+//! milestone, each delegating to the relevant service.
 
 use std::path::Path;
 use std::sync::OnceLock;
@@ -21,13 +21,11 @@ use crate::db;
 use crate::db::repository::progress as progress_repo;
 use crate::db::repository::{book as book_repo, category as category_repo};
 use crate::db::repository::book::NewBook;
+use crate::error::{AppError, AppResult};
 use crate::models::book::{Book, BookType, Category};
 use crate::models::progress::{ReadingProgress, ViewMode};
 use crate::pdf;
 use crate::pdf::types::{CharBox, OutlineEntry, PageBitmap};
-// `pub use` so the generated `frb_generated.rs` (which does `use crate::api::*`)
-// can resolve these type names in its own scope.
-pub use crate::error::{AppError, AppResult};
 
 /// Global flag set once `init_core` succeeds. Cheap to read from Dart-side
 /// polling (skeleton only; M1+ replaces with a proper state machine).
@@ -584,14 +582,6 @@ pub async fn get_outline(book_id: i64) -> OutlineResult {
     }
 }
 
-/// Whether a page has a text layer (FEATURES 7.1.2: empty -> scanned).
-///
-/// Async: pdfium text loading is heavyweight.
-pub async fn page_has_text(book_id: i64, page: i64) -> bool {
-    let _ = book_id;
-    pdf::page_has_text(page).unwrap_or(false)
-}
-
 // -----------------------------------------------------------------------------
 // Reading progress (FEATURES 3.3.4)
 // -----------------------------------------------------------------------------
@@ -870,15 +860,6 @@ pub fn delete_ai_thread(thread_id: i64) -> i32 {
     }
 }
 
-/// Delete all threads (and their messages) -- "清空" in the panel (6.5.3).
-pub fn clear_ai_threads() -> i32 {
-    let conn = db::db();
-    match ai_repo::clear_threads(&conn) {
-        Ok(()) => 1,
-        Err(_) => 0,
-    }
-}
-
 /// The AI client for this build (real impl with the `ai` feature).
 #[cfg(feature = "ai")]
 fn ai_client() -> impl ai::AiClient {
@@ -1077,9 +1058,4 @@ async fn builtin_search_stream(
     sink: StreamSink<String>,
 ) {
     let _ = sink.add_error("AI support not compiled in (feature 'ai' disabled)".to_string());
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
 }

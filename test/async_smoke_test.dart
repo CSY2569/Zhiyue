@@ -3,50 +3,9 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:rbwa/src/rust/api.dart' as rust;
-import 'package:rbwa/src/rust/frb_generated.dart';
 import 'package:rbwa/src/rust/models/annotation.dart';
 
-/// Builds a minimal but valid one-page PDF (Helvetica text) with a correct
-/// xref table, so the smoke test does not depend on external sample files.
-String buildMinimalPdf(String text) {
-  final stream = 'BT /F1 24 Tf 72 770 Td ($text) Tj ET';
-  final objects = <String>[
-    '<< /Type /Catalog /Pages 2 0 R >>',
-    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] '
-        '/Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
-    '<< /Length ${stream.length} >>\nstream\n$stream\nendstream',
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-  ];
-  final sb = StringBuffer('%PDF-1.4\n');
-  final offsets = <int>[];
-  for (var i = 0; i < objects.length; i++) {
-    offsets.add(sb.length);
-    sb.write('${i + 1} 0 obj\n${objects[i]}\nendobj\n');
-  }
-  final xrefPos = sb.length;
-  sb.write('xref\n0 ${objects.length + 1}\n');
-  sb.write('0000000000 65535 f \n');
-  for (final off in offsets) {
-    sb.write('${off.toString().padLeft(10, '0')} 00000 n \n');
-  }
-  sb.write('trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\n'
-      'startxref\n$xrefPos\n%%EOF\n');
-  return sb.toString();
-}
-
-/// Isolated test database: every run starts from a fresh DB under /tmp, so
-/// integration tests never touch the user's real data.
-const _testDbPath = '/tmp/rbwa-test/rbwa.db';
-
-Future<void> _initIsolatedDb() async {
-  await RustLib.init();
-  final dir = Directory('/tmp/rbwa-test');
-  if (dir.existsSync()) dir.deleteSync(recursive: true);
-  dir.createSync(recursive: true);
-  final init = await rust.initCoreWithDbPath(dbPath: _testDbPath);
-  expect(init.ok, true, reason: 'core init: ${init.error}');
-}
+import 'helpers/smoke_helpers.dart';
 
 /// Smoke test for the Rust async pipeline: verifies that open_book and
 /// render_page (async FRB functions) complete without blocking/hanging, and
@@ -58,7 +17,7 @@ void main() {
     // A self-contained sample PDF for the whole suite.
     File('/tmp/test.pdf')
         .writeAsStringSync(buildMinimalPdf('Dummy PDF for RBWA smoke tests'));
-    await _initIsolatedDb();
+    await initIsolatedCore();
   });
 
   test('rust async pdf pipeline completes', () async {

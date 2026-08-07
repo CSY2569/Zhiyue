@@ -158,14 +158,6 @@ Future<PageRenderResult> renderThumbnail({
 Future<OutlineResult> getOutline({required PlatformInt64 bookId}) =>
     RustLib.instance.api.crateApiGetOutline(bookId: bookId);
 
-/// Whether a page has a text layer (FEATURES 7.1.2: empty -> scanned).
-///
-/// Async: pdfium text loading is heavyweight.
-Future<bool> pageHasText({
-  required PlatformInt64 bookId,
-  required PlatformInt64 page,
-}) => RustLib.instance.api.crateApiPageHasText(bookId: bookId, page: page);
-
 /// Load the saved reading position for a book. Returns `None` on first open.
 Future<ReadingProgress?> getProgress({required PlatformInt64 bookId}) =>
     RustLib.instance.api.crateApiGetProgress(bookId: bookId);
@@ -292,9 +284,6 @@ Future<int> appendAiMessage({
 /// window existed, 0 otherwise (6.5.3 per-window deletion).
 Future<int> deleteAiThread({required PlatformInt64 threadId}) =>
     RustLib.instance.api.crateApiDeleteAiThread(threadId: threadId);
-
-/// Delete all threads (and their messages) -- "清空" in the panel (6.5.3).
-Future<int> clearAiThreads() => RustLib.instance.api.crateApiClearAiThreads();
 
 /// Streaming text action (translate / explain / search / chat, FEATURES
 /// 6.2). `history` carries the thread's prior turns (6.5.2); the action's

@@ -20,14 +20,14 @@ use crate::error::AppResult;
 
 /// Global DB connection behind a Mutex. rusqlite::Connection is not `Sync`
 /// (internal RefCell), so all access serializes through this lock. Set once
-/// by [`init_database`], read by subsystems via [`db`].
+/// by [`init_database_at`], read by subsystems via [`db`].
 static DB: OnceLock<Mutex<Connection>> = OnceLock::new();
 
 /// Guard holding the DB lock; returned by [`db`] and dropped by the caller.
 pub type DbGuard<'a> = std::sync::MutexGuard<'a, Connection>;
 
 /// Lock and borrow the shared connection. Blocks until the lock is free.
-/// Panics if called before [`init_database`] (poisoned lock also panics).
+/// Panics if called before [`init_database_at`] (poisoned lock also panics).
 pub fn db() -> DbGuard<'static> {
     DB.get()
         .expect("database not initialized -- init_database() not called")
@@ -53,15 +53,10 @@ pub fn db_path() -> AppResult<PathBuf> {
 
 /// Initialize the database: open connection, apply PRAGMAs, run schema DDL,
 /// record schema version. Idempotent -- safe to call on every app start.
-/// Uses the default app-data path (production).
+/// Uses an explicit path so tests can isolate their data from the user's
+/// real database (`init_core_with_db_path`).
 ///
 /// Returns the resolved DB path (for display in the UI / logs).
-pub fn init_database() -> AppResult<PathBuf> {
-    init_database_at(&db_path()?)
-}
-
-/// Initialize the database at an explicit path. Used by integration tests to
-/// isolate test data from the user's real database (`init_core_with_db_path`).
 pub fn init_database_at(path: &Path) -> AppResult<PathBuf> {
     tracing::info!(?path, "opening SQLite database");
 

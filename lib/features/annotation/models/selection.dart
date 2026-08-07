@@ -24,7 +24,4 @@ class Selection {
   final int currentIndex;
   final String text;
   final List<NormRect> lineRects;
-
-  int get startIndex => anchorIndex < currentIndex ? anchorIndex : currentIndex;
-  int get endIndex => anchorIndex < currentIndex ? currentIndex : anchorIndex;
 }

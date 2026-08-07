@@ -113,13 +113,6 @@ pub fn delete_thread(conn: &Connection, thread_id: i64) -> AppResult<bool> {
     Ok(n > 0)
 }
 
-/// Delete all threads (messages go with them via cascade; FEATURES 6.5.3
-/// "清空").
-pub fn clear_threads(conn: &Connection) -> AppResult<()> {
-    conn.execute("DELETE FROM ai_threads", [])?;
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -214,19 +207,6 @@ mod tests {
         append_message(&conn, id, AiRole::Assistant, "a", None).unwrap();
         let threads = list_threads(&conn).unwrap();
         assert_eq!(threads[0].action_type, AiActionType::Vision);
-    }
-
-    #[test]
-    fn clear_threads_cascades_messages() {
-        let conn = test_conn();
-        let id = create_thread(&conn, "t", AiActionType::Search, None).unwrap();
-        append_message(&conn, id, AiRole::User, "q", None).unwrap();
-        append_message(&conn, id, AiRole::Assistant, "a", None).unwrap();
-
-        clear_threads(&conn).unwrap();
-        assert!(list_threads(&conn).unwrap().is_empty());
-        // Cascade delete removed the messages too.
-        assert!(list_messages(&conn, id).unwrap().is_empty());
     }
 
     #[test]

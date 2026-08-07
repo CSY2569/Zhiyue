@@ -453,14 +453,6 @@ impl AiClient for OpenAiClient {
             stream_request(&http, url, api_key, vision_model(config), messages).await
         }
     }
-
-    fn cancel(&self, _call_id: &str) -> impl Future<Output = AppResult<()>> + Send {
-        async move {
-            // Cancellation is implicit: dropping the stream (Dart cancels the
-            // FRB subscription) aborts the in-flight request.
-            Ok(())
-        }
-    }
 }
 
 #[cfg(test)]

@@ -203,15 +203,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             icon: const Icon(Icons.save_outlined, size: 18),
             label: Text(_saving ? '保存中…' : '保存 AI 配置'),
           ),
-          const Divider(),
-          _SectionTitle('OCR', theme),
-          ListTile(
-            leading: const Icon(Icons.document_scanner_outlined),
-            title: const Text('识别模式'),
-            subtitle: const Text('高精度（默认，M5 支持）'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {},
-          ),
         ],
       ),
     );

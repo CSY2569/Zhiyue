@@ -5,7 +5,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:rbwa/src/rust/api.dart' as rust;
-import 'package:rbwa/src/rust/frb_generated.dart';
+
+import 'helpers/smoke_helpers.dart';
 import 'package:rbwa/src/rust/models/ai.dart';
 
 /// Local OpenAI-compatible mock: serves SSE chat completions (or Responses
@@ -101,49 +102,13 @@ class MockOpenAi {
   Future<void> stop() => server.close(force: true);
 }
 
-/// Minimal valid PDF for page rendering (same builder as async_smoke_test).
-void _writeTestPdf() {
-  final stream = 'BT /F1 24 Tf 72 770 Td (Dummy PDF for RBWA AI tests) Tj ET';
-  final objects = <String>[
-    '<< /Type /Catalog /Pages 2 0 R >>',
-    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] '
-        '/Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
-    '<< /Length ${stream.length} >>\nstream\n$stream\nendstream',
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-  ];
-  final sb = StringBuffer('%PDF-1.4\n');
-  final offsets = <int>[];
-  for (var i = 0; i < objects.length; i++) {
-    offsets.add(sb.length);
-    sb.write('${i + 1} 0 obj\n${objects[i]}\nendobj\n');
-  }
-  final xrefPos = sb.length;
-  sb.write('xref\n0 ${objects.length + 1}\n');
-  sb.write('0000000000 65535 f \n');
-  for (final off in offsets) {
-    sb.write('${off.toString().padLeft(10, '0')} 00000 n \n');
-  }
-  sb.write('trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\n'
-      'startxref\n$xrefPos\n%%EOF\n');
-  File('/tmp/test.pdf').writeAsStringSync(sb.toString());
-}
-
-
-
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() async {
-    await RustLib.init();
-    // Isolated test database: AI config and page writes stay under /tmp and
-    // never touch the user's real data.
-    final dir = Directory('/tmp/rbwa-test');
-    if (dir.existsSync()) dir.deleteSync(recursive: true);
-    dir.createSync(recursive: true);
-    final init = await rust.initCoreWithDbPath(dbPath: '/tmp/rbwa-test/rbwa.db');
-    expect(init.ok, true, reason: 'core init: ${init.error}');
-    _writeTestPdf();
+    await initIsolatedCore();
+    File('/tmp/test.pdf').writeAsStringSync(
+        buildMinimalPdf('Dummy PDF for RBWA AI tests'));
   });
 
   test('stream_chat streams chunks and builds the right request', () async {
@@ -295,7 +260,9 @@ void main() {
         {noBook.id});
 
     // Cleanup so later tests see an empty history.
-    expect(await rust.clearAiThreads(), 1);
+    for (final t in await rust.listAiThreads()) {
+      await rust.deleteAiThread(threadId: t.id);
+    }
     expect(await rust.listAiThreads(), isEmpty);
   });
 

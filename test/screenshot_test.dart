@@ -12,62 +12,12 @@ import 'package:rbwa/features/ai/providers/ai_provider.dart';
 import 'package:rbwa/features/ai/widgets/result_card.dart';
 import 'package:rbwa/features/screenshot/free_screenshot_overlay.dart';
 import 'package:rbwa/features/screenshot/screenshot_provider.dart';
-import 'package:rbwa/src/rust/api.dart' show AiThreadCreateResult;
 import 'package:rbwa/src/rust/models/ai.dart';
+
+import 'helpers/fake_ai_repo.dart';
 
 const _red = Color(0xFFE53935);
 const _redArgb = 0xFFE53935;
-
-/// Fake AI repository: no Rust; the vision stream answers with fixed chunks
-/// and threads persist in memory (mirrors the FRB surface).
-class _FakeAiRepo extends AiRepository {
-  final visionCalls = <Uint8List>[];
-  final savedThreads = <int, String>{};
-  final savedMessages = <int, List<AiChatMessage>>{};
-  int _nextThreadId = 1;
-
-  @override
-  Future<List<AiThread>> listAiThreads() async => [];
-
-  @override
-  Future<List<AiMessage>> listAiMessages(int threadId) async => [];
-
-  @override
-  Future<AiThreadCreateResult> createAiThread({
-    required String title,
-    required AiActionType actionType,
-    required int? bookId,
-  }) async {
-    final id = _nextThreadId++;
-    savedThreads[id] = title;
-    savedMessages[id] = [];
-    return AiThreadCreateResult(id: id, error: null);
-  }
-
-  @override
-  Future<int> appendAiMessage({
-    required int threadId,
-    required AiRole role,
-    required String content,
-    AiActionType? actionType,
-  }) async {
-    savedMessages[threadId]?.add(AiChatMessage(role: role, content: content));
-    return 1;
-  }
-
-  @override
-  Future<int> clearAiThreads() async {
-    savedThreads.clear();
-    savedMessages.clear();
-    return 1;
-  }
-
-  @override
-  Stream<String> streamVisionPng({required Uint8List png}) {
-    visionCalls.add(png);
-    return Stream.fromIterable(['识别', '结果']);
-  }
-}
 
 /// Harness: a red box in a known window region + a button that enters
 /// screenshot mode (mirrors the reader toolbar 识图 entry).
@@ -111,12 +61,12 @@ class _Harness extends ConsumerWidget {
 
 void main() {
   late Directory tmpDir;
-  late _FakeAiRepo repo;
+  late FakeAiRepo repo;
 
   setUp(() async {
     // Screenshots land in an isolated temp dir -- never the user's disk.
     tmpDir = await Directory.systemTemp.createTemp('rbwa_shot_');
-    repo = _FakeAiRepo();
+    repo = FakeAiRepo();
   });
 
   tearDown(() async {

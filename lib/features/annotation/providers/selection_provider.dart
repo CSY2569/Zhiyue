@@ -35,7 +35,6 @@ class SelectionUiState {
 
   SelectionUiState copyWith({
     Selection? selection,
-    bool clearSelection = false,
     Rect? toolbarAnchor,
     bool clearAnchor = false,
     Offset? toolbarPos,
@@ -46,7 +45,7 @@ class SelectionUiState {
     bool clearComposer = false,
   }) {
     return SelectionUiState(
-      selection: clearSelection ? null : (selection ?? this.selection),
+      selection: selection ?? this.selection,
       toolbarAnchor: clearAnchor ? null : (toolbarAnchor ?? this.toolbarAnchor),
       toolbarPos: clearToolbarPos ? null : (toolbarPos ?? this.toolbarPos),
       noteTargetId: clearNote ? null : (noteTargetId ?? this.noteTargetId),

@@ -1,21 +1,15 @@
 //! Shared data models crossing the Rust <-> Dart FFI boundary.
 //!
 //! Every type here is `frb`-exportable (plain struct / enum). Subsystems
-//! produce/consume these; the Dart side receives immutable copies. Complex
-//! models get a matching `freezed` class on the Dart side for ergonomics.
+//! produce/consume these; the Dart side receives immutable copies.
 //!
 //! Milestone mapping:
 //!   book / category / progress -> M1
-//!   annotation (text + image)  -> M3 / M5
-//!   ocr                         -> M5
+//!   annotation (text)          -> M3
 //!   ai                          -> M4
-//!   search                      -> M6
-//!   settings                    -> M1
+//!   (ocr / search / image-layer models land with milestones M5 / M6)
 
 pub mod ai;
 pub mod annotation;
 pub mod book;
-pub mod ocr;
 pub mod progress;
-pub mod search;
-pub mod settings;

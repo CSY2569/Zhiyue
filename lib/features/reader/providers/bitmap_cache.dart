@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:collection';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:rbwa/data/repositories/reader_repository.dart';
+import 'package:rbwa/features/reader/providers/image_decoder.dart';
 
 /// Cache key: (bookId, page, renderZoom). Pages are 0-indexed.
 typedef _CacheKey = ({int bookId, int page, double renderZoom});
@@ -59,7 +59,8 @@ class BitmapCache {
           await _repo.renderPage(bookId, page, renderZoom, dpiScale);
       if (result.error != null || result.rgba.isEmpty) return null;
 
-      final image = await _decodeRgba(result.width, result.height, result.rgba);
+      final image =
+          await decodeRgbaImage(result.width, result.height, result.rgba);
       if (image == null) return null;
 
       _evictIfNeeded();
@@ -68,19 +69,6 @@ class BitmapCache {
     } catch (_) {
       return null;
     }
-  }
-
-  /// Decode raw RGBA bytes into a [ui.Image] via [ui.decodeImageFromPixels].
-  Future<ui.Image?> _decodeRgba(int width, int height, Uint8List rgba) {
-    final completer = Completer<ui.Image?>();
-    ui.decodeImageFromPixels(
-      rgba,
-      width,
-      height,
-      ui.PixelFormat.rgba8888,
-      (img) => completer.complete(img),
-    );
-    return completer.future;
   }
 
   void _evictIfNeeded() {

@@ -1,13 +1,15 @@
+import 'dart:typed_data' show Uint8List;
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
+import 'package:rbwa/features/ai/widgets/ai_utils.dart';
 import 'package:rbwa/src/rust/models/ai.dart';
 
 /// One AI conversation message bubble: user turns right-aligned, AI answers
-/// as Markdown on the left (shared by the reader side panel and the
-/// 「AI 对话」 page). Vision turns also show the screenshot that was sent
-/// (识图). Right-click / long-press copies that single message.
+/// as Markdown on the left (shared by the reader side panel, the result card
+/// and the 「AI 对话」 page). Vision turns also show the screenshot that was
+/// sent (识图). Right-click / long-press copies that single message.
 class AiMessageBubble extends StatelessWidget {
   const AiMessageBubble({
     super.key,
@@ -16,6 +18,7 @@ class AiMessageBubble extends StatelessWidget {
     this.imagePng,
     this.streaming = false,
     this.maxWidth = 260,
+    this.aiColor,
   });
 
   final AiRole role;
@@ -24,16 +27,13 @@ class AiMessageBubble extends StatelessWidget {
   final bool streaming;
   final double maxWidth;
 
+  /// Background of AI (assistant) bubbles; defaults to the theme's
+  /// `surfaceContainerHigh`. The result card passes its own tone.
+  final Color? aiColor;
+
   /// Right-click copies the whole message (desktop; long-press on touch).
-  Future<void> _copy(BuildContext context) async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      await Clipboard.setData(ClipboardData(text: content));
-      messenger.showSnackBar(const SnackBar(content: Text('已复制该消息')));
-    } catch (_) {
-      messenger.showSnackBar(const SnackBar(content: Text('复制失败')));
-    }
-  }
+  Future<void> _copy(BuildContext context) =>
+      copyTextWithSnack(context, content, okLabel: '已复制该消息');
 
   @override
   Widget build(BuildContext context) {
@@ -51,7 +51,7 @@ class AiMessageBubble extends StatelessWidget {
           decoration: BoxDecoration(
             color: isUser
                 ? theme.colorScheme.primaryContainer
-                : theme.colorScheme.surfaceContainerHigh,
+                : (aiColor ?? theme.colorScheme.surfaceContainerHigh),
             borderRadius: BorderRadius.circular(8),
           ),
           child: isUser

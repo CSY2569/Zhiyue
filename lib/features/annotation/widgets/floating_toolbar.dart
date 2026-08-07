@@ -16,8 +16,14 @@ import 'package:rbwa/src/rust/models/annotation.dart';
 ///
 /// Rendered inside an OverlayPortal; returns [SizedBox.shrink] when there is
 /// no anchored selection (or while the note composer is open).
+///
+/// [bookId] / [bookTitle] snapshot the open book for the AI actions; null =
+/// the no-book window.
 class FloatingToolbar extends ConsumerWidget {
-  const FloatingToolbar({super.key});
+  const FloatingToolbar({super.key, this.bookId, this.bookTitle});
+
+  final int? bookId;
+  final String? bookTitle;
 
   // Estimated size used for auto positioning before layout. Buttons are
   // compact so 8 fit on one row at the minimum window width (960).
@@ -127,7 +133,12 @@ class FloatingToolbar extends ConsumerWidget {
   ) async {
     final sel = ref.read(selectionProvider).selection;
     if (sel == null) return;
-    await ref.read(aiProvider.notifier).startAction(action, sel.text);
+    await ref.read(aiProvider.notifier).startAction(
+          action,
+          sel.text,
+          bookId: bookId,
+          bookTitle: bookTitle,
+        );
     ref.read(selectionProvider.notifier).clear();
   }
 

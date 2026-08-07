@@ -13,13 +13,11 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 # ---------------------------------------------------------------------------
 # Dependency strategy
 # ---------------------------------------------------------------------------
-# Skeleton stage: declare dependencies that are actually exercised by the
-# skeleton code (flutter_rust_bridge, rusqlite, tokio, anyhow, thiserror,
-# tracing, serde, dirs). Heavy subsystem crates (pdfium-render, async-openai,
-# jieba-rs, image) are declared here so they are pinned in the lockfile and
-# compile-checked, but are NOT deeply called yet -- real integration happens
-# per milestone (M2-M6). rapidocr-core is intentionally omitted until M5
-# because its API is still young; we will pin a version then.
+# Dependencies are declared only when actually exercised by the code
+# (flutter_rust_bridge, rusqlite, tokio, thiserror, tracing, serde, dirs).
+# Subsystem crates (pdfium-render, reqwest, image) are gated behind cargo
+# features per milestone (M2-M6). rapidocr-core is intentionally omitted
+# until M5 because its API is still young; we will pin a version then.
 # ---------------------------------------------------------------------------
 
 [dependencies]
@@ -44,9 +42,6 @@ pdfium-render = { version = "0.9", features = ["image_latest", "thread_safe"], o
 # `image_url.detail: null`), so only reqwest is needed.
 # async-openai = { version = "0.27", optional = true }
 
-# Chinese tokenization for FTS5 (M6)
-jieba-rs = { version = "0.7", optional = true }
-
 # Image processing - thumbnails (M2)
 image = { version = "0.25", optional = true }
 
@@ -66,7 +61,6 @@ base64 = "0.22"
 bytes = "1"
 
 # Error handling
-anyhow = "1"
 thiserror = "2"
 
 # Logging
@@ -77,17 +71,14 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 dirs = "5"
 
 # Misc
-once_cell = "1"
 uuid = { version = "1", features = ["v4"] }
-chrono = { version = "0.4", features = ["serde"] }
 
 [features]
 default = ["pdf", "ai"]
-# Opt-in subsystem crates, enabled per milestone to keep skeleton lean.
+# Opt-in subsystem crates, enabled per milestone to keep the build lean.
 pdf = ["dep:pdfium-render", "dep:image"]
 # M4: AI streaming client. `image` provides PNG encoding for vision screenshots.
 ai = ["dep:reqwest", "dep:image"]
-search = ["dep:jieba-rs"]
 
 [profile.release]
 opt-level = "z"

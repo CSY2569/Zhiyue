@@ -113,7 +113,11 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
             tooltip: '识图',
             onPressed: () {
               final overlay = Overlay.of(context, rootOverlay: true);
-              ref.read(screenshotProvider.notifier).begin(overlay);
+              ref.read(screenshotProvider.notifier).begin(
+                    overlay,
+                    bookId: state.book?.id,
+                    bookTitle: state.book?.title,
+                  );
             },
           ),
           // AI side panel (FEATURES 6.5) -- independent of the three sidebars.

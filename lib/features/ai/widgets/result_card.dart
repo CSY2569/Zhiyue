@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
+import 'package:rbwa/features/ai/widgets/ai_utils.dart';
+import 'package:rbwa/features/ai/widgets/message_bubble.dart'
+    show AiMessageBubble;
 import 'package:rbwa/src/rust/models/ai.dart' show AiRole;
 
 /// Floating AI result card (FEATURES 6.4): shows the active thread's full
@@ -15,8 +16,14 @@ import 'package:rbwa/src/rust/models/ai.dart' show AiRole;
 ///
 /// The card never closes by itself: it stays visible after streaming and
 /// across follow-ups, and only the close button hides it.
+///
+/// [bookId] / [bookTitle] snapshot the open book for the follow-up input
+/// (null = the no-book window).
 class ResultCard extends ConsumerWidget {
-  const ResultCard({super.key});
+  const ResultCard({super.key, this.bookId, this.bookTitle});
+
+  final int? bookId;
+  final String? bookTitle;
 
   static const double _cardWidth = 440;
   static const double _cardHeight = 360;
@@ -79,7 +86,8 @@ class ResultCard extends ConsumerWidget {
                       _CardButton(
                         icon: Icons.copy_outlined,
                         tooltip: '复制对话',
-                        onTap: () => _copy(context, conversation),
+                        onTap: () => copyTextWithSnack(context, conversation,
+                            okLabel: '已复制对话'),
                       ),
                       _CardButton(
                         icon: Icons.open_in_full_outlined,
@@ -107,23 +115,31 @@ class ResultCard extends ConsumerWidget {
                     if (tail != null)
                       tail.isEmpty
                           ? const _StreamingCursor()
-                          : _CardBubble(
+                          : AiMessageBubble(
                               role: AiRole.assistant,
                               content: tail,
                               streaming: true,
+                              maxWidth: 380,
+                              aiColor: theme.colorScheme.surfaceContainerHighest,
                             ),
                     ...messages.reversed.map(
-                      (m) => _CardBubble(
+                      (m) => AiMessageBubble(
                         role: m.role,
                         content: m.content,
                         imagePng: m.imagePng,
+                        maxWidth: 380,
+                        aiColor: theme.colorScheme.surfaceContainerHighest,
                       ),
                     ),
                   ],
                 ),
               ),
               const Divider(height: 8),
-              _CardInput(streaming: streamingHere),
+              _CardInput(
+                streaming: streamingHere,
+                bookId: bookId,
+                bookTitle: bookTitle,
+              ),
               const SizedBox(height: 8),
             ],
           ),
@@ -148,106 +164,20 @@ class ResultCard extends ConsumerWidget {
     }
     return sb.toString().trim();
   }
-
-  Future<void> _copy(BuildContext context, String text) async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      await Clipboard.setData(ClipboardData(text: text));
-      messenger.showSnackBar(const SnackBar(content: Text('已复制对话')));
-    } catch (_) {
-      messenger.showSnackBar(const SnackBar(content: Text('复制失败')));
-    }
-  }
-}
-
-/// One message bubble on the card: user turns right-aligned, AI answers as
-/// Markdown on the left (same layout as the side panel). Right-click /
-/// long-press copies that single message. Vision turns also show the
-/// screenshot that was sent (识图).
-class _CardBubble extends StatelessWidget {
-  const _CardBubble({
-    required this.role,
-    required this.content,
-    this.imagePng,
-    this.streaming = false,
-  });
-
-  final AiRole role;
-  final String content;
-  final Uint8List? imagePng;
-  final bool streaming;
-
-  Future<void> _copy(BuildContext context) async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      await Clipboard.setData(ClipboardData(text: content));
-      messenger.showSnackBar(const SnackBar(content: Text('已复制该消息')));
-    } catch (_) {
-      messenger.showSnackBar(const SnackBar(content: Text('复制失败')));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isUser = role == AiRole.user;
-    return Align(
-      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: GestureDetector(
-        onSecondaryTapDown: (_) => _copy(context),
-        onLongPress: () => _copy(context),
-        child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          constraints: const BoxConstraints(maxWidth: 380),
-          decoration: BoxDecoration(
-            color: isUser
-                ? theme.colorScheme.primaryContainer
-                : theme.colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: isUser
-              ? Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (imagePng != null) ...[
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: ConstrainedBox(
-                          constraints:
-                              const BoxConstraints(maxWidth: 360, maxHeight: 220),
-                          child: Image.memory(imagePng!, fit: BoxFit.contain),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                    ],
-                    Text(content, style: theme.textTheme.bodySmall),
-                  ],
-                )
-              : MarkdownBody(
-                  // GFM is the default extension set.
-                  data: streaming ? '$content\n\n▍' : content,
-                  styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
-                    p: theme.textTheme.bodySmall,
-                    codeblockDecoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                  ),
-                ),
-        ),
-      ),
-    );
-  }
 }
 
 /// Conversation input on the card: multi-turn follow-up (FEATURES 6.5.2).
 /// Enter sends / Shift+Enter adds a newline (8.9); disabled while streaming.
 class _CardInput extends ConsumerStatefulWidget {
-  const _CardInput({required this.streaming});
+  const _CardInput({
+    required this.streaming,
+    this.bookId,
+    this.bookTitle,
+  });
 
   final bool streaming;
+  final int? bookId;
+  final String? bookTitle;
 
   @override
   ConsumerState<_CardInput> createState() => _CardInputState();
@@ -272,16 +202,18 @@ class _CardInputState extends ConsumerState<_CardInput> {
     _input.clear();
     if (activeId == null) {
       // No thread yet: asking directly creates a new chat thread (6.5.1).
-      ref.read(aiProvider.notifier).askQuestion(text);
+      ref.read(aiProvider.notifier).askQuestion(
+            text,
+            bookId: widget.bookId,
+            bookTitle: widget.bookTitle,
+          );
     } else {
       ref.read(aiProvider.notifier).sendMessage(activeId, text);
     }
   }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
-    if (event is KeyDownEvent &&
-        event.logicalKey == LogicalKeyboardKey.enter &&
-        !HardwareKeyboard.instance.isShiftPressed) {
+    if (isEnterWithoutShift(event)) {
       _send();
       return KeyEventResult.handled;
     }

@@ -81,11 +81,7 @@ async fn main() {
         outline.entries.len(), outline.error);
     assert!(outline.error.is_none());
 
-    // 6. page_has_text.
-    let has_text = api::page_has_text(book.id, 0).await;
-    println!("[ok] page_has_text: {has_text}");
-
-    // 7. Save progress.
+    // 6. Save progress.
     let saved = api::save_progress(book.id, 1, 1.5, "single".into());
     println!("[ok] save_progress: {saved}");
     assert_eq!(saved, 1);

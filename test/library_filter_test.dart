@@ -86,7 +86,8 @@ void main() {
     expect(n.state.isClear, isFalse);
     n.showAll();
     expect(n.state.searchQuery, 'rust');
-    n.clear();
+    n.showAll();
+    n.setSearchQuery('');
     expect(n.state.isClear, isTrue);
   });
 

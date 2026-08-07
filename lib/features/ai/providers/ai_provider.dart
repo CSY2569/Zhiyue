@@ -6,140 +6,25 @@ import 'dart:ui' show Offset;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:rbwa/data/repositories/ai_repository.dart';
-import 'package:rbwa/features/reader/providers/viewer_provider.dart';
+import 'package:rbwa/features/ai/providers/ai_state.dart';
+import 'package:rbwa/features/ai/providers/ai_stream.dart';
 import 'package:rbwa/src/rust/models/ai.dart';
 
-/// One in-memory conversation window (FEATURES 6.5.4): every AI exchange
-/// inside a book shares its window (one window per book, [bookId]); null
-/// bookId = the no-book window.
-class AiThreadState {
-  AiThreadState({
-    required this.id,
-    required this.action,
-    required this.title,
-    this.dbId,
-    this.bookId,
-  });
-
-  final int id;
-  /// Latest action performed in this window (history-list icon).
-  AiActionType action;
-  /// Window title: the book title snapshot (or「未打开书籍」without one).
-  final String title;
-  /// The book this window belongs to; null = the no-book window.
-  final int? bookId;
-  /// Database row id once the window is persisted (null until then; the DB
-  /// is a shadow of this in-memory state, 6.5.4).
-  int? dbId;
-  /// Completed turns; the in-flight assistant answer lives in
-  /// [AiState.streamingText] until it finishes.
-  final List<AiChatMessage> messages = [];
-}
-
-/// A single chat message (role + markdown content).
-class AiChatMessage {
-  const AiChatMessage({
-    required this.role,
-    required this.content,
-    this.imagePng,
-  });
-
-  final AiRole role;
-  final String content;
-
-  /// Screenshot sent with a vision request (识图). In-memory only: the
-  /// persisted shadow row stores [content]; history reloads show the text.
-  final Uint8List? imagePng;
-}
-
-/// UI state for the AI subsystem (FEATURES 6.4 / 6.5).
-class AiState {
-  const AiState({
-    this.threads = const [],
-    this.activeThreadId,
-    this.streamingThreadId,
-    this.streamingText = '',
-    this.cardStreaming = false,
-    this.cardVisible = false,
-    this.cardPos = const Offset(80, 120),
-    this.aiPanelOpen = false,
-    this.historyLoaded = false,
-    this.panelCleared = false,
-  });
-
-  final List<AiThreadState> threads;
-  final int? activeThreadId;
-
-  /// Thread whose answer is currently streaming (FEATURES 6.3.1).
-  final int? streamingThreadId;
-  /// Accumulated text of the in-flight answer (card + panel bubble).
-  final String streamingText;
-
-  /// Whether the card's answer is still streaming (blinking cursor + stop).
-  final bool cardStreaming;
-
-  /// Whether the floating result card is shown (FEATURES 6.4.1).
-  final bool cardVisible;
-  /// User-dragged card position (FEATURES 8.4).
-  final Offset cardPos;
-
-  /// Whether the AI side panel is open.
-  final bool aiPanelOpen;
-
-  /// Whether persisted history has been loaded (6.5.4); thread operations
-  /// wait for this so in-memory ids never clash with database ids.
-  final bool historyLoaded;
-
-  /// After 「清空」 the panel stays on the empty guide (no window list) until
-  /// the next AI action; the windows and messages themselves are untouched.
-  final bool panelCleared;
-
-  AiThreadState? threadOf(int? id) {
-    for (final t in threads) {
-      if (t.id == id) return t;
-    }
-    return null;
-  }
-
-  AiState copyWith({
-    List<AiThreadState>? threads,
-    int? activeThreadId,
-    bool clearActiveThread = false,
-    int? streamingThreadId,
-    bool clearStreaming = false,
-    String? streamingText,
-    bool? cardStreaming,
-    bool? cardVisible,
-    Offset? cardPos,
-    bool? aiPanelOpen,
-    bool? historyLoaded,
-    bool? panelCleared,
-  }) {
-    return AiState(
-      threads: threads ?? this.threads,
-      activeThreadId: clearActiveThread
-          ? null
-          : (activeThreadId ?? this.activeThreadId),
-      streamingThreadId:
-          clearStreaming ? null : (streamingThreadId ?? this.streamingThreadId),
-      streamingText: streamingText ?? this.streamingText,
-      cardStreaming: cardStreaming ?? this.cardStreaming,
-      cardVisible: cardVisible ?? this.cardVisible,
-      cardPos: cardPos ?? this.cardPos,
-      aiPanelOpen: aiPanelOpen ?? this.aiPanelOpen,
-      historyLoaded: historyLoaded ?? this.historyLoaded,
-      panelCleared: panelCleared ?? this.panelCleared,
-    );
-  }
-}
+/// The state model lives in [ai_state]; re-exported so consumers importing
+/// this provider file keep seeing the state types.
+export 'ai_state.dart';
 
 /// Manages conversation windows, streaming, the result card, and the side
 /// panel (FEATURES 6.2-6.6). One window per book (6.5.4): every AI exchange
-/// inside a book shares its window. Windows persist to the database as a
-/// shadow of the in-memory state: the UI never blocks on writes.
+/// inside a book shares its window.
+///
+/// The caller (the reader page) passes the open book's id and title snapshot
+/// into each action, so this notifier never reads the reader's state.
+/// Windows persist to the database as a shadow of the in-memory state: the
+/// UI never blocks on writes.
 class AiNotifier extends Notifier<AiState> {
   int _nextThreadId = 1;
-  StreamSubscription<String>? _sub;
+  final AiStreamSession _session = AiStreamSession();
 
   /// Completes once persisted history is loaded; every thread operation
   /// awaits it first (so local ids never clash with database ids).
@@ -155,7 +40,7 @@ class AiNotifier extends Notifier<AiState> {
     _historyReady = Completer<void>();
     _loadHistory();
     // Stop streaming callbacks (they write state) when the element dies.
-    ref.onDispose(_cancelSub);
+    ref.onDispose(_session.cancel);
     return const AiState();
   }
 
@@ -191,7 +76,6 @@ class AiNotifier extends Notifier<AiState> {
     try {
       state = state.copyWith(
         threads: [...loaded, ...state.threads],
-        historyLoaded: true,
         activeThreadId:
             state.activeThreadId ?? (loaded.isNotEmpty ? loaded.last.id : null),
       );
@@ -206,10 +90,6 @@ class AiNotifier extends Notifier<AiState> {
     _dbQueue = _dbQueue.then((_) => op()).catchError((_) {});
   }
 
-  /// The currently open book (null when the reader has no book, or outside
-  /// the reader -- the no-book window).
-  int? get _currentBookId => ref.read(viewerProvider).book?.id;
-
   /// The existing window for [bookId], if any (one window per book).
   AiThreadState? _windowOf(int? bookId) {
     for (final w in state.threads) {
@@ -220,19 +100,21 @@ class AiNotifier extends Notifier<AiState> {
 
   /// Window title: the book title snapshot; the no-book window is labeled
   /// 「未打开书籍」.
-  String _windowTitle(int? bookId) {
+  String _windowTitle(int? bookId, String? bookTitle) {
     if (bookId == null) return '未打开书籍';
-    final title = ref.read(viewerProvider).book?.title;
-    if (title == null || title.trim().isEmpty) return '未打开书籍';
-    return title;
+    if (bookTitle == null || bookTitle.trim().isEmpty) return '未打开书籍';
+    return bookTitle;
   }
 
-  /// Resolve the conversation window for the current book, creating it in
-  /// memory when missing (persistence happens in the callers). Returns the
-  /// window and whether it was just created. An existing window's latest
-  /// action is refreshed for the history icon.
-  (AiThreadState, bool) _resolveWindow(AiActionType action) {
-    final bookId = _currentBookId;
+  /// Resolve the conversation window for [bookId], creating it in memory when
+  /// missing (persistence happens in the callers). Returns the window and
+  /// whether it was just created. An existing window's latest action is
+  /// refreshed for the history icon.
+  (AiThreadState, bool) _resolveWindow(
+    AiActionType action,
+    int? bookId,
+    String? bookTitle,
+  ) {
     final existing = _windowOf(bookId);
     if (existing != null) {
       existing.action = action;
@@ -241,7 +123,7 @@ class AiNotifier extends Notifier<AiState> {
     final window = AiThreadState(
       id: _nextThreadId++,
       action: action,
-      title: _windowTitle(bookId),
+      title: _windowTitle(bookId, bookTitle),
       bookId: bookId,
     );
     state = state.copyWith(threads: [...state.threads, window]);
@@ -288,12 +170,18 @@ class AiNotifier extends Notifier<AiState> {
   // Actions from the floating toolbar (FEATURES 6.2)
   // ---------------------------------------------------------------------------
 
-  /// Start an action on a selection (FEATURES 6.2): routes into the current
-  /// book's conversation window (creating it when it does not exist yet) and
-  /// streams the answer into the result card.
-  Future<void> startAction(AiActionType action, String text) async {
+  /// Start an action on a selection (FEATURES 6.2): routes into [bookId]'s
+  /// conversation window (creating it when it does not exist yet) and streams
+  /// the answer into the result card. [bookId] / [bookTitle] snapshot the
+  /// currently open book; null = the no-book window.
+  Future<void> startAction(
+    AiActionType action,
+    String text, {
+    required int? bookId,
+    required String? bookTitle,
+  }) async {
     await _historyReady.future;
-    final (window, isNew) = _resolveWindow(action);
+    final (window, isNew) = _resolveWindow(action, bookId, bookTitle);
     window.messages.add(AiChatMessage(role: AiRole.user, content: text));
     if (isNew) {
       _persistWindow(window, text); // create + first user message
@@ -324,16 +212,29 @@ class AiNotifier extends Notifier<AiState> {
   }
 
   /// Ask a question without a selection (FEATURES 6.5.1): new chat thread.
-  Future<void> askQuestion(String text) =>
-      startAction(AiActionType.chat, text);
+  Future<void> askQuestion(
+    String text, {
+    required int? bookId,
+    required String? bookTitle,
+  }) =>
+      startAction(
+        AiActionType.chat,
+        text,
+        bookId: bookId,
+        bookTitle: bookTitle,
+      );
 
-  /// Region vision (识图): the captured screenshot goes into the current
-  /// book's conversation window and the answer streams into the result card.
+  /// Region vision (识图): the captured screenshot goes into [bookId]'s
+  /// conversation window and the answer streams into the result card.
   /// The screenshot is pixel-exact (captured straight from the window's
   /// composited layer), so the model sees exactly what was selected.
-  Future<void> startVision(Uint8List png) async {
+  Future<void> startVision(
+    Uint8List png, {
+    required int? bookId,
+    required String? bookTitle,
+  }) async {
     await _historyReady.future;
-    final (window, isNew) = _resolveWindow(AiActionType.vision);
+    final (window, isNew) = _resolveWindow(AiActionType.vision, bookId, bookTitle);
     window.messages.add(AiChatMessage(
       role: AiRole.user,
       content: '（区域截图）',
@@ -381,8 +282,6 @@ class AiNotifier extends Notifier<AiState> {
   }
 
   void _startStream(AiThreadState thread, Stream<String> stream) {
-    _cancelSub();
-    final sb = StringBuffer();
     state = state.copyWith(
       streamingThreadId: thread.id,
       streamingText: '',
@@ -390,19 +289,11 @@ class AiNotifier extends Notifier<AiState> {
       // (selection actions); panel follow-ups stream inline instead.
       cardStreaming: state.cardVisible,
     );
-    _sub = stream.listen(
-      (chunk) {
-        sb.write(chunk);
-        state = state.copyWith(streamingText: sb.toString());
-      },
-      onError: (Object e) {
-        // Errors (e.g. HTTP 400 with the provider message) are appended to
-        // the answer text so they show up on the card AND in the panel.
-        sb.write('\n\n> ⚠️ ${_errorText(e)}');
-        state = state.copyWith(streamingText: sb.toString());
-        _finishStream(thread, sb.toString());
-      },
-      onDone: () => _finishStream(thread, sb.toString()),
+    _session.start(
+      stream,
+      onUpdate: (text) => state = state.copyWith(streamingText: text),
+      onFinish: (text) => _finishStream(thread, text),
+      formatError: _errorText,
     );
   }
 
@@ -418,7 +309,6 @@ class AiNotifier extends Notifier<AiState> {
       clearStreaming: true, // panel bubble -> message list
       cardStreaming: false, // card keeps showing the full answer
     );
-    _sub = null;
   }
 
   /// Keep the in-flight partial answer in the thread (and its shadow row).
@@ -431,50 +321,36 @@ class AiNotifier extends Notifier<AiState> {
     }
   }
 
-  /// Cancel the in-flight call (FEATURES 6.3.2): drops the FRB subscription,
-  /// which aborts the Rust request. The card keeps the partial answer.
-  void cancelStreaming() {
-    _cancelSub();
-    final thread = state.threadOf(state.streamingThreadId);
-    _keepPartialAnswer(thread, state.streamingText);
-    state = state.copyWith(
-      clearStreaming: true,
-      cardStreaming: false,
-    );
-  }
-
-  void _cancelSub() {
-    _sub?.cancel();
-    _sub = null;
-  }
-
   // ---------------------------------------------------------------------------
   // Result card (FEATURES 6.4)
   // ---------------------------------------------------------------------------
 
-  /// Move the card's streaming content into the side panel thread.
-  void moveCardToPanel() {
-    _cancelSub();
+  /// Shared tail of the card-teardown actions: keep the partial answer in
+  /// the thread, then drop the in-flight stream and clear the streaming
+  /// flags. [hideCard] hides the result card (close / expand); the stop
+  /// button keeps it visible with the partial answer (6.3.2). [openPanel]
+  /// (the expand action) additionally opens the side panel.
+  void _endStream({bool hideCard = false, bool openPanel = false}) {
     _keepPartialAnswer(state.threadOf(state.streamingThreadId), state.streamingText);
+    _session.cancel();
     state = state.copyWith(
       clearStreaming: true,
       cardStreaming: false,
-      cardVisible: false,
-      aiPanelOpen: true,
+      cardVisible: (hideCard || openPanel) ? false : null,
+      aiPanelOpen: openPanel ? true : null,
     );
   }
 
+  /// Cancel the in-flight call (FEATURES 6.3.2): drops the FRB subscription,
+  /// which aborts the Rust request. The card keeps the partial answer.
+  void cancelStreaming() => _endStream();
+
+  /// Move the card's streaming content into the side panel thread.
+  void moveCardToPanel() => _endStream(openPanel: true);
+
   /// Close the result card (button, FEATURES 8.6). If an answer is still
   /// streaming, its partial text is kept in the thread.
-  void closeCard() {
-    _cancelSub();
-    _keepPartialAnswer(state.threadOf(state.streamingThreadId), state.streamingText);
-    state = state.copyWith(
-      clearStreaming: true,
-      cardStreaming: false,
-      cardVisible: false,
-    );
-  }
+  void closeCard() => _endStream(hideCard: true);
 
   void moveCard(Offset pos) => state = state.copyWith(cardPos: pos);
 
@@ -493,7 +369,7 @@ class AiNotifier extends Notifier<AiState> {
   /// the 「AI 对话」 page (deleteWindow) or in the database, never here.
   Future<void> clearThreads() async {
     await _historyReady.future;
-    _cancelSub();
+    _session.cancel();
     state = state.copyWith(
       clearActiveThread: true,
       clearStreaming: true,
@@ -509,7 +385,7 @@ class AiNotifier extends Notifier<AiState> {
     await _historyReady.future;
     final remaining = state.threads.where((w) => w.id != threadId).toList();
     if (remaining.length == state.threads.length) return;
-    _cancelSub();
+    _session.cancel();
     state = state.copyWith(
       threads: remaining,
       clearActiveThread: state.activeThreadId == threadId,
@@ -531,7 +407,6 @@ class AiNotifier extends Notifier<AiState> {
 
   /// Back to the window list (the panel header's back button).
   void showWindowList() => state = state.copyWith(clearActiveThread: true);
-
 
   String _errorText(Object e) {
     final s = e.toString();

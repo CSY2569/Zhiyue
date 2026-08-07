@@ -45,10 +45,6 @@ class ReaderRepository {
   Future<rust.OutlineResult> getOutline(int bookId) =>
       rust.getOutline(bookId: bookId);
 
-  /// Whether a page has a text layer (empty -> scanned).
-  Future<bool> pageHasText(int bookId, int page) =>
-      rust.pageHasText(bookId: bookId, page: page);
-
   /// Load the saved reading position for a book.
   Future<ReadingProgress?> getProgress(int bookId) =>
       rust.getProgress(bookId: bookId);

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/features/annotation/annotation_icons.dart';
 import 'package:rbwa/features/annotation/export_actions.dart';
 import 'package:rbwa/features/annotation/providers/annotation_provider.dart';
 import 'package:rbwa/src/rust/models/annotation.dart';
@@ -54,19 +55,6 @@ class NotesRail extends ConsumerWidget {
   }
 }
 
-IconData _kindIcon(TextAnnotationKind kind) {
-  switch (kind) {
-    case TextAnnotationKind.highlight:
-      return Icons.border_color;
-    case TextAnnotationKind.underline:
-      return Icons.format_underlined;
-    case TextAnnotationKind.strikethrough:
-      return Icons.format_strikethrough;
-    case TextAnnotationKind.note:
-      return Icons.edit_note;
-  }
-}
-
 class _PageHeader extends StatelessWidget {
   const _PageHeader({required this.page});
 
@@ -116,7 +104,7 @@ class _AnnotationTile extends ConsumerWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(_kindIcon(ann.kind),
+              Icon(textAnnotationIcon(ann.kind),
                   size: 16, color: theme.colorScheme.primary),
               const SizedBox(width: 8),
               Expanded(

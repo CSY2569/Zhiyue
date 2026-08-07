@@ -16,26 +16,16 @@ dependencies:
 
   # State management
   flutter_riverpod: ^2.6.1
-  riverpod_annotation: ^2.6.1
 
   # Routing
   go_router: ^14.6.2
 
-  # Immutable data models
-  freezed_annotation: ^2.4.4
-  json_annotation: ^4.9.0
-
   # Window / desktop
   window_manager: ^0.4.3
   file_picker: ^8.1.6
-  super_clipboard: ^0.8.18
 
-  # Rendering (AI answers: Markdown + LaTeX)
+  # Rendering (AI answers: Markdown)
   flutter_markdown: ^0.7.4+3
-  flutter_math_fork: ^0.7.3
-
-  # Persistence (transitional, before SQLite-backed settings)
-  shared_preferences: ^2.3.3
 
   # Path utilities (app data dir)
   path: ^1.9.0
@@ -47,14 +37,6 @@ dev_dependencies:
     sdk: flutter
 
   flutter_lints: ^6.0.0
-
-  # Codegen
-  build_runner: ^2.4.13
-  freezed: ^2.5.7
-  json_serializable: ^6.9.0
-  riverpod_generator: ^2.6.3
-  custom_lint: ^0.7.0
-  riverpod_lint: ^2.6.3
 
 flutter:
   uses-material-design: true

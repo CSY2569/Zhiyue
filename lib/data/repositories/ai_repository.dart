@@ -74,9 +74,6 @@ class AiRepository {
   /// existed.
   Future<int> deleteAiThread(int threadId) =>
       rust.deleteAiThread(threadId: threadId);
-
-  /// Delete all threads and their messages ("清空").
-  Future<int> clearAiThreads() => rust.clearAiThreads();
 }
 
 /// Riverpod provider for the singleton [AiRepository].
