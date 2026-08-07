@@ -6,6 +6,92 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+/// An image-layer mark (FEATURES 5.1-5.5): normalized position + rotation,
+/// kind-specific JSON `payload` (path points / text / image ref / geometry)
+/// and `style` (color / strokeWidth / fill / fontSize). Marks never modify
+/// the underlying image; they render as a separate layer on top.
+class ImageAnnotation {
+  final PlatformInt64 id;
+  final PlatformInt64 bookId;
+  final PlatformInt64 page;
+  final ImageAnnotationKind kind;
+  final double x;
+  final double y;
+  final double? w;
+  final double? h;
+  final double rotation;
+
+  /// JSON: kind-specific data (path points / text / image ref / geometry).
+  final String payload;
+
+  /// JSON: style (color / strokeWidth / fill / fontSize).
+  final String style;
+  final String createdAt;
+
+  const ImageAnnotation({
+    required this.id,
+    required this.bookId,
+    required this.page,
+    required this.kind,
+    required this.x,
+    required this.y,
+    this.w,
+    this.h,
+    required this.rotation,
+    required this.payload,
+    required this.style,
+    required this.createdAt,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      bookId.hashCode ^
+      page.hashCode ^
+      kind.hashCode ^
+      x.hashCode ^
+      y.hashCode ^
+      w.hashCode ^
+      h.hashCode ^
+      rotation.hashCode ^
+      payload.hashCode ^
+      style.hashCode ^
+      createdAt.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ImageAnnotation &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          bookId == other.bookId &&
+          page == other.page &&
+          kind == other.kind &&
+          x == other.x &&
+          y == other.y &&
+          w == other.w &&
+          h == other.h &&
+          rotation == other.rotation &&
+          payload == other.payload &&
+          style == other.style &&
+          createdAt == other.createdAt;
+}
+
+/// Image annotation kind (FEATURES 5.1-5.4).
+enum ImageAnnotationKind {
+  /// Freehand brush stroke -- vector path (FEATURES 5.1).
+  brush,
+
+  /// Geometric shape: arrow / rect / ellipse (FEATURES 5.4).
+  shape,
+
+  /// Floating sticky note / text box (FEATURES 5.2).
+  sticky,
+
+  /// Stamp / signature image (FEATURES 5.3).
+  stamp,
+}
+
 /// A normalized rectangle on a page: all values in [0.0, 1.0].
 class NormRect {
   final double x;

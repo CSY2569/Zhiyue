@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:rbwa/features/annotation/providers/annotation_provider.dart';
 import 'package:rbwa/features/annotation/widgets/highlight_layer.dart';
+import 'package:rbwa/features/annotation/widgets/image_mark_layer.dart';
 import 'package:rbwa/features/annotation/widgets/selection_layer.dart';
 import 'package:rbwa/features/reader/providers/bitmap_cache.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
@@ -777,6 +778,13 @@ class _PageItemState extends ConsumerState<_PageItem> {
                   page: widget.page,
                   annotations: pageAnns,
                 ),
+              ),
+              // Image-layer marks (FEATURES §5): painted above the selection
+              // layer; when a mark tool is armed this layer captures the
+              // pointer events (draw / move / resize), otherwise it is
+              // hit-test transparent.
+              Positioned.fill(
+                child: ImageMarkLayer(page: widget.page),
               ),
             ],
           ),

@@ -7,8 +7,8 @@ import 'package:rbwa/data/repositories/reader_repository.dart';
 import 'package:rbwa/src/rust/models/book.dart';
 import 'package:rbwa/src/rust/models/progress.dart';
 
-/// Which sidebar panel is open (FEATURES 3.4.4).
-enum SidebarType { thumbnails, outline, annotations }
+/// Which sidebar panel is open (FEATURES 3.4.4 / 5.5).
+enum SidebarType { thumbnails, outline, annotations, imageMarks }
 
 /// Immutable snapshot of the reader's state (FEATURES §3).
 class ViewerState {

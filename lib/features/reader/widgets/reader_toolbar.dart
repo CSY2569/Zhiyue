@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
+import 'package:rbwa/features/annotation/providers/image_mark_provider.dart'
+    show MarkTool, markToolProvider;
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
 import 'package:rbwa/features/screenshot/screenshot_provider.dart';
 import 'package:rbwa/src/rust/models/progress.dart';
@@ -55,6 +57,12 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
             active: state.openSidebar == SidebarType.annotations,
             onTap: () => notifier.toggleSidebar(SidebarType.annotations),
           ),
+          _SidebarToggle(
+            icon: Icons.layers_outlined,
+            label: '标记',
+            active: state.openSidebar == SidebarType.imageMarks,
+            onTap: () => notifier.toggleSidebar(SidebarType.imageMarks),
+          ),
           const _Divider(),
           // View mode selector (3.1): one popup for the three modes.
           const _ModeSelector(),
@@ -66,7 +74,7 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
             onPressed: notifier.zoomOut,
           ),
           SizedBox(
-            width: 48,
+            width: 40,
             child: Text(
               '${(state.zoom * 100).round()}%',
               textAlign: TextAlign.center,
@@ -105,6 +113,20 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
                 : null,
           ),
           const Spacer(),
+          // 批注入口 (FEATURES §5): toggles the mark tools; the tool bar
+          // itself floats above the reading area (MarkToolBar) so it has
+          // room for the tools + style controls.
+          _SidebarToggle(
+            icon: Icons.brush_outlined,
+            label: '批注',
+            active: ref.watch(markToolProvider.select((s) => s.tool != null)),
+            onTap: () {
+              final armed = ref.read(markToolProvider).tool != null;
+              ref
+                  .read(markToolProvider.notifier)
+                  .setTool(armed ? null : MarkTool.select);
+            },
+          ),
           // 识图 (region vision, FEATURES 6.6.2 / 7.2): full-window
           // selection; the captured pixels go straight to the vision model
           // and the answer streams into the result card (所选即所得).
@@ -255,6 +277,7 @@ class _SidebarToggle extends StatelessWidget {
       child: IconButton(
         icon: Icon(icon, size: 20),
         color: active ? theme.colorScheme.primary : null,
+        visualDensity: VisualDensity.compact,
         onPressed: onTap,
       ),
     );

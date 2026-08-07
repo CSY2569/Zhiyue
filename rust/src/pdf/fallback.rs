@@ -34,3 +34,25 @@ pub fn outline() -> AppResult<Vec<OutlineEntry>> {
 }
 
 pub fn close() {}
+
+pub fn open_image(_path: &str) -> AppResult<i64> {
+    Err(AppError::Pdf(NOT_BUILT.into()))
+}
+
+pub fn render_image(_page: i64, _zoom: f32, _dpi_scale: f32) -> AppResult<PageBitmap> {
+    Err(AppError::Pdf(NOT_BUILT.into()))
+}
+
+pub fn thumbnail_image(_page: i64, _max_size: u32) -> AppResult<PageBitmap> {
+    Err(AppError::Pdf(NOT_BUILT.into()))
+}
+
+pub fn extract_image_text(_page: i64) -> AppResult<Vec<CharBox>> {
+    Err(AppError::Pdf(NOT_BUILT.into()))
+}
+
+pub fn page_image_has_text(_page: i64) -> AppResult<bool> {
+    Err(AppError::Pdf(NOT_BUILT.into()))
+}
+
+pub fn close_image() {}

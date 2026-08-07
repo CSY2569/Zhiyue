@@ -8,6 +8,7 @@ import 'models/ai.dart';
 import 'models/annotation.dart';
 import 'models/book.dart';
 import 'models/progress.dart';
+import 'ocr.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'pdf/types.dart';
 
@@ -111,22 +112,24 @@ Future<int> renameCategory({required PlatformInt64 id, required String name}) =>
 Future<int> deleteCategory({required PlatformInt64 id}) =>
     RustLib.instance.api.crateApiDeleteCategory(id: id);
 
-/// Open a book's PDF for reading (FEATURES 3.1). Must be called before
-/// `render_page`, `get_outline`, etc. The document stays open until another
-/// book is opened or `close_book` is called.
+/// Open a book's document for reading. Image books (PNG / JPG / WEBP) decode
+/// via the `image` crate; PDFs open via pdfium. Must precede render/outline
+/// calls (FEATURES 3.3). The document stays open until another book is
+/// opened or `close_book` is called.
 ///
-/// Async: pdfium document open is heavyweight and must not block the UI.
+/// Async: document open is heavyweight and must not block the UI.
 Future<OpenBookResult> openBook({required String storedPath}) =>
     RustLib.instance.api.crateApiOpenBook(storedPath: storedPath);
 
 /// Close the currently-open document, freeing its memory.
 Future<void> closeBook() => RustLib.instance.api.crateApiCloseBook();
 
-/// Render a page (0-indexed) to an RGBA bitmap (FEATURES 3.6.2).
+/// Render a page (0-indexed) to an RGBA bitmap (FEATURES 3.6.2 / 7.3).
 /// `zoom` is the user zoom factor (1.0 = 100%); `dpi_scale` is the device
-/// pixel ratio for high-DPI rendering.
+/// pixel ratio for high-DPI rendering. Image books render through the same
+/// pipeline (their single page scales with zoom).
 ///
-/// Async: pdfium rendering is heavyweight and must not block the UI.
+/// Async: rendering is heavyweight and must not block the UI.
 Future<PageRenderResult> renderPage({
   required PlatformInt64 bookId,
   required PlatformInt64 page,
@@ -139,9 +142,9 @@ Future<PageRenderResult> renderPage({
   dpiScale: dpiScale,
 );
 
-/// Render a small thumbnail for the sidebar (FEATURES 3.4.1).
+/// Render a small thumbnail for the sidebar (FEATURES 3.4.1 / 7.3).
 ///
-/// Async: pdfium rendering is heavyweight and must not block the UI.
+/// Async: rendering is heavyweight and must not block the UI.
 Future<PageRenderResult> renderThumbnail({
   required PlatformInt64 bookId,
   required PlatformInt64 page,
@@ -178,7 +181,8 @@ Future<int> saveProgress({
 
 /// Extract per-character boxes for a page (0-indexed), normalized to [0,1]
 /// with a top-left origin (Flutter coordinate space). Empty `boxes` means the
-/// page has no text layer (scanned page -- OCR selection lands in M5).
+/// page has no text layer (scanned page / image book -- OCR selection lands
+/// in M5).
 ///
 /// Async: pdfium text traversal is heavyweight and must not block the UI.
 Future<CharBoxResult> extractText({
@@ -225,16 +229,79 @@ Future<int> updateAnnotationContent({
 Future<int> deleteAnnotation({required PlatformInt64 annotationId}) =>
     RustLib.instance.api.crateApiDeleteAnnotation(annotationId: annotationId);
 
-/// Export all annotations of a book as Markdown (FEATURES 4.5.2): `# 阅读标注`
-/// -> `## 第 N 页` -> one bullet per annotation, notes quoted underneath.
+/// Export all annotations of a book as Markdown (FEATURES 4.5.2 / 5.6):
+/// `# 阅读标注` -> `## 第 N 页` -> one bullet per annotation, notes quoted
+/// underneath; image-layer marks merge into their page sections.
 Future<ExportResult> exportAnnotationsMarkdown({
   required PlatformInt64 bookId,
 }) => RustLib.instance.api.crateApiExportAnnotationsMarkdown(bookId: bookId);
 
 /// Export all annotations of a book as pretty-printed JSON, including
-/// coordinates and style (FEATURES 4.5.3).
+/// coordinates and style (FEATURES 4.5.3); image-layer marks included (5.6).
 Future<ExportResult> exportAnnotationsJson({required PlatformInt64 bookId}) =>
     RustLib.instance.api.crateApiExportAnnotationsJson(bookId: bookId);
+
+/// List all image-layer marks of a book, ordered by page then creation
+/// (FEATURES 5.5: the layer panel groups them by page).
+Future<List<ImageAnnotation>> listImageAnnotations({
+  required PlatformInt64 bookId,
+}) => RustLib.instance.api.crateApiListImageAnnotations(bookId: bookId);
+
+/// Create an image-layer mark (brush / shape / sticky / stamp). `payload`
+/// and `style` are kind-specific JSON strings (FEATURES 5.1-5.5).
+Future<ImageMarkCreateResult> createImageAnnotation({
+  required PlatformInt64 bookId,
+  required PlatformInt64 page,
+  required ImageAnnotationKind kind,
+  required double x,
+  required double y,
+  double? w,
+  double? h,
+  required double rotation,
+  required String payload,
+  required String style,
+}) => RustLib.instance.api.crateApiCreateImageAnnotation(
+  bookId: bookId,
+  page: page,
+  kind: kind,
+  x: x,
+  y: y,
+  w: w,
+  h: h,
+  rotation: rotation,
+  payload: payload,
+  style: style,
+);
+
+/// Update an image-layer mark in full (position / payload / style -- marks
+/// are selectable, movable and editable, FEATURES 5.1-5.5). Returns 1 on
+/// success.
+Future<int> updateImageAnnotation({
+  required PlatformInt64 annotationId,
+  required double x,
+  required double y,
+  double? w,
+  double? h,
+  required double rotation,
+  required String payload,
+  required String style,
+}) => RustLib.instance.api.crateApiUpdateImageAnnotation(
+  annotationId: annotationId,
+  x: x,
+  y: y,
+  w: w,
+  h: h,
+  rotation: rotation,
+  payload: payload,
+  style: style,
+);
+
+/// Delete an image-layer mark by id (FEATURES 5.5: per-mark deletion and
+/// layer-wide clear both reduce to this). Returns 1 on success.
+Future<int> deleteImageAnnotation({required PlatformInt64 annotationId}) =>
+    RustLib.instance.api.crateApiDeleteImageAnnotation(
+      annotationId: annotationId,
+    );
 
 /// Load the BYOK AI configuration (FEATURES 6.1), or defaults on first run.
 Future<AiConfig> getAiConfig() => RustLib.instance.api.crateApiGetAiConfig();
@@ -306,6 +373,42 @@ Stream<String> streamChat({
 /// composited layer), so what the model sees is exactly what was selected.
 Stream<String> streamVisionPng({required List<int> png}) =>
     RustLib.instance.api.crateApiStreamVisionPng(png: png);
+
+/// Whether a page has a text layer (FEATURES 7.1.2: empty -> scanned /
+/// image page). Drives the "扫描识别" prompt in the reader.
+Future<bool> pageHasText({
+  required PlatformInt64 bookId,
+  required PlatformInt64 page,
+}) => RustLib.instance.api.crateApiPageHasText(bookId: bookId, page: page);
+
+/// The cached scan result for a page, if any (FEATURES 7.1.4). The Flutter
+/// side queries this to build the invisible text layer without re-scanning.
+Future<OcrResult?> getPageOcr({
+  required PlatformInt64 bookId,
+  required PlatformInt64 page,
+  required OcrMode mode,
+}) => RustLib.instance.api.crateApiGetPageOcr(
+  bookId: bookId,
+  page: page,
+  mode: mode,
+);
+
+/// Full-page OCR scan (FEATURES 7.1.2 / 7.1.8): renders the page at its
+/// original resolution (not the display zoom) and runs the engine; the
+/// result is cached per (book_id, page, mode) (7.1.4). With the stub engine
+/// (models not installed) this returns an explicit error, which the UI
+/// surfaces as the "扫描识别" prompt.
+///
+/// Async: rendering + inference must not block the UI.
+Future<ScanPageResult> scanPage({
+  required PlatformInt64 bookId,
+  required PlatformInt64 page,
+  required OcrMode mode,
+}) => RustLib.instance.api.crateApiScanPage(
+  bookId: bookId,
+  page: page,
+  mode: mode,
+);
 
 /// Result of creating a persisted thread (FEATURES 6.5.4). `id` is -1 and
 /// `error` set on failure (sentinel convention: no `Result` across FRB).
@@ -385,6 +488,25 @@ class ExportResult {
           error == other.error;
 }
 
+/// Result of creating an image-layer mark: the new row id, or -1 on error.
+class ImageMarkCreateResult {
+  final PlatformInt64 id;
+  final String? error;
+
+  const ImageMarkCreateResult({required this.id, this.error});
+
+  @override
+  int get hashCode => id.hashCode ^ error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ImageMarkCreateResult &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          error == other.error;
+}
+
 /// Outcome of importing one file (FEATURES 2.1).
 class ImportResult {
   /// The imported (or already-existing) book record. `None` on failure.
@@ -445,6 +567,15 @@ class InitResult {
           dbPath == other.dbPath &&
           schemaVersion == other.schemaVersion &&
           error == other.error;
+}
+
+/// The OCR mode (FEATURES 7.1.9): high-precision server models by default,
+/// fast mobile models switchable in settings.
+enum OcrMode {
+  highPrecision,
+  fast;
+
+  Future<void> asStr() => RustLib.instance.api.crateApiOcrModeAsStr(that: this);
 }
 
 /// Result of opening a book for reading.
@@ -524,5 +655,27 @@ class PageRenderResult {
           width == other.width &&
           height == other.height &&
           rgba == other.rgba &&
+          error == other.error;
+}
+
+/// Result of a full-page scan: the recognized lines (empty until the engine
+/// is available) + the mode used, or an explicit error.
+class ScanPageResult {
+  final List<OcrLine> lines;
+  final String mode;
+  final String? error;
+
+  const ScanPageResult({required this.lines, required this.mode, this.error});
+
+  @override
+  int get hashCode => lines.hashCode ^ mode.hashCode ^ error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ScanPageResult &&
+          runtimeType == other.runtimeType &&
+          lines == other.lines &&
+          mode == other.mode &&
           error == other.error;
 }

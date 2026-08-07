@@ -174,7 +174,8 @@ class _EmptyHint extends StatelessWidget {
   }
 }
 
-/// Bottom export bar: Markdown / JSON export buttons (FEATURES 4.5.2/4.5.3).
+/// Bottom export bar: Markdown / JSON export buttons (FEATURES 4.5.2/4.5.3)
+/// plus the merged-image export (5.6: page bitmap + marks -> PNG).
 class _ExportBar extends ConsumerWidget {
   const _ExportBar();
 
@@ -182,22 +183,37 @@ class _ExportBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Padding(
       padding: const EdgeInsets.all(8),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () =>
-                  exportAnnotations(context, ref, format: 'markdown'),
-              icon: const Icon(Icons.description_outlined, size: 16),
-              label: const Text('Markdown'),
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () =>
+                      exportAnnotations(context, ref, format: 'markdown'),
+                  icon: const Icon(Icons.description_outlined, size: 16),
+                  label: const Text('Markdown'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () =>
+                      exportAnnotations(context, ref, format: 'json'),
+                  icon: const Icon(Icons.data_object, size: 16),
+                  label: const Text('JSON'),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Expanded(
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: () => exportAnnotations(context, ref, format: 'json'),
-              icon: const Icon(Icons.data_object, size: 16),
-              label: const Text('JSON'),
+              onPressed: () => exportMergedImage(context, ref),
+              icon: const Icon(Icons.image_outlined, size: 16),
+              label: const Text('导出拼合图片（含批注）'),
             ),
           ),
         ],

@@ -13,6 +13,7 @@ import 'models/ai.dart';
 import 'models/annotation.dart';
 import 'models/book.dart';
 import 'models/progress.dart';
+import 'ocr.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'pdf/types.dart';
 
@@ -69,7 +70,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => 1901157655;
+  int get rustContentHash => 1977872376;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -115,6 +116,19 @@ abstract class RustLibApi extends BaseApi {
 
   Future<Category?> crateApiCreateCategory({required String name});
 
+  Future<ImageMarkCreateResult> crateApiCreateImageAnnotation({
+    required PlatformInt64 bookId,
+    required PlatformInt64 page,
+    required ImageAnnotationKind kind,
+    required double x,
+    required double y,
+    double? w,
+    double? h,
+    required double rotation,
+    required String payload,
+    required String style,
+  });
+
   Future<int> crateApiDeleteAiThread({required PlatformInt64 threadId});
 
   Future<int> crateApiDeleteAnnotation({required PlatformInt64 annotationId});
@@ -122,6 +136,10 @@ abstract class RustLibApi extends BaseApi {
   Future<int> crateApiDeleteBook({required PlatformInt64 id});
 
   Future<int> crateApiDeleteCategory({required PlatformInt64 id});
+
+  Future<int> crateApiDeleteImageAnnotation({
+    required PlatformInt64 annotationId,
+  });
 
   Future<ExportResult> crateApiExportAnnotationsJson({
     required PlatformInt64 bookId,
@@ -141,6 +159,12 @@ abstract class RustLibApi extends BaseApi {
   Future<Book?> crateApiGetBook({required PlatformInt64 id});
 
   Future<OutlineResult> crateApiGetOutline({required PlatformInt64 bookId});
+
+  Future<OcrResult?> crateApiGetPageOcr({
+    required PlatformInt64 bookId,
+    required PlatformInt64 page,
+    required OcrMode mode,
+  });
 
   Future<ReadingProgress?> crateApiGetProgress({required PlatformInt64 bookId});
 
@@ -166,7 +190,18 @@ abstract class RustLibApi extends BaseApi {
 
   Future<List<Category>> crateApiListCategories();
 
+  Future<List<ImageAnnotation>> crateApiListImageAnnotations({
+    required PlatformInt64 bookId,
+  });
+
+  Future<void> crateApiOcrModeAsStr({required OcrMode that});
+
   Future<OpenBookResult> crateApiOpenBook({required String storedPath});
+
+  Future<bool> crateApiPageHasText({
+    required PlatformInt64 bookId,
+    required PlatformInt64 page,
+  });
 
   Future<int> crateApiRenameCategory({
     required PlatformInt64 id,
@@ -193,6 +228,12 @@ abstract class RustLibApi extends BaseApi {
     required String viewMode,
   });
 
+  Future<ScanPageResult> crateApiScanPage({
+    required PlatformInt64 bookId,
+    required PlatformInt64 page,
+    required OcrMode mode,
+  });
+
   Future<int> crateApiSetAiConfig({required AiConfig config});
 
   Future<int> crateApiSetSetting({required String key, required String value});
@@ -212,6 +253,17 @@ abstract class RustLibApi extends BaseApi {
   Future<int> crateApiUpdateAnnotationContent({
     required PlatformInt64 annotationId,
     String? content,
+  });
+
+  Future<int> crateApiUpdateImageAnnotation({
+    required PlatformInt64 annotationId,
+    required double x,
+    required double y,
+    double? w,
+    double? h,
+    required double rotation,
+    required String payload,
+    required String style,
   });
 }
 
@@ -458,6 +510,68 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "create_category", argNames: ["name"]);
 
   @override
+  Future<ImageMarkCreateResult> crateApiCreateImageAnnotation({
+    required PlatformInt64 bookId,
+    required PlatformInt64 page,
+    required ImageAnnotationKind kind,
+    required double x,
+    required double y,
+    double? w,
+    double? h,
+    required double rotation,
+    required String payload,
+    required String style,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(bookId, serializer);
+          sse_encode_i_64(page, serializer);
+          sse_encode_image_annotation_kind(kind, serializer);
+          sse_encode_f_64(x, serializer);
+          sse_encode_f_64(y, serializer);
+          sse_encode_opt_box_autoadd_f_64(w, serializer);
+          sse_encode_opt_box_autoadd_f_64(h, serializer);
+          sse_encode_f_64(rotation, serializer);
+          sse_encode_String(payload, serializer);
+          sse_encode_String(style, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 8,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_image_mark_create_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiCreateImageAnnotationConstMeta,
+        argValues: [bookId, page, kind, x, y, w, h, rotation, payload, style],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiCreateImageAnnotationConstMeta =>
+      const TaskConstMeta(
+        debugName: "create_image_annotation",
+        argNames: [
+          "bookId",
+          "page",
+          "kind",
+          "x",
+          "y",
+          "w",
+          "h",
+          "rotation",
+          "payload",
+          "style",
+        ],
+      );
+
+  @override
   Future<int> crateApiDeleteAiThread({required PlatformInt64 threadId}) {
     return handler.executeNormal(
       NormalTask(
@@ -467,7 +581,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 9,
             port: port_,
           );
         },
@@ -497,7 +611,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 10,
             port: port_,
           );
         },
@@ -527,7 +641,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 11,
             port: port_,
           );
         },
@@ -555,7 +669,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 12,
             port: port_,
           );
         },
@@ -574,6 +688,39 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "delete_category", argNames: ["id"]);
 
   @override
+  Future<int> crateApiDeleteImageAnnotation({
+    required PlatformInt64 annotationId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(annotationId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 13,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_i_32,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiDeleteImageAnnotationConstMeta,
+        argValues: [annotationId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiDeleteImageAnnotationConstMeta =>
+      const TaskConstMeta(
+        debugName: "delete_image_annotation",
+        argNames: ["annotationId"],
+      );
+
+  @override
   Future<ExportResult> crateApiExportAnnotationsJson({
     required PlatformInt64 bookId,
   }) {
@@ -585,7 +732,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 14,
             port: port_,
           );
         },
@@ -618,7 +765,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 15,
             port: port_,
           );
         },
@@ -653,7 +800,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 16,
             port: port_,
           );
         },
@@ -682,7 +829,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 17,
             port: port_,
           );
         },
@@ -710,7 +857,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 16,
+            funcId: 18,
             port: port_,
           );
         },
@@ -738,7 +885,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 19,
             port: port_,
           );
         },
@@ -757,6 +904,42 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "get_outline", argNames: ["bookId"]);
 
   @override
+  Future<OcrResult?> crateApiGetPageOcr({
+    required PlatformInt64 bookId,
+    required PlatformInt64 page,
+    required OcrMode mode,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(bookId, serializer);
+          sse_encode_i_64(page, serializer);
+          sse_encode_ocr_mode(mode, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 20,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_opt_box_autoadd_ocr_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiGetPageOcrConstMeta,
+        argValues: [bookId, page, mode],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiGetPageOcrConstMeta => const TaskConstMeta(
+    debugName: "get_page_ocr",
+    argNames: ["bookId", "page", "mode"],
+  );
+
+  @override
   Future<ReadingProgress?> crateApiGetProgress({
     required PlatformInt64 bookId,
   }) {
@@ -768,7 +951,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 18,
+            funcId: 21,
             port: port_,
           );
         },
@@ -796,7 +979,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 19,
+            funcId: 22,
             port: port_,
           );
         },
@@ -824,7 +1007,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 20,
+            funcId: 23,
             port: port_,
           );
         },
@@ -851,7 +1034,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 21,
+            funcId: 24,
             port: port_,
           );
         },
@@ -879,7 +1062,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 22,
+            funcId: 25,
             port: port_,
           );
         },
@@ -911,7 +1094,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 23,
+            funcId: 26,
             port: port_,
           );
         },
@@ -940,7 +1123,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 24,
+            funcId: 27,
             port: port_,
           );
         },
@@ -970,7 +1153,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 25,
+            funcId: 28,
             port: port_,
           );
         },
@@ -997,7 +1180,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 26,
+            funcId: 29,
             port: port_,
           );
         },
@@ -1024,7 +1207,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 27,
+            funcId: 30,
             port: port_,
           );
         },
@@ -1043,6 +1226,67 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "list_categories", argNames: []);
 
   @override
+  Future<List<ImageAnnotation>> crateApiListImageAnnotations({
+    required PlatformInt64 bookId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(bookId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 31,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_image_annotation,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiListImageAnnotationsConstMeta,
+        argValues: [bookId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiListImageAnnotationsConstMeta =>
+      const TaskConstMeta(
+        debugName: "list_image_annotations",
+        argNames: ["bookId"],
+      );
+
+  @override
+  Future<void> crateApiOcrModeAsStr({required OcrMode that}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_ocr_mode(that, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 32,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiOcrModeAsStrConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiOcrModeAsStrConstMeta =>
+      const TaskConstMeta(debugName: "ocr_mode_as_str", argNames: ["that"]);
+
+  @override
   Future<OpenBookResult> crateApiOpenBook({required String storedPath}) {
     return handler.executeNormal(
       NormalTask(
@@ -1052,7 +1296,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 28,
+            funcId: 33,
             port: port_,
           );
         },
@@ -1071,6 +1315,40 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "open_book", argNames: ["storedPath"]);
 
   @override
+  Future<bool> crateApiPageHasText({
+    required PlatformInt64 bookId,
+    required PlatformInt64 page,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(bookId, serializer);
+          sse_encode_i_64(page, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 34,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiPageHasTextConstMeta,
+        argValues: [bookId, page],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPageHasTextConstMeta => const TaskConstMeta(
+    debugName: "page_has_text",
+    argNames: ["bookId", "page"],
+  );
+
+  @override
   Future<int> crateApiRenameCategory({
     required PlatformInt64 id,
     required String name,
@@ -1084,7 +1362,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 29,
+            funcId: 35,
             port: port_,
           );
         },
@@ -1122,7 +1400,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 30,
+            funcId: 36,
             port: port_,
           );
         },
@@ -1158,7 +1436,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 31,
+            funcId: 37,
             port: port_,
           );
         },
@@ -1196,7 +1474,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 32,
+            funcId: 38,
             port: port_,
           );
         },
@@ -1217,6 +1495,42 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
+  Future<ScanPageResult> crateApiScanPage({
+    required PlatformInt64 bookId,
+    required PlatformInt64 page,
+    required OcrMode mode,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(bookId, serializer);
+          sse_encode_i_64(page, serializer);
+          sse_encode_ocr_mode(mode, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 39,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_scan_page_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiScanPageConstMeta,
+        argValues: [bookId, page, mode],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiScanPageConstMeta => const TaskConstMeta(
+    debugName: "scan_page",
+    argNames: ["bookId", "page", "mode"],
+  );
+
+  @override
   Future<int> crateApiSetAiConfig({required AiConfig config}) {
     return handler.executeNormal(
       NormalTask(
@@ -1226,7 +1540,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 33,
+            funcId: 40,
             port: port_,
           );
         },
@@ -1255,7 +1569,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 34,
+            funcId: 41,
             port: port_,
           );
         },
@@ -1292,7 +1606,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 35,
+              funcId: 42,
               port: port_,
             );
           },
@@ -1327,7 +1641,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 36,
+              funcId: 43,
               port: port_,
             );
           },
@@ -1359,7 +1673,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 37,
+            funcId: 44,
             port: port_,
           );
         },
@@ -1387,7 +1701,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 38,
+            funcId: 45,
             port: port_,
           );
         },
@@ -1419,7 +1733,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 39,
+            funcId: 46,
             port: port_,
           );
         },
@@ -1438,6 +1752,62 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(
         debugName: "update_annotation_content",
         argNames: ["annotationId", "content"],
+      );
+
+  @override
+  Future<int> crateApiUpdateImageAnnotation({
+    required PlatformInt64 annotationId,
+    required double x,
+    required double y,
+    double? w,
+    double? h,
+    required double rotation,
+    required String payload,
+    required String style,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(annotationId, serializer);
+          sse_encode_f_64(x, serializer);
+          sse_encode_f_64(y, serializer);
+          sse_encode_opt_box_autoadd_f_64(w, serializer);
+          sse_encode_opt_box_autoadd_f_64(h, serializer);
+          sse_encode_f_64(rotation, serializer);
+          sse_encode_String(payload, serializer);
+          sse_encode_String(style, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 47,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_i_32,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiUpdateImageAnnotationConstMeta,
+        argValues: [annotationId, x, y, w, h, rotation, payload, style],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiUpdateImageAnnotationConstMeta =>
+      const TaskConstMeta(
+        debugName: "update_image_annotation",
+        argNames: [
+          "annotationId",
+          "x",
+          "y",
+          "w",
+          "h",
+          "rotation",
+          "payload",
+          "style",
+        ],
       );
 
   @protected
@@ -1604,9 +1974,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  double dco_decode_box_autoadd_f_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as double;
+  }
+
+  @protected
   PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_i_64(raw);
+  }
+
+  @protected
+  OcrResult dco_decode_box_autoadd_ocr_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_ocr_result(raw);
   }
 
   @protected
@@ -1693,6 +2075,46 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ImageAnnotation dco_decode_image_annotation(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 12)
+      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
+    return ImageAnnotation(
+      id: dco_decode_i_64(arr[0]),
+      bookId: dco_decode_i_64(arr[1]),
+      page: dco_decode_i_64(arr[2]),
+      kind: dco_decode_image_annotation_kind(arr[3]),
+      x: dco_decode_f_64(arr[4]),
+      y: dco_decode_f_64(arr[5]),
+      w: dco_decode_opt_box_autoadd_f_64(arr[6]),
+      h: dco_decode_opt_box_autoadd_f_64(arr[7]),
+      rotation: dco_decode_f_64(arr[8]),
+      payload: dco_decode_String(arr[9]),
+      style: dco_decode_String(arr[10]),
+      createdAt: dco_decode_String(arr[11]),
+    );
+  }
+
+  @protected
+  ImageAnnotationKind dco_decode_image_annotation_kind(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return ImageAnnotationKind.values[raw as int];
+  }
+
+  @protected
+  ImageMarkCreateResult dco_decode_image_mark_create_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return ImageMarkCreateResult(
+      id: dco_decode_i_64(arr[0]),
+      error: dco_decode_opt_String(arr[1]),
+    );
+  }
+
+  @protected
   ImportResult dco_decode_import_result(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -1750,9 +2172,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<ImageAnnotation> dco_decode_list_image_annotation(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_image_annotation).toList();
+  }
+
+  @protected
   List<NormRect> dco_decode_list_norm_rect(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_norm_rect).toList();
+  }
+
+  @protected
+  List<OcrLine> dco_decode_list_ocr_line(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_ocr_line).toList();
   }
 
   @protected
@@ -1794,6 +2228,40 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  OcrLine dco_decode_ocr_line(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return OcrLine(
+      text: dco_decode_String(arr[0]),
+      x: dco_decode_f_64(arr[1]),
+      y: dco_decode_f_64(arr[2]),
+      w: dco_decode_f_64(arr[3]),
+      h: dco_decode_f_64(arr[4]),
+      confidence: dco_decode_f_64(arr[5]),
+    );
+  }
+
+  @protected
+  OcrMode dco_decode_ocr_mode(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return OcrMode.values[raw as int];
+  }
+
+  @protected
+  OcrResult dco_decode_ocr_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return OcrResult(
+      lines: dco_decode_list_ocr_line(arr[0]),
+      mode: dco_decode_String(arr[1]),
+    );
+  }
+
+  @protected
   OpenBookResult dco_decode_open_book_result(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -1831,9 +2299,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  double? dco_decode_opt_box_autoadd_f_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_f_64(raw);
+  }
+
+  @protected
   PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_i_64(raw);
+  }
+
+  @protected
+  OcrResult? dco_decode_opt_box_autoadd_ocr_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_ocr_result(raw);
   }
 
   @protected
@@ -1893,6 +2373,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       zoom: dco_decode_f_64(arr[2]),
       viewMode: dco_decode_view_mode(arr[3]),
       updatedAt: dco_decode_String(arr[4]),
+    );
+  }
+
+  @protected
+  ScanPageResult dco_decode_scan_page_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return ScanPageResult(
+      lines: dco_decode_list_ocr_line(arr[0]),
+      mode: dco_decode_String(arr[1]),
+      error: dco_decode_opt_String(arr[2]),
     );
   }
 
@@ -2136,9 +2629,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  double sse_decode_box_autoadd_f_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_f_64(deserializer));
+  }
+
+  @protected
   PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_i_64(deserializer));
+  }
+
+  @protected
+  OcrResult sse_decode_box_autoadd_ocr_result(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_ocr_result(deserializer));
   }
 
   @protected
@@ -2213,6 +2718,56 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getPlatformInt64();
+  }
+
+  @protected
+  ImageAnnotation sse_decode_image_annotation(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_i_64(deserializer);
+    var var_bookId = sse_decode_i_64(deserializer);
+    var var_page = sse_decode_i_64(deserializer);
+    var var_kind = sse_decode_image_annotation_kind(deserializer);
+    var var_x = sse_decode_f_64(deserializer);
+    var var_y = sse_decode_f_64(deserializer);
+    var var_w = sse_decode_opt_box_autoadd_f_64(deserializer);
+    var var_h = sse_decode_opt_box_autoadd_f_64(deserializer);
+    var var_rotation = sse_decode_f_64(deserializer);
+    var var_payload = sse_decode_String(deserializer);
+    var var_style = sse_decode_String(deserializer);
+    var var_createdAt = sse_decode_String(deserializer);
+    return ImageAnnotation(
+      id: var_id,
+      bookId: var_bookId,
+      page: var_page,
+      kind: var_kind,
+      x: var_x,
+      y: var_y,
+      w: var_w,
+      h: var_h,
+      rotation: var_rotation,
+      payload: var_payload,
+      style: var_style,
+      createdAt: var_createdAt,
+    );
+  }
+
+  @protected
+  ImageAnnotationKind sse_decode_image_annotation_kind(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return ImageAnnotationKind.values[inner];
+  }
+
+  @protected
+  ImageMarkCreateResult sse_decode_image_mark_create_result(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_i_64(deserializer);
+    var var_error = sse_decode_opt_String(deserializer);
+    return ImageMarkCreateResult(id: var_id, error: var_error);
   }
 
   @protected
@@ -2304,6 +2859,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<ImageAnnotation> sse_decode_list_image_annotation(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <ImageAnnotation>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_image_annotation(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<NormRect> sse_decode_list_norm_rect(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -2311,6 +2880,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <NormRect>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_norm_rect(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<OcrLine> sse_decode_list_ocr_line(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <OcrLine>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_ocr_line(deserializer));
     }
     return ans_;
   }
@@ -2365,6 +2946,40 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_w = sse_decode_f_64(deserializer);
     var var_h = sse_decode_f_64(deserializer);
     return NormRect(x: var_x, y: var_y, w: var_w, h: var_h);
+  }
+
+  @protected
+  OcrLine sse_decode_ocr_line(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_text = sse_decode_String(deserializer);
+    var var_x = sse_decode_f_64(deserializer);
+    var var_y = sse_decode_f_64(deserializer);
+    var var_w = sse_decode_f_64(deserializer);
+    var var_h = sse_decode_f_64(deserializer);
+    var var_confidence = sse_decode_f_64(deserializer);
+    return OcrLine(
+      text: var_text,
+      x: var_x,
+      y: var_y,
+      w: var_w,
+      h: var_h,
+      confidence: var_confidence,
+    );
+  }
+
+  @protected
+  OcrMode sse_decode_ocr_mode(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return OcrMode.values[inner];
+  }
+
+  @protected
+  OcrResult sse_decode_ocr_result(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_lines = sse_decode_list_ocr_line(deserializer);
+    var var_mode = sse_decode_String(deserializer);
+    return OcrResult(lines: var_lines, mode: var_mode);
   }
 
   @protected
@@ -2427,11 +3042,35 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_f_64(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_i_64(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  OcrResult? sse_decode_opt_box_autoadd_ocr_result(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_ocr_result(deserializer));
     } else {
       return null;
     }
@@ -2501,6 +3140,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       viewMode: var_viewMode,
       updatedAt: var_updatedAt,
     );
+  }
+
+  @protected
+  ScanPageResult sse_decode_scan_page_result(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_lines = sse_decode_list_ocr_line(deserializer);
+    var var_mode = sse_decode_String(deserializer);
+    var var_error = sse_decode_opt_String(deserializer);
+    return ScanPageResult(lines: var_lines, mode: var_mode, error: var_error);
   }
 
   @protected
@@ -2726,12 +3374,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_64(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_i_64(
     PlatformInt64 self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_64(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_ocr_result(
+    OcrResult self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_ocr_result(self, serializer);
   }
 
   @protected
@@ -2804,6 +3467,45 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_image_annotation(
+    ImageAnnotation self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_i_64(self.bookId, serializer);
+    sse_encode_i_64(self.page, serializer);
+    sse_encode_image_annotation_kind(self.kind, serializer);
+    sse_encode_f_64(self.x, serializer);
+    sse_encode_f_64(self.y, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.w, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.h, serializer);
+    sse_encode_f_64(self.rotation, serializer);
+    sse_encode_String(self.payload, serializer);
+    sse_encode_String(self.style, serializer);
+    sse_encode_String(self.createdAt, serializer);
+  }
+
+  @protected
+  void sse_encode_image_annotation_kind(
+    ImageAnnotationKind self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_image_mark_create_result(
+    ImageMarkCreateResult self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.id, serializer);
+    sse_encode_opt_String(self.error, serializer);
+  }
+
+  @protected
   void sse_encode_import_result(ImportResult self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_opt_box_autoadd_book(self.book, serializer);
@@ -2872,6 +3574,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_image_annotation(
+    List<ImageAnnotation> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_image_annotation(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_norm_rect(
     List<NormRect> self,
     SseSerializer serializer,
@@ -2880,6 +3594,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_norm_rect(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_ocr_line(List<OcrLine> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_ocr_line(item, serializer);
     }
   }
 
@@ -2936,6 +3659,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.y, serializer);
     sse_encode_f_64(self.w, serializer);
     sse_encode_f_64(self.h, serializer);
+  }
+
+  @protected
+  void sse_encode_ocr_line(OcrLine self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.text, serializer);
+    sse_encode_f_64(self.x, serializer);
+    sse_encode_f_64(self.y, serializer);
+    sse_encode_f_64(self.w, serializer);
+    sse_encode_f_64(self.h, serializer);
+    sse_encode_f_64(self.confidence, serializer);
+  }
+
+  @protected
+  void sse_encode_ocr_mode(OcrMode self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_ocr_result(OcrResult self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_ocr_line(self.lines, serializer);
+    sse_encode_String(self.mode, serializer);
   }
 
   @protected
@@ -2996,6 +3743,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_f_64(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_box_autoadd_i_64(
     PlatformInt64? self,
     SseSerializer serializer,
@@ -3005,6 +3762,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_i_64(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_ocr_result(
+    OcrResult? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_ocr_result(self, serializer);
     }
   }
 
@@ -3059,6 +3829,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.zoom, serializer);
     sse_encode_view_mode(self.viewMode, serializer);
     sse_encode_String(self.updatedAt, serializer);
+  }
+
+  @protected
+  void sse_encode_scan_page_result(
+    ScanPageResult self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_ocr_line(self.lines, serializer);
+    sse_encode_String(self.mode, serializer);
+    sse_encode_opt_String(self.error, serializer);
   }
 
   @protected

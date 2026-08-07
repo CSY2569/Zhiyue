@@ -3,9 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rbwa/src/rust/api.dart' as rust;
 import 'package:rbwa/src/rust/models/annotation.dart';
 import 'package:rbwa/src/rust/models/progress.dart';
+import 'package:rbwa/src/rust/ocr.dart' show OcrResult;
 
-/// Wrapper around the FRB-generated Rust bindings for the reader / PDF
-/// pipeline (FEATURES §3).
+/// Wrapper around the FRB-generated Rust bindings for the reader / PDF /
+/// image / OCR pipeline (FEATURES §3, §5, §7).
 ///
 /// This is the only place the reader UI layer touches `lib/src/rust/*`
 /// directly (ARCHITECTURE §1). Upper layers (providers, widgets) depend on
@@ -106,6 +107,78 @@ class ReaderRepository {
   /// Pretty JSON export for a book (FEATURES 4.5.3).
   Future<rust.ExportResult> exportAnnotationsJson(int bookId) =>
       rust.exportAnnotationsJson(bookId: bookId);
+
+  // --- M5: image-layer marks (FEATURES §5) ----------------------------------
+
+  /// All image-layer marks of a book, ordered by page.
+  Future<List<ImageAnnotation>> listImageAnnotations(int bookId) =>
+      rust.listImageAnnotations(bookId: bookId);
+
+  /// Create an image-layer mark; the result carries the new row id.
+  Future<rust.ImageMarkCreateResult> createImageAnnotation({
+    required int bookId,
+    required int page,
+    required ImageAnnotationKind kind,
+    required double x,
+    required double y,
+    double? w,
+    double? h,
+    required double rotation,
+    required String payload,
+    required String style,
+  }) =>
+      rust.createImageAnnotation(
+        bookId: bookId,
+        page: page,
+        kind: kind,
+        x: x,
+        y: y,
+        w: w,
+        h: h,
+        rotation: rotation,
+        payload: payload,
+        style: style,
+      );
+
+  /// Update an image-layer mark (position / payload / style).
+  Future<int> updateImageAnnotation({
+    required int annotationId,
+    required double x,
+    required double y,
+    double? w,
+    double? h,
+    required double rotation,
+    required String payload,
+    required String style,
+  }) =>
+      rust.updateImageAnnotation(
+        annotationId: annotationId,
+        x: x,
+        y: y,
+        w: w,
+        h: h,
+        rotation: rotation,
+        payload: payload,
+        style: style,
+      );
+
+  /// Delete an image-layer mark by id.
+  Future<int> deleteImageAnnotation(int annotationId) =>
+      rust.deleteImageAnnotation(annotationId: annotationId);
+
+  // --- M5: full-page OCR (FEATURES §7) --------------------------------------
+
+  /// Whether a page has a text layer (empty -> scanned / image page).
+  Future<bool> pageHasText(int bookId, int page) =>
+      rust.pageHasText(bookId: bookId, page: page);
+
+  /// The cached scan result for a page (null when not scanned yet).
+  Future<OcrResult?> getPageOcr(int bookId, int page, rust.OcrMode mode) =>
+      rust.getPageOcr(bookId: bookId, page: page, mode: mode);
+
+  /// Full-page OCR scan (original resolution; cached per page+mode).
+  Future<rust.ScanPageResult> scanPage(int bookId, int page, rust.OcrMode mode) =>
+      rust.scanPage(bookId: bookId, page: page, mode: mode);
 }
 
 /// Riverpod provider for the singleton [ReaderRepository].

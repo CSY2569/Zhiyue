@@ -9,4 +9,6 @@ pub mod ai;
 pub mod annotation;
 pub mod book;
 pub mod category;
+pub mod image_annotation;
+pub mod ocr;
 pub mod progress;

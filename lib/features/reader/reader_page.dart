@@ -8,13 +8,17 @@ import 'package:rbwa/features/ai/providers/ai_provider.dart';
 import 'package:rbwa/features/ai/widgets/ai_panel_side.dart';
 import 'package:rbwa/features/ai/widgets/result_card.dart';
 import 'package:rbwa/features/annotation/export_actions.dart';
+import 'package:rbwa/features/annotation/providers/image_mark_provider.dart';
 import 'package:rbwa/features/annotation/providers/selection_provider.dart';
 import 'package:rbwa/features/annotation/widgets/floating_toolbar.dart';
+import 'package:rbwa/features/annotation/widgets/mark_layer_panel.dart';
+import 'package:rbwa/features/annotation/widgets/mark_toolbar.dart';
 import 'package:rbwa/features/annotation/widgets/note_composer.dart';
 import 'package:rbwa/features/annotation/widgets/note_popup.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
 import 'package:rbwa/features/reader/widgets/pdf_page_scroll.dart';
 import 'package:rbwa/features/reader/widgets/reader_toolbar.dart';
+import 'package:rbwa/features/reader/widgets/scan_overlay.dart';
 import 'package:rbwa/features/reader/widgets/sidebars/notes_rail.dart';
 import 'package:rbwa/features/reader/widgets/sidebars/outline_tree.dart';
 import 'package:rbwa/features/reader/widgets/sidebars/thumbnail_rail.dart';
@@ -106,19 +110,30 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   /// Global shortcuts (FEATURES 8.6 / 8.x): Esc clears the selection and
-  /// closes floating editors; Ctrl+S exports
-  /// annotations (last format). The AI result card is NOT closed here -- it
-  /// stays open until the user clicks its close button.
+  /// closes floating editors; Ctrl+S exports annotations (last format);
+  /// Ctrl+Z / Ctrl+Shift+Z undo / redo image-layer mark edits (5.7). The AI
+  /// result card is NOT closed here -- it stays open until the user clicks
+  /// its close button.
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.escape) {
       ref.read(selectionProvider.notifier).clear();
       return KeyEventResult.handled;
     }
-    if (HardwareKeyboard.instance.isControlPressed &&
-        event.logicalKey == LogicalKeyboardKey.keyS) {
-      exportAnnotations(context, ref);
-      return KeyEventResult.handled;
+    if (HardwareKeyboard.instance.isControlPressed) {
+      if (event.logicalKey == LogicalKeyboardKey.keyS) {
+        exportAnnotations(context, ref);
+        return KeyEventResult.handled;
+      }
+      if (event.logicalKey == LogicalKeyboardKey.keyZ) {
+        final notifier = ref.read(imageMarkProvider.notifier);
+        if (HardwareKeyboard.instance.isShiftPressed) {
+          notifier.redo();
+        } else {
+          notifier.undo();
+        }
+        return KeyEventResult.handled;
+      }
     }
     return KeyEventResult.ignored;
   }
@@ -183,6 +198,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             ),
             // Floating selection UI (rendered above everything, in the
             // app-level Overlay so they are never clipped).
+            // Scan prompt (FEATURES 7.1.2): pages without a text layer get a
+            // "扫描识别" bar above the reading area.
+            Positioned(
+              top: 8,
+              left: 8,
+              child: ScanOverlay(),
+            ),
+            // Mark tool bar (FEATURES §5): floats above the reading area
+            // while a mark tool is armed.
+            Positioned(
+              top: 8,
+              left: 0,
+              right: 0,
+              child: Center(child: MarkToolBar()),
+            ),
             OverlayPortal(
               controller: _toolbarController,
               overlayChildBuilder: (_) => FloatingToolbar(
@@ -223,6 +253,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         );
       case SidebarType.annotations:
         return NotesRail(
+          onJump: (page) => _jumpToPage(page + 1),
+        );
+      case SidebarType.imageMarks:
+        return MarkLayerPanel(
           onJump: (page) => _jumpToPage(page + 1),
         );
     }

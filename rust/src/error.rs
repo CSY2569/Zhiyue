@@ -1,9 +1,9 @@
 //! Unified error type for the RBWA Rust core.
 //!
-//! All subsystems (pdf / ai / db) convert their errors into [`AppError`],
-//! which is exported to Flutter via `flutter_rust_bridge`. This keeps the
-//! FFI boundary error surface flat and decoupled from any single crate's
-//! error enum.
+//! All subsystems (pdf / ai / ocr / db) convert their errors into
+//! [`AppError`], which is exported to Flutter via `flutter_rust_bridge`.
+//! This keeps the FFI boundary error surface flat and decoupled from any
+//! single crate's error enum.
 
 use thiserror::Error;
 
@@ -22,6 +22,9 @@ pub enum AppError {
 
     #[error("ai error: {0}")]
     Ai(String),
+
+    #[error("ocr error: {0}")]
+    Ocr(String),
 
     #[error("io error: {0}")]
     Io(String),

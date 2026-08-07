@@ -15,6 +15,7 @@
 //! milestone, each delegating to the relevant service.
 
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 
 use crate::db;
@@ -492,43 +493,87 @@ pub struct OutlineResult {
 }
 
 /// Open a book's PDF for reading (FEATURES 3.1). Must be called before
-/// `render_page`, `get_outline`, etc. The document stays open until another
-/// book is opened or `close_book` is called.
+/// Whether the currently open document is an image book (set by [open_book],
+/// read by the render commands to route between the pdfium and image
+/// pipelines, FEATURES 7.3).
+static OPENED_IMAGE: AtomicBool = AtomicBool::new(false);
+
+/// Open a book's document for reading. Image books (PNG / JPG / WEBP) decode
+/// via the `image` crate; PDFs open via pdfium. Must precede render/outline
+/// calls (FEATURES 3.3). The document stays open until another book is
+/// opened or `close_book` is called.
 ///
-/// Async: pdfium document open is heavyweight and must not block the UI.
+/// Async: document open is heavyweight and must not block the UI.
 pub async fn open_book(stored_path: String) -> OpenBookResult {
-    match pdf::open(&stored_path) {
-        Ok(count) => {
-            let has_outline = pdf::outline().map(|e| !e.is_empty()).unwrap_or(false);
-            OpenBookResult {
-                page_count: count,
-                has_outline,
-                error: None,
-            }
+    // Route by the stored book's type (the path is the copy under the app
+    // data dir; unknown books fall back to the pdfium path).
+    let is_image = {
+        let conn = db::db();
+        match book_repo::find_by_stored_path(&conn, &stored_path) {
+            Ok(Some(b)) => b.file_type == BookType::Image,
+            _ => false,
         }
-        Err(e) => OpenBookResult {
-            page_count: 0,
-            has_outline: false,
-            error: Some(e.to_string()),
-        },
+    };
+    OPENED_IMAGE.store(is_image, Ordering::Relaxed);
+    let result = if is_image {
+        match pdf::open_image(&stored_path) {
+            Ok(count) => OpenBookResult {
+                page_count: count,
+                has_outline: false, // images have no outline
+                error: None,
+            },
+            Err(e) => OpenBookResult {
+                page_count: 0,
+                has_outline: false,
+                error: Some(e.to_string()),
+            },
+        }
+    } else {
+        match pdf::open(&stored_path) {
+            Ok(count) => {
+                let has_outline = pdf::outline().map(|e| !e.is_empty()).unwrap_or(false);
+                OpenBookResult {
+                    page_count: count,
+                    has_outline,
+                    error: None,
+                }
+            }
+            Err(e) => OpenBookResult {
+                page_count: 0,
+                has_outline: false,
+                error: Some(e.to_string()),
+            },
+        }
+    };
+    if result.error.is_some() {
+        OPENED_IMAGE.store(false, Ordering::Relaxed);
     }
+    result
 }
 
 /// Close the currently-open document, freeing its memory.
 pub async fn close_book() {
     pdf::close();
+    pdf::close_image();
+    OPENED_IMAGE.store(false, Ordering::Relaxed);
 }
 
-/// Render a page (0-indexed) to an RGBA bitmap (FEATURES 3.6.2).
+/// Render a page (0-indexed) to an RGBA bitmap (FEATURES 3.6.2 / 7.3).
 /// `zoom` is the user zoom factor (1.0 = 100%); `dpi_scale` is the device
-/// pixel ratio for high-DPI rendering.
+/// pixel ratio for high-DPI rendering. Image books render through the same
+/// pipeline (their single page scales with zoom).
 ///
-/// Async: pdfium rendering is heavyweight and must not block the UI.
+/// Async: rendering is heavyweight and must not block the UI.
 pub async fn render_page(book_id: i64, page: i64, zoom: f64, dpi_scale: f64) -> PageRenderResult {
     // `book_id` is accepted for API symmetry but the active document is used;
     // the caller must have opened this book via `open_book` first.
     let _ = book_id;
-    match pdf::render_page(page, zoom as f32, dpi_scale as f32) {
+    let result = if OPENED_IMAGE.load(Ordering::Relaxed) {
+        pdf::render_image(page, zoom as f32, dpi_scale as f32)
+    } else {
+        pdf::render_page(page, zoom as f32, dpi_scale as f32)
+    };
+    match result {
         Ok(bmp) => PageRenderResult {
             width: bmp.width,
             height: bmp.height,
@@ -544,12 +589,17 @@ pub async fn render_page(book_id: i64, page: i64, zoom: f64, dpi_scale: f64) -> 
     }
 }
 
-/// Render a small thumbnail for the sidebar (FEATURES 3.4.1).
+/// Render a small thumbnail for the sidebar (FEATURES 3.4.1 / 7.3).
 ///
-/// Async: pdfium rendering is heavyweight and must not block the UI.
+/// Async: rendering is heavyweight and must not block the UI.
 pub async fn render_thumbnail(book_id: i64, page: i64, max_size: u32) -> PageRenderResult {
     let _ = book_id;
-    match pdf::thumbnail(page, max_size) {
+    let result = if OPENED_IMAGE.load(Ordering::Relaxed) {
+        pdf::thumbnail_image(page, max_size)
+    } else {
+        pdf::thumbnail(page, max_size)
+    };
+    match result {
         Ok(bmp) => PageRenderResult {
             width: bmp.width,
             height: bmp.height,
@@ -658,12 +708,18 @@ pub struct ExportResult {
 
 /// Extract per-character boxes for a page (0-indexed), normalized to [0,1]
 /// with a top-left origin (Flutter coordinate space). Empty `boxes` means the
-/// page has no text layer (scanned page -- OCR selection lands in M5).
+/// page has no text layer (scanned page / image book -- OCR selection lands
+/// in M5).
 ///
 /// Async: pdfium text traversal is heavyweight and must not block the UI.
 pub async fn extract_text(book_id: i64, page: i64) -> CharBoxResult {
     let _ = book_id;
-    match pdf::extract_text(page) {
+    let result = if OPENED_IMAGE.load(Ordering::Relaxed) {
+        pdf::extract_image_text(page)
+    } else {
+        pdf::extract_text(page)
+    };
+    match result {
         Ok(boxes) => CharBoxResult {
             boxes,
             error: None,
@@ -720,16 +776,17 @@ pub fn delete_annotation(annotation_id: i64) -> i32 {
         .unwrap_or(0)
 }
 
-/// Export all annotations of a book as Markdown (FEATURES 4.5.2): `# 阅读标注`
-/// -> `## 第 N 页` -> one bullet per annotation, notes quoted underneath.
+/// Export all annotations of a book as Markdown (FEATURES 4.5.2 / 5.6):
+/// `# 阅读标注` -> `## 第 N 页` -> one bullet per annotation, notes quoted
+/// underneath; image-layer marks merge into their page sections.
 pub fn export_annotations_markdown(book_id: i64) -> ExportResult {
     let conn = db::db();
-    match annotation_repo::list(&conn, book_id) {
-        Ok(anns) => ExportResult {
-            content: export::annotations_markdown(&anns),
+    match (annotation_repo::list(&conn, book_id), image_annotation_repo::list(&conn, book_id)) {
+        (Ok(anns), Ok(marks)) => ExportResult {
+            content: export::annotations_markdown(&anns, &marks),
             error: None,
         },
-        Err(e) => ExportResult {
+        (Err(e), _) | (_, Err(e)) => ExportResult {
             content: String::new(),
             error: Some(e.to_string()),
         },
@@ -737,19 +794,98 @@ pub fn export_annotations_markdown(book_id: i64) -> ExportResult {
 }
 
 /// Export all annotations of a book as pretty-printed JSON, including
-/// coordinates and style (FEATURES 4.5.3).
+/// coordinates and style (FEATURES 4.5.3); image-layer marks included (5.6).
 pub fn export_annotations_json(book_id: i64) -> ExportResult {
     let conn = db::db();
-    match annotation_repo::list(&conn, book_id) {
-        Ok(anns) => ExportResult {
-            content: export::annotations_json(book_id, &anns),
+    match (annotation_repo::list(&conn, book_id), image_annotation_repo::list(&conn, book_id)) {
+        (Ok(anns), Ok(marks)) => ExportResult {
+            content: export::annotations_json(book_id, &anns, &marks),
             error: None,
         },
-        Err(e) => ExportResult {
+        (Err(e), _) | (_, Err(e)) => ExportResult {
             content: String::new(),
             error: Some(e.to_string()),
         },
     }
+}
+
+// =============================================================================
+// M5 -- image-layer marks (FEATURES §5)
+// =============================================================================
+//
+// Image-layer annotations (brush / shape / sticky / stamp) render as a
+// separate layer on top of the page image; they never modify the underlying
+// bitmap. Position is a normalized center (x, y) with optional normalized
+// size (w, h) and rotation; `payload` / `style` are kind-specific JSON.
+
+use crate::db::repository::image_annotation as image_annotation_repo;
+use crate::models::annotation::{ImageAnnotation, ImageAnnotationKind};
+
+/// Result of creating an image-layer mark: the new row id, or -1 on error.
+pub struct ImageMarkCreateResult {
+    pub id: i64,
+    pub error: Option<String>,
+}
+
+/// List all image-layer marks of a book, ordered by page then creation
+/// (FEATURES 5.5: the layer panel groups them by page).
+pub fn list_image_annotations(book_id: i64) -> Vec<ImageAnnotation> {
+    let conn = db::db();
+    image_annotation_repo::list(&conn, book_id).unwrap_or_default()
+}
+
+/// Create an image-layer mark (brush / shape / sticky / stamp). `payload`
+/// and `style` are kind-specific JSON strings (FEATURES 5.1-5.5).
+pub fn create_image_annotation(
+    book_id: i64,
+    page: i64,
+    kind: ImageAnnotationKind,
+    x: f64,
+    y: f64,
+    w: Option<f64>,
+    h: Option<f64>,
+    rotation: f64,
+    payload: String,
+    style: String,
+) -> ImageMarkCreateResult {
+    let conn = db::db();
+    match image_annotation_repo::create(
+        &conn, book_id, page, kind, x, y, w, h, rotation, payload, style,
+    ) {
+        Ok(id) => ImageMarkCreateResult { id, error: None },
+        Err(e) => ImageMarkCreateResult {
+            id: -1,
+            error: Some(e.to_string()),
+        },
+    }
+}
+
+/// Update an image-layer mark in full (position / payload / style -- marks
+/// are selectable, movable and editable, FEATURES 5.1-5.5). Returns 1 on
+/// success.
+pub fn update_image_annotation(
+    annotation_id: i64,
+    x: f64,
+    y: f64,
+    w: Option<f64>,
+    h: Option<f64>,
+    rotation: f64,
+    payload: String,
+    style: String,
+) -> i32 {
+    let conn = db::db();
+    image_annotation_repo::update(&conn, annotation_id, x, y, w, h, rotation, payload, style)
+        .map(|_| 1)
+        .unwrap_or(0)
+}
+
+/// Delete an image-layer mark by id (FEATURES 5.5: per-mark deletion and
+/// layer-wide clear both reduce to this). Returns 1 on success.
+pub fn delete_image_annotation(annotation_id: i64) -> i32 {
+    let conn = db::db();
+    image_annotation_repo::delete(&conn, annotation_id)
+        .map(|_| 1)
+        .unwrap_or(0)
 }
 
 // =============================================================================
@@ -1058,4 +1194,139 @@ async fn builtin_search_stream(
     sink: StreamSink<String>,
 ) {
     let _ = sink.add_error("AI support not compiled in (feature 'ai' disabled)".to_string());
+}
+
+// =============================================================================
+// M5 -- OCR (FEATURES §7)
+// =============================================================================
+//
+// Full-page OCR chain: scan at original resolution (7.1.8), cache per
+// (book_id, page, mode) (7.1.4), inject the result as an invisible text
+// layer for selection (7.1.3). The engine itself is a stub until the models
+// are installed (scripts/download_ocr_models.sh, 7.1.1); the chain is fully
+// wired and returns an explicit error until then.
+
+use crate::db::repository::ocr as ocr_repo;
+use crate::ocr::{self, OcrLine, OcrResult};
+
+/// The OCR mode (FEATURES 7.1.9): high-precision server models by default,
+/// fast mobile models switchable in settings.
+pub enum OcrMode {
+    HighPrecision,
+    Fast,
+}
+
+impl OcrMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            OcrMode::HighPrecision => "high_precision",
+            OcrMode::Fast => "fast",
+        }
+    }
+}
+
+/// Result of a full-page scan: the recognized lines (empty until the engine
+/// is available) + the mode used, or an explicit error.
+pub struct ScanPageResult {
+    pub lines: Vec<OcrLine>,
+    pub mode: String,
+    pub error: Option<String>,
+}
+
+/// Whether a page has a text layer (FEATURES 7.1.2: empty -> scanned /
+/// image page). Drives the "扫描识别" prompt in the reader.
+pub async fn page_has_text(book_id: i64, page: i64) -> bool {
+    let _ = book_id;
+    if OPENED_IMAGE.load(Ordering::Relaxed) {
+        pdf::page_image_has_text(page).unwrap_or(false)
+    } else {
+        pdf::page_has_text(page).unwrap_or(false)
+    }
+}
+
+/// The cached scan result for a page, if any (FEATURES 7.1.4). The Flutter
+/// side queries this to build the invisible text layer without re-scanning.
+pub fn get_page_ocr(book_id: i64, page: i64, mode: OcrMode) -> Option<OcrResult> {
+    let conn = db::db();
+    ocr_repo::get_page_ocr(&conn, book_id, page, mode.as_str()).unwrap_or(None)
+}
+
+/// Full-page OCR scan (FEATURES 7.1.2 / 7.1.8): renders the page at its
+/// original resolution (not the display zoom) and runs the engine; the
+/// result is cached per (book_id, page, mode) (7.1.4). With the stub engine
+/// (models not installed) this returns an explicit error, which the UI
+/// surfaces as the "扫描识别" prompt.
+///
+/// Async: rendering + inference must not block the UI.
+pub async fn scan_page(book_id: i64, page: i64, mode: OcrMode) -> ScanPageResult {
+    let mode_str = mode.as_str().to_string();
+
+    // Cache hit: repeat scans / page flips return instantly (7.1.4).
+    {
+        let conn = db::db();
+        if let Ok(Some(cached)) = ocr_repo::get_page_ocr(&conn, book_id, page, &mode_str) {
+            return ScanPageResult {
+                lines: cached.lines,
+                mode: cached.mode,
+                error: None,
+            };
+        }
+    }
+
+    let engine = ocr::engine();
+    if !engine.is_available() {
+        // Models not installed: explicit, actionable error (7.1.1).
+        return ScanPageResult {
+            lines: Vec::new(),
+            mode: mode_str,
+            error: Some(ocr::StubOcrEngine::MISSING_MODELS.into()),
+        };
+    }
+
+    // Render the page at original resolution (7.1.8) and scan.
+    let bmp = if OPENED_IMAGE.load(Ordering::Relaxed) {
+        pdf::render_image(page, 1.0, 1.0)
+    } else {
+        pdf::render_page(page, 1.0, 1.0)
+    };
+    let bmp = match bmp {
+        Ok(b) if !b.rgba.is_empty() => b,
+        Ok(_) => {
+            return ScanPageResult {
+                lines: Vec::new(),
+                mode: mode_str,
+                error: Some("页面渲染为空".into()),
+            };
+        }
+        Err(e) => {
+            return ScanPageResult {
+                lines: Vec::new(),
+                mode: mode_str,
+                error: Some(e.to_string()),
+            };
+        }
+    };
+    let page_img = ocr::PageImage {
+        rgba: &bmp.rgba,
+        width: bmp.width,
+        height: bmp.height,
+    };
+
+    match engine.scan(&page_img) {
+        Ok(result) => {
+            // Cache before returning so flips back are instant (7.1.4).
+            let conn = db::db();
+            let _ = ocr_repo::save_page_ocr(&conn, book_id, page, &mode_str, &result);
+            ScanPageResult {
+                lines: result.lines,
+                mode: result.mode,
+                error: None,
+            }
+        }
+        Err(e) => ScanPageResult {
+            lines: Vec::new(),
+            mode: mode_str,
+            error: Some(e.to_string()),
+        },
+    }
 }

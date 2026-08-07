@@ -15,11 +15,11 @@
 //!   - `db`       : SQLite connection + schema + repositories
 //!   - `pdf`      : PDF render / text / char-box service (M2)
 //!   - `ai`       : OpenAI-compatible streaming client (M4)
+//!   - `ocr`      : full-page OCR engine + cache chain (M5)
 //!   - `export`   : annotation Markdown / JSON export (M3)
 //!   - `error`    : unified `AppError`
 //!
-//! Milestones M5 (OCR, image-layer marks) and M6 (FTS5 search) will add their
-//! modules here.
+//! Milestone M6 (FTS5 search) will add its module here.
 
 pub mod ai;
 pub mod api;
@@ -27,6 +27,7 @@ pub mod db;
 pub mod error;
 pub mod export;
 pub mod models;
+pub mod ocr;
 pub mod pdf;
 
 // flutter_rust_bridge generated bindings (created by `flutter_rust_bridge_codegen`).

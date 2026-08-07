@@ -79,6 +79,18 @@ pub fn find_by_original_path(conn: &Connection, path: &str) -> AppResult<Option<
     }
 }
 
+/// Look up a book by its stored file path (the copy under the app data dir).
+/// Used to route `open_book` between the pdfium and image pipelines (M5).
+pub fn find_by_stored_path(conn: &Connection, path: &str) -> AppResult<Option<Book>> {
+    let mut stmt =
+        conn.prepare(&format!("SELECT {SELECT_COLS} FROM books WHERE stored_path = ?1"))?;
+    let mut rows = stmt.query_map(params![path], row_to_book)?;
+    match rows.next() {
+        Some(row) => Ok(Some(row?)),
+        None => Ok(None),
+    }
+}
+
 /// Insert a new book row and return the inserted record. Caller must ensure
 /// `original_path` is not already present (call `find_by_original_path` first).
 pub fn insert(conn: &Connection, params: &NewBook) -> AppResult<Book> {

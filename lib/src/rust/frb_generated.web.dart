@@ -14,6 +14,7 @@ import 'models/ai.dart';
 import 'models/annotation.dart';
 import 'models/book.dart';
 import 'models/progress.dart';
+import 'ocr.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated_web.dart';
 import 'pdf/types.dart';
 
@@ -77,7 +78,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Category dco_decode_box_autoadd_category(dynamic raw);
 
   @protected
+  double dco_decode_box_autoadd_f_64(dynamic raw);
+
+  @protected
   PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
+
+  @protected
+  OcrResult dco_decode_box_autoadd_ocr_result(dynamic raw);
 
   @protected
   ReadingProgress dco_decode_box_autoadd_reading_progress(dynamic raw);
@@ -107,6 +114,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 dco_decode_i_64(dynamic raw);
 
   @protected
+  ImageAnnotation dco_decode_image_annotation(dynamic raw);
+
+  @protected
+  ImageAnnotationKind dco_decode_image_annotation_kind(dynamic raw);
+
+  @protected
+  ImageMarkCreateResult dco_decode_image_mark_create_result(dynamic raw);
+
+  @protected
   ImportResult dco_decode_import_result(dynamic raw);
 
   @protected
@@ -128,7 +144,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<CharBox> dco_decode_list_char_box(dynamic raw);
 
   @protected
+  List<ImageAnnotation> dco_decode_list_image_annotation(dynamic raw);
+
+  @protected
   List<NormRect> dco_decode_list_norm_rect(dynamic raw);
+
+  @protected
+  List<OcrLine> dco_decode_list_ocr_line(dynamic raw);
 
   @protected
   List<OutlineEntry> dco_decode_list_outline_entry(dynamic raw);
@@ -146,6 +168,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   NormRect dco_decode_norm_rect(dynamic raw);
 
   @protected
+  OcrLine dco_decode_ocr_line(dynamic raw);
+
+  @protected
+  OcrMode dco_decode_ocr_mode(dynamic raw);
+
+  @protected
+  OcrResult dco_decode_ocr_result(dynamic raw);
+
+  @protected
   OpenBookResult dco_decode_open_book_result(dynamic raw);
 
   @protected
@@ -161,7 +192,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Category? dco_decode_opt_box_autoadd_category(dynamic raw);
 
   @protected
+  double? dco_decode_opt_box_autoadd_f_64(dynamic raw);
+
+  @protected
   PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw);
+
+  @protected
+  OcrResult? dco_decode_opt_box_autoadd_ocr_result(dynamic raw);
 
   @protected
   ReadingProgress? dco_decode_opt_box_autoadd_reading_progress(dynamic raw);
@@ -177,6 +214,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ReadingProgress dco_decode_reading_progress(dynamic raw);
+
+  @protected
+  ScanPageResult dco_decode_scan_page_result(dynamic raw);
 
   @protected
   TextAnnotation dco_decode_text_annotation(dynamic raw);
@@ -256,7 +296,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Category sse_decode_box_autoadd_category(SseDeserializer deserializer);
 
   @protected
+  double sse_decode_box_autoadd_f_64(SseDeserializer deserializer);
+
+  @protected
   PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
+
+  @protected
+  OcrResult sse_decode_box_autoadd_ocr_result(SseDeserializer deserializer);
 
   @protected
   ReadingProgress sse_decode_box_autoadd_reading_progress(
@@ -288,6 +334,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
 
   @protected
+  ImageAnnotation sse_decode_image_annotation(SseDeserializer deserializer);
+
+  @protected
+  ImageAnnotationKind sse_decode_image_annotation_kind(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ImageMarkCreateResult sse_decode_image_mark_create_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ImportResult sse_decode_import_result(SseDeserializer deserializer);
 
   @protected
@@ -309,7 +368,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<CharBox> sse_decode_list_char_box(SseDeserializer deserializer);
 
   @protected
+  List<ImageAnnotation> sse_decode_list_image_annotation(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<NormRect> sse_decode_list_norm_rect(SseDeserializer deserializer);
+
+  @protected
+  List<OcrLine> sse_decode_list_ocr_line(SseDeserializer deserializer);
 
   @protected
   List<OutlineEntry> sse_decode_list_outline_entry(
@@ -331,6 +398,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   NormRect sse_decode_norm_rect(SseDeserializer deserializer);
 
   @protected
+  OcrLine sse_decode_ocr_line(SseDeserializer deserializer);
+
+  @protected
+  OcrMode sse_decode_ocr_mode(SseDeserializer deserializer);
+
+  @protected
+  OcrResult sse_decode_ocr_result(SseDeserializer deserializer);
+
+  @protected
   OpenBookResult sse_decode_open_book_result(SseDeserializer deserializer);
 
   @protected
@@ -348,7 +424,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Category? sse_decode_opt_box_autoadd_category(SseDeserializer deserializer);
 
   @protected
+  double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer);
+
+  @protected
   PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
+
+  @protected
+  OcrResult? sse_decode_opt_box_autoadd_ocr_result(
+    SseDeserializer deserializer,
+  );
 
   @protected
   ReadingProgress? sse_decode_opt_box_autoadd_reading_progress(
@@ -366,6 +450,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ReadingProgress sse_decode_reading_progress(SseDeserializer deserializer);
+
+  @protected
+  ScanPageResult sse_decode_scan_page_result(SseDeserializer deserializer);
 
   @protected
   TextAnnotation sse_decode_text_annotation(SseDeserializer deserializer);
@@ -457,8 +544,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_category(Category self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_i_64(
     PlatformInt64 self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_ocr_result(
+    OcrResult self,
     SseSerializer serializer,
   );
 
@@ -493,6 +589,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
 
   @protected
+  void sse_encode_image_annotation(
+    ImageAnnotation self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_image_annotation_kind(
+    ImageAnnotationKind self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_image_mark_create_result(
+    ImageMarkCreateResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_import_result(ImportResult self, SseSerializer serializer);
 
   @protected
@@ -517,7 +631,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_char_box(List<CharBox> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_image_annotation(
+    List<ImageAnnotation> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_norm_rect(List<NormRect> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_ocr_line(List<OcrLine> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_outline_entry(
@@ -544,6 +667,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_norm_rect(NormRect self, SseSerializer serializer);
 
   @protected
+  void sse_encode_ocr_line(OcrLine self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ocr_mode(OcrMode self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ocr_result(OcrResult self, SseSerializer serializer);
+
+  @protected
   void sse_encode_open_book_result(
     OpenBookResult self,
     SseSerializer serializer,
@@ -568,8 +700,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_i_64(
     PlatformInt64? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_ocr_result(
+    OcrResult? self,
     SseSerializer serializer,
   );
 
@@ -594,6 +735,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_reading_progress(
     ReadingProgress self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_scan_page_result(
+    ScanPageResult self,
     SseSerializer serializer,
   );
 
