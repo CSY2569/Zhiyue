@@ -115,6 +115,26 @@ void main() {
     print('ANNOTATIONS_OK');
   }, timeout: const Timeout(Duration(seconds: 30)));
 
+  test('pdf import generates a cover thumbnail (FEATURES 2.6)', () async {
+    final imported = await rust.importBook(path: '/tmp/test.pdf');
+    expect(imported.error, isNull, reason: 'import: ${imported.error}');
+    final book = imported.book!;
+
+    // The import renders page 0 into covers/{id}.png and stores the path.
+    final cover = book.coverPath;
+    expect(cover, isNotNull, reason: 'pdf import must set cover_path');
+    expect(File(cover!).existsSync(), isTrue,
+        reason: 'cover file must exist on disk: $cover');
+    // The file is a real PNG (magic bytes).
+    final bytes = File(cover).readAsBytesSync();
+    expect(bytes.length, greaterThan(8));
+    expect(bytes.sublist(0, 4), [0x89, 0x50, 0x4E, 0x47]);
+
+    expect(await rust.deleteBook(id: book.id), 1);
+    // ignore: avoid_print
+    print('COVER_OK: $cover');
+  }, timeout: const Timeout(Duration(seconds: 30)));
+
   test('image book renders the image, not the previous PDF (regression)',
       () async {
     // Simulate "last opened PDF": open the sample PDF and render it.

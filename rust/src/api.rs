@@ -285,24 +285,7 @@ async fn import_book_inner(original_path: &str) -> AppResult<ImportResult> {
     if file_type == BookType::Pdf {
         match pdf::open(&stored_path_str) {
             Ok(count) => {
-                let covers_dir = db::app_data_dir()
-                    .map(|d| d.join("covers"))
-                    .ok();
-                let cover_path_str = covers_dir.as_ref().and_then(|dir| {
-                    std::fs::create_dir_all(dir).ok()?;
-                    let p = dir.join(format!("{}.png", book.id));
-                    // Render page 0 as a ~400px-wide thumbnail and encode to PNG.
-                    match pdf::thumbnail(0, 400) {
-                        Ok(bmp) => {
-                            save_rgba_as_png(bmp, &p).ok()?;
-                            Some(p.to_string_lossy().to_string())
-                        }
-                        Err(e) => {
-                            tracing::warn!(error = %e, "cover render failed");
-                            None
-                        }
-                    }
-                });
+                let cover_path_str = save_cover_thumbnail(book.id);
                 let conn = db::db();
                 let _ = book_repo::update_page_count(&conn, book.id, count);
                 let _ = book_repo::update_cover(&conn, book.id, cover_path_str.clone());
@@ -473,13 +456,11 @@ static OPENED_IMAGE: AtomicBool = AtomicBool::new(false);
 pub async fn open_book(stored_path: String) -> OpenBookResult {
     // Route by the stored book's type (the path is the copy under the app
     // data dir; unknown books fall back to the pdfium path).
-    let is_image = {
+    let book = {
         let conn = db::db();
-        match book_repo::find_by_stored_path(&conn, &stored_path) {
-            Ok(Some(b)) => b.file_type == BookType::Image,
-            _ => false,
-        }
+        book_repo::find_by_stored_path(&conn, &stored_path)
     };
+    let is_image = matches!(book.as_ref(), Ok(Some(b)) if b.file_type == BookType::Image);
     OPENED_IMAGE.store(is_image, Ordering::Relaxed);
     let result = if is_image {
         match pdf::open_image(&stored_path) {
@@ -494,6 +475,19 @@ pub async fn open_book(stored_path: String) -> OpenBookResult {
         match pdf::open(&stored_path) {
             Ok(count) => {
                 let has_outline = pdf::outline().map(|e| !e.is_empty()).unwrap_or(false);
+                // Legacy books imported while pdfium was unavailable have no
+                // cover (and a stale page count of 0); heal both now that the
+                // document is open (FEATURES 2.6).
+                if let Ok(Some(b)) = &book {
+                    let conn = db::db();
+                    if b.cover_path.is_none() {
+                        let cover = save_cover_thumbnail(b.id);
+                        let _ = book_repo::update_cover(&conn, b.id, cover);
+                    }
+                    if b.page_count == 0 {
+                        let _ = book_repo::update_page_count(&conn, b.id, count);
+                    }
+                }
                 OpenBookResult {
                     page_count: count,
                     has_outline,
@@ -640,6 +634,25 @@ fn open_error(e: AppError) -> OpenBookResult {
         page_count: 0,
         has_outline: false,
         error: Some(e.to_string()),
+    }
+}
+
+/// Render page 0 of the open PDF as a ~400px-wide cover PNG for [book_id]
+/// (FEATURES 2.6), returning the absolute cover path. None when the render
+/// fails -- non-fatal, the tile shows a type placeholder.
+fn save_cover_thumbnail(book_id: i64) -> Option<String> {
+    let dir = db::app_data_dir().ok()?.join("covers");
+    std::fs::create_dir_all(&dir).ok()?;
+    let p = dir.join(format!("{book_id}.png"));
+    match pdf::thumbnail(0, 400) {
+        Ok(bmp) => {
+            save_rgba_as_png(bmp, &p).ok()?;
+            Some(p.to_string_lossy().to_string())
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "cover render failed");
+            None
+        }
     }
 }
 

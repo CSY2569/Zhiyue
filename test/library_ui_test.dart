@@ -1,3 +1,6 @@
+import 'dart:convert' show base64Decode;
+import 'dart:io';
+
 import 'package:flutter/gestures.dart' show kSecondaryMouseButton;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,7 +29,31 @@ Book _book({int? categoryId}) => Book(
       importedAt: 'now',
     );
 
+/// 1x1 transparent PNG written to a temp file as a fake cover image.
+String _writeFakeCover() {
+  final p = '/tmp/rbwa_cover_test.png';
+  File(p).writeAsBytesSync(base64Decode(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='));
+  return p;
+}
 
+Widget _tile(Book book) => MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: SizedBox(
+            width: 180,
+            height: 260,
+            child: BookTile(
+              book: book,
+              onTap: _noop,
+              onToggleFavorite: _noop,
+              onAssignCategory: _noop,
+              onDelete: _noop,
+            ),
+          ),
+        ),
+      ),
+    );
 
 void main() {
   testWidgets('toolbar no longer duplicates rail filters', (tester) async {
@@ -158,6 +185,46 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(result, (null, true));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('pdf book with a generated cover renders the cover image',
+      (tester) async {
+    final cover = _writeFakeCover();
+    addTearDown(() => File(cover).deleteSync());
+    // PDF covers are generated at import (covers/{id}.png); the tile must
+    // display them, not the type placeholder (FEATURES 2.6).
+    // The FileImage decode runs inside runAsync: widget tests use a fake
+    // async zone where real file I/O never completes on its own.
+    await tester.runAsync(() async {
+      await tester.pumpWidget(_tile(Book(
+        id: 1,
+        title: '带封面 PDF',
+        originalPath: '/x.pdf',
+        storedPath: '/x.pdf',
+        fileType: BookType.pdf,
+        pageCount: 10,
+        coverPath: cover,
+        favorite: false,
+        categoryId: null,
+        lastOpenedAt: null,
+        importedAt: 'now',
+      )));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pump();
+
+    expect(find.byType(Image), findsOneWidget);
+    expect(find.byIcon(Icons.picture_as_pdf_outlined), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('book without a cover falls back to the type placeholder',
+      (tester) async {
+    await tester.pumpWidget(_tile(_book()));
+
+    expect(find.byType(Image), findsNothing);
+    expect(find.byIcon(Icons.picture_as_pdf_outlined), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

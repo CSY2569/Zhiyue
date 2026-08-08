@@ -202,9 +202,9 @@ class _Cover extends StatelessWidget {
   Widget build(BuildContext context) {
     Widget content;
     final cover = book.coverPath;
-    // PDF covers are not available until M2 (pdfium); images use the file
-    // itself as the cover.
-    if (cover != null && book.fileType == BookType.image) {
+    // PDF covers are rendered at import (covers/{id}.png, FEATURES 2.6);
+    // image books use the file itself as the cover.
+    if (cover != null) {
       content = Image.file(
         File(cover),
         fit: BoxFit.cover,
