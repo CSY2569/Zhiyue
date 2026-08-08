@@ -135,6 +135,42 @@ void main() {
     print('COVER_OK: $cover');
   }, timeout: const Timeout(Duration(seconds: 30)));
 
+  test('full-text search builds, finds, and cascades on delete (M6)',
+      () async {
+    // Import the sample PDF (its only page holds 'Dummy PDF for RBWA AI
+    // tests'), then let the background index build run to completion.
+    final imported = await rust.importBook(path: '/tmp/test.pdf');
+    expect(imported.error, isNull, reason: 'import: ${imported.error}');
+    final book = imported.book!;
+
+    await rust.ensureBookIndex(bookId: book.id);
+    var status = await rust.searchIndexStatus(bookId: book.id);
+    var waited = 0;
+    while (status != 'ready' && waited < 100) {
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      status = await rust.searchIndexStatus(bookId: book.id);
+      waited++;
+    }
+    expect(status, 'ready',
+        reason: 'index must reach ready (waited ${waited * 200}ms)');
+
+    // Search finds the page with a context snippet.
+    final res = await rust.searchBooks(query: 'Dummy', limit: null);
+    expect(res.error, isNull, reason: 'search: ${res.error}');
+    final hits = res.hits.where((h) => h.bookId == book.id).toList();
+    expect(hits, hasLength(1));
+    expect(hits.single.page, 0);
+    expect(hits.single.snippet, contains('Dummy'));
+
+    // Deleting the book removes its index entries (FK cascade + FTS
+    // triggers keep the external-content table in sync).
+    expect(await rust.deleteBook(id: book.id), 1);
+    final after = await rust.searchBooks(query: 'Dummy', limit: null);
+    expect(after.hits.where((h) => h.bookId == book.id), isEmpty);
+    // ignore: avoid_print
+    print('SEARCH_OK: ${hits.single.snippet}');
+  }, timeout: const Timeout(Duration(seconds: 60)));
+
   test('image book renders the image, not the previous PDF (regression)',
       () async {
     // Simulate "last opened PDF": open the sample PDF and render it.

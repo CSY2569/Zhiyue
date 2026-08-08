@@ -11,6 +11,7 @@ import 'package:rbwa/features/library/widgets/book_grid.dart';
 import 'package:rbwa/features/library/widgets/category_assign_dialog.dart';
 import 'package:rbwa/features/library/widgets/category_rail.dart';
 import 'package:rbwa/features/library/widgets/library_toolbar.dart';
+import 'package:rbwa/features/search/providers/search_providers.dart';
 import 'package:rbwa/src/rust/models/book.dart';
 
 /// Library / bookshelf page (FEATURES §2).
@@ -99,6 +100,13 @@ class _Body extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final booksAsync = ref.watch(libraryBooksProvider);
+
+    // Full-text index pre-build (M6, 3.5.1): refresh statuses and trigger
+    // background builds for books without an index (app start heals legacy
+    // imports). Post-frame -- must not touch providers during build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(searchIndexStatusProvider.notifier).refresh();
+    });
 
     return booksAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),

@@ -142,6 +142,27 @@ fn migrate(conn: &Connection) -> AppResult<()> {
             )?;
             record_version(conn)?;
         }
+        Some(4) => {
+            tracing::info!(
+                "migrating schema 4 -> 5 (full-text search: original_text + FTS triggers)"
+            );
+            conn.execute_batch(
+                "ALTER TABLE page_text_index ADD COLUMN original_text TEXT;
+                 CREATE TRIGGER IF NOT EXISTS page_text_index_ai AFTER INSERT ON page_text_index BEGIN
+                     INSERT INTO page_text_fts(rowid, raw_text) VALUES (new.rowid, new.raw_text);
+                 END;
+                 CREATE TRIGGER IF NOT EXISTS page_text_index_ad AFTER DELETE ON page_text_index BEGIN
+                     INSERT INTO page_text_fts(page_text_fts, rowid, raw_text)
+                         VALUES ('delete', old.rowid, old.raw_text);
+                 END;
+                 CREATE TRIGGER IF NOT EXISTS page_text_index_au AFTER UPDATE OF raw_text ON page_text_index BEGIN
+                     INSERT INTO page_text_fts(page_text_fts, rowid, raw_text)
+                         VALUES ('delete', old.rowid, old.raw_text);
+                     INSERT INTO page_text_fts(rowid, raw_text) VALUES (new.rowid, new.raw_text);
+                 END;",
+            )?;
+            record_version(conn)?;
+        }
         Some(v) => {
             tracing::warn!(recorded = v, expected = SCHEMA_VERSION, "schema version mismatch -- migration not yet implemented");
         }
@@ -283,5 +304,115 @@ mod tests {
             .unwrap(),
             2
         );
+    }
+
+    /// A v4-era database: the search tables exist but lack `original_text`
+    /// and the external-content FTS triggers (M6 pre-migration state).
+    fn v4_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "PRAGMA foreign_keys = ON;
+             CREATE TABLE books (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                title         TEXT NOT NULL,
+                original_path TEXT NOT NULL UNIQUE,
+                stored_path   TEXT NOT NULL,
+                file_type     TEXT NOT NULL,
+                page_count    INTEGER NOT NULL DEFAULT 0,
+                cover_path    TEXT,
+                favorite      INTEGER NOT NULL DEFAULT 0,
+                category_id   INTEGER,
+                last_opened_at TEXT,
+                imported_at   TEXT NOT NULL DEFAULT (datetime('now'))
+             );
+             CREATE TABLE ai_threads (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                title       TEXT NOT NULL,
+                action_type TEXT NOT NULL,
+                book_id     INTEGER,
+                created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+             );
+             CREATE TABLE page_text_index (
+                book_id   INTEGER NOT NULL,
+                page      INTEGER NOT NULL,
+                source    TEXT NOT NULL,
+                raw_text  TEXT NOT NULL,
+                indexed_at TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (book_id, page),
+                FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+             );
+             CREATE VIRTUAL TABLE page_text_fts USING fts5(
+                raw_text,
+                content='page_text_index',
+                content_rowid='rowid',
+                tokenize='unicode61'
+             );
+             CREATE TABLE schema_version (
+                version    INTEGER PRIMARY KEY,
+                applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+             );
+             INSERT INTO schema_version (version) VALUES (4);",
+        )
+        .unwrap();
+        conn
+    }
+
+    #[test]
+    fn migrate_v4_to_v5_wires_fulltext_triggers() {
+        let conn = v4_db();
+        migrate(&conn).unwrap();
+
+        let v: u32 = conn
+            .query_row("SELECT MAX(version) FROM schema_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(v, SCHEMA_VERSION);
+
+        // original_text column added by the ALTER.
+        let cols: Vec<String> = conn
+            .prepare("PRAGMA table_info(page_text_index)")
+            .unwrap()
+            .query_map([], |r| r.get::<_, String>(1))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert!(cols.contains(&"original_text".to_string()), "{cols:?}");
+
+        // An insert into the content table propagates into the FTS index
+        // (external content needs the triggers -- it does not sync itself).
+        conn.execute(
+            "INSERT INTO books (title, original_path, stored_path, file_type) \
+             VALUES ('测试书', '/x.pdf', '/x.pdf', 'pdf')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO page_text_index (book_id, page, source, raw_text, original_text) \
+             VALUES (1, 0, 'pdf', '量子 计算 入门', '量子计算入门')",
+            [],
+        )
+        .unwrap();
+        let hits: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM page_text_fts WHERE page_text_fts MATCH '\"量子\"'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(hits, 1, "FTS must see the inserted page");
+
+        // Deleting the book cascades the content row AND its FTS entries.
+        conn.execute("DELETE FROM books WHERE id = 1", []).unwrap();
+        let remaining: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM page_text_fts WHERE page_text_fts MATCH '\"量子\"'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(remaining, 0, "FTS entries must follow the cascade");
+
+        // migrate is idempotent once up to date.
+        migrate(&conn).unwrap();
     }
 }

@@ -6,6 +6,7 @@ import 'package:rbwa/features/ai/pages/ai_conversations_page.dart';
 import 'package:rbwa/features/library/library_page.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
 import 'package:rbwa/features/reader/reader_page.dart';
+import 'package:rbwa/features/search/search_page.dart';
 import 'package:rbwa/features/settings/settings_page.dart';
 import 'package:rbwa/features/shell/app_title_bar.dart';
 
@@ -24,6 +25,7 @@ final appRouter = GoRouter(
       builder: (context, state, child) {
         final isReader = state.matchedLocation.startsWith('/reader');
         final isAiChat = state.matchedLocation.startsWith('/ai-chat');
+        final isSearch = state.matchedLocation.startsWith('/search');
         return Column(
           children: [
             Consumer(
@@ -36,10 +38,12 @@ final appRouter = GoRouter(
                         ? '阅读器'
                         : isAiChat
                             ? 'AI 对话'
-                            : 'RBWA');
+                            : isSearch
+                                ? '全文搜索'
+                                : 'RBWA');
                 return AppTitleBar(
                   title: title,
-                  showBack: isReader || isAiChat,
+                  showBack: isReader || isAiChat || isSearch,
                 );
               },
             ),
@@ -65,6 +69,11 @@ final appRouter = GoRouter(
           path: '/ai-chat',
           name: 'ai-chat',
           builder: (context, state) => const AiConversationsPage(),
+        ),
+        GoRoute(
+          path: '/search',
+          name: 'search',
+          builder: (context, state) => const SearchPage(),
         ),
         GoRoute(
           path: '/settings',

@@ -16,7 +16,10 @@
 ///
 /// 4: `ai_messages.image_path` -- vision screenshots persist for history
 /// reload (FEATURES 6.6.2: 区域识图截图在历史对话中保留).
-pub const SCHEMA_VERSION: u32 = 4;
+/// 5: full-text search (M6) -- `page_text_index.original_text` (snippet /
+/// hit-locate source; `raw_text` holds the jieba-segmented text) and the
+/// external-content FTS triggers that keep `page_text_fts` in sync.
+pub const SCHEMA_VERSION: u32 = 5;
 
 /// Indexes for per-book AI conversation windows (v3, FEATURES 6.5.4).
 ///
@@ -146,29 +149,47 @@ CREATE TABLE IF NOT EXISTS page_ocr_cache (
 );
 
 -- ===========================================================================
--- 8. page_text_index  (FEATURES 9.1.6 / §3.5)
---    Per-page text source for full-text search. Text-PDF uses pdfjs text,
---    scanned uses OCR result. FTS5 virtual table for jieba-tokenized search.
+-- 8. Full-text search (M6, FEATURES 3.5) -------------------------------
+--    Per-page text: PDF pages use the native text layer, OCR-scanned pages
+--    use the recognition result. `raw_text` is the JIEBA-SEGMENTED text the
+--    FTS table indexes (unicode61 tokenizes space-separated CJK tokens);
+--    `original_text` keeps the raw page text for snippets + hit location.
+--    page_text_fts is an external-content table: the triggers below keep it
+--    in sync, so the books-row FK cascade also removes FTS entries.
 -- ===========================================================================
--- Metadata table mapping (book_id, page) -> source + raw text.
 CREATE TABLE IF NOT EXISTS page_text_index (
     book_id   INTEGER NOT NULL,
     page      INTEGER NOT NULL,
     source    TEXT NOT NULL,                   -- 'pdf' | 'ocr'
-    raw_text  TEXT NOT NULL,
+    raw_text  TEXT NOT NULL,                   -- jieba-segmented (indexed)
+    original_text TEXT,                        -- raw page text (snippet / locate)
     indexed_at TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (book_id, page),
     FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
 );
 
--- FTS5 full-text index over page_text_index.raw_text.
--- content_source links to the metadata table so deletes cascade into FTS.
+-- FTS5 full-text index over page_text_index.raw_text. External content:
+-- the FTS table stores only rowid + segmented text; queries JOIN back to
+-- page_text_index for book_id / page / original_text.
 CREATE VIRTUAL TABLE IF NOT EXISTS page_text_fts USING fts5(
     raw_text,
     content='page_text_index',
     content_rowid='rowid',
-    tokenize='unicode61'                       -- jieba applied at index time in search subsystem
+    tokenize='unicode61'
 );
+
+CREATE TRIGGER IF NOT EXISTS page_text_index_ai AFTER INSERT ON page_text_index BEGIN
+    INSERT INTO page_text_fts(rowid, raw_text) VALUES (new.rowid, new.raw_text);
+END;
+CREATE TRIGGER IF NOT EXISTS page_text_index_ad AFTER DELETE ON page_text_index BEGIN
+    INSERT INTO page_text_fts(page_text_fts, rowid, raw_text)
+        VALUES ('delete', old.rowid, old.raw_text);
+END;
+CREATE TRIGGER IF NOT EXISTS page_text_index_au AFTER UPDATE OF raw_text ON page_text_index BEGIN
+    INSERT INTO page_text_fts(page_text_fts, rowid, raw_text)
+        VALUES ('delete', old.rowid, old.raw_text);
+    INSERT INTO page_text_fts(rowid, raw_text) VALUES (new.rowid, new.raw_text);
+END;
 
 -- ===========================================================================
 -- 9. ai_history  (FEATURES 9.1.7 / 6.5.4)

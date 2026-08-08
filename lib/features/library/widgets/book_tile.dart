@@ -1,7 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/features/search/providers/search_providers.dart';
 import 'package:rbwa/src/rust/models/book.dart';
 
 /// A single book card in the library grid (FEATURES 2.2 / 2.5 / 2.6).
@@ -190,8 +192,9 @@ class _Card extends StatelessWidget {
   }
 }
 
-/// Cover image or type placeholder (FEATURES 2.6).
-class _Cover extends StatelessWidget {
+/// Cover image or type placeholder (FEATURES 2.6). Watches the search-index
+/// status for the "索引中" badge (M6, 3.5.1).
+class _Cover extends ConsumerWidget {
   const _Cover({required this.book, required this.theme, this.dimmed = false});
 
   final Book book;
@@ -199,7 +202,11 @@ class _Cover extends StatelessWidget {
   final bool dimmed;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Highlight the badge while the background full-text index build runs.
+    final indexing =
+        ref.watch(searchIndexStatusProvider.select((m) => m[book.id])) ==
+            'building';
     Widget content;
     final cover = book.coverPath;
     // PDF covers are rendered at import (covers/{id}.png, FEATURES 2.6);
@@ -217,7 +224,8 @@ class _Cover extends StatelessWidget {
     if (dimmed) {
       content = Opacity(opacity: 0.7, child: content);
     }
-    // Page-count badge bottom-right.
+    // Page-count badge bottom-right; a "索引中" chip while the full-text
+    // index build is in flight (M6, 3.5.1).
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -237,6 +245,23 @@ class _Cover extends StatelessWidget {
             ),
           ),
         ),
+        if (indexing) ...[
+          Positioned(
+            left: 4,
+            bottom: 4,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xCCE65100),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text(
+                '索引中',
+                style: TextStyle(color: Colors.white, fontSize: 10),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

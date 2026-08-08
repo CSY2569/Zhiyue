@@ -37,18 +37,20 @@ String _writeFakeCover() {
   return p;
 }
 
-Widget _tile(Book book) => MaterialApp(
-      home: Scaffold(
-        body: Center(
-          child: SizedBox(
-            width: 180,
-            height: 260,
-            child: BookTile(
-              book: book,
-              onTap: _noop,
-              onToggleFavorite: _noop,
-              onAssignCategory: _noop,
-              onDelete: _noop,
+Widget _tile(Book book) => ProviderScope(
+      child: MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 180,
+              height: 260,
+              child: BookTile(
+                book: book,
+                onTap: _noop,
+                onToggleFavorite: _noop,
+                onAssignCategory: _noop,
+                onDelete: _noop,
+              ),
             ),
           ),
         ),
@@ -80,18 +82,20 @@ void main() {
   testWidgets('right-clicking a book card offers "分配到分类…"',
       (tester) async {
     var assigned = false;
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: Center(
-          child: SizedBox(
-            width: 180,
-            height: 260,
-            child: BookTile(
-              book: _book(),
-              onTap: _noop,
-              onToggleFavorite: _noop,
-              onAssignCategory: () => assigned = true,
-              onDelete: _noop,
+    await tester.pumpWidget(ProviderScope(
+      child: MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 180,
+              height: 260,
+              child: BookTile(
+                book: _book(),
+                onTap: _noop,
+                onToggleFavorite: _noop,
+                onAssignCategory: () => assigned = true,
+                onDelete: _noop,
+              ),
             ),
           ),
         ),

@@ -35,6 +35,10 @@ pub fn outline() -> AppResult<Vec<OutlineEntry>> {
 
 pub fn close() {}
 
+pub fn extract_document_text(_path: &str) -> AppResult<Vec<String>> {
+    Err(AppError::Pdf(NOT_BUILT.into()))
+}
+
 pub fn open_image(_path: &str) -> AppResult<i64> {
     Err(AppError::Pdf(NOT_BUILT.into()))
 }

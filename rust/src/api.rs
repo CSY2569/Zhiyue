@@ -20,6 +20,7 @@ use std::sync::OnceLock;
 
 use crate::db;
 use crate::db::repository::progress as progress_repo;
+use crate::db::repository::search as search_repo;
 use crate::db::repository::{book as book_repo, category as category_repo};
 use crate::db::repository::book::NewBook;
 use crate::error::{AppError, AppResult};
@@ -315,9 +316,11 @@ async fn import_book_inner(original_path: &str) -> AppResult<ImportResult> {
 /// and cover thumbnail. Returns 1 on success, 0 if the book was not found.
 pub fn delete_book(id: i64) -> i32 {
     // Fetch the stored_path + cover_path first so we can clean up files, then
-    // delete the DB row (cascade handles child tables).
+    // delete the DB row (cascade handles child tables; the FTS triggers drop
+    // the search index rows). The ready marker is removed explicitly.
     let (stored_path, cover_path) = {
         let conn = db::db();
+        let _ = search_repo::clear_ready(&conn, id);
         match book_repo::get(&conn, id) {
             Ok(Some(book)) => {
                 let removed = book_repo::delete(&conn, id).unwrap_or(false);
@@ -1418,8 +1421,25 @@ pub async fn scan_page(book_id: i64, page: i64, mode: OcrMode) -> ScanPageResult
     match engine.scan(&page_img, &mode_str) {
         Ok(result) => {
             // Cache before returning so flips back are instant (7.1.4).
-            let conn = db::db();
-            let _ = ocr_repo::save_page_ocr(&conn, book_id, page, &mode_str, &result);
+            // Incremental search index (M6, 3.5.1): scanned pages become
+            // searchable immediately. The text concatenates the recognized
+            // lines -- the same form the Dart char-box layer produces, so
+            // hit highlighting aligns with the line boxes.
+            let original: String = result.lines.iter().map(|l| l.text.as_str()).collect();
+            {
+                let conn = db::db();
+                let _ = ocr_repo::save_page_ocr(&conn, book_id, page, &mode_str, &result);
+                if !original.trim().is_empty() {
+                    let _ = search_repo::index_page(
+                        &conn,
+                        book_id,
+                        page,
+                        "ocr",
+                        &original,
+                        &crate::search::tokenize(&original),
+                    );
+                }
+            }
             ScanPageResult {
                 lines: result.lines,
                 mode: result.mode,
@@ -1431,5 +1451,100 @@ pub async fn scan_page(book_id: i64, page: i64, mode: OcrMode) -> ScanPageResult
             mode: mode_str,
             error: Some(e.to_string()),
         },
+    }
+}
+
+// =============================================================================
+// M6 -- Full-text search (FEATURES §3.5)
+// =============================================================================
+//
+// Indexes per-page text: native text layers (text PDFs) and OCR-scanned
+// pages (auto-appended on scan). Text books build their index in a
+// background thread after import (`ensure_book_index`); image books and
+// unscanned pages never enter the index. Hits are ordered by book then
+// page; the snippet is a context window around the first occurrence.
+
+/// One full-text search hit: the book, the 0-indexed page, and a context
+/// snippet around the first occurrence of the query.
+pub struct SearchHit {
+    pub book_id: i64,
+    pub page: i64,
+    pub snippet: String,
+}
+
+/// Result of a library-wide full-text search.
+pub struct SearchResult {
+    pub hits: Vec<SearchHit>,
+    pub error: Option<String>,
+}
+
+/// Search the whole library's indexed text (FEATURES 3.5.2). Hits are
+/// ordered by book then page, capped at [limit] (default 200).
+pub fn search_books(query: String, limit: Option<i64>) -> SearchResult {
+    let limit = limit.unwrap_or(200).clamp(1, 500);
+    let conn = db::db();
+    match search_repo::search(&conn, &query, limit) {
+        Ok(hits) => SearchResult {
+            hits: hits
+                .into_iter()
+                .map(|h| SearchHit {
+                    book_id: h.book_id,
+                    page: h.page,
+                    snippet: h.snippet,
+                })
+                .collect(),
+            error: None,
+        },
+        Err(e) => SearchResult {
+            hits: Vec::new(),
+            error: Some(e.to_string()),
+        },
+    }
+}
+
+/// Ensure [book_id]'s pages are indexed (3.5.1 pre-build): triggers a
+/// background build when the index is missing (builds run on an independent
+/// pdfium document, so they never disturb the reader). Returns nothing --
+/// poll [search_index_status] for progress.
+pub async fn ensure_book_index(book_id: i64) {
+    let conn = db::db();
+    if search_repo::is_ready(&conn, book_id) || search_repo::has_rows(&conn, book_id) {
+        return;
+    }
+    drop(conn);
+    crate::search::build_book_index(book_id);
+}
+
+/// Index status of a book: "missing" (nothing indexed) | "building"
+/// (background build in flight) | "ready" (fully built or has scanned
+/// pages). Drives the "索引中" badge and the search page footer.
+pub fn search_index_status(book_id: i64) -> String {
+    let conn = db::db();
+    if crate::search::is_building(book_id) {
+        return "building".to_string();
+    }
+    if search_repo::is_ready(&conn, book_id) || search_repo::has_rows(&conn, book_id) {
+        return "ready".to_string();
+    }
+    "missing".to_string()
+}
+
+/// Books whose pages are not indexed yet (PDFs only -- image books never
+/// index). The library page triggers [ensure_book_index] for these on app
+/// start, so legacy imports heal in the background.
+pub fn list_unindexed_books() -> Vec<i64> {
+    let conn = db::db();
+    match book_repo::list(&conn) {
+        Ok(books) => books
+            .into_iter()
+            .filter(|b| {
+                b.file_type == BookType::Pdf
+                    && !crate::search::is_building(b.id)
+                    && !search_repo::is_ready(&conn, b.id)
+                    && !search_repo::has_rows(&conn, b.id)
+            })
+            .map(|b| b.id)
+            .collect(),
+        Err(_) => Vec::new(),
     }
 }

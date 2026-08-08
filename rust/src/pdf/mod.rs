@@ -24,7 +24,10 @@ mod image_book;
 pub use types::{CharBox, OutlineEntry, PageBitmap};
 
 #[cfg(feature = "pdf")]
-pub use pdfium::{close, extract_text, open, outline, page_has_text, render_page, thumbnail};
+pub use pdfium::{
+    close, extract_document_text, extract_text, open, outline, page_has_text, render_page,
+    thumbnail,
+};
 #[cfg(feature = "pdf")]
 pub use image_book::{
     close_image, extract_image_text, open_image, page_image_has_text, render_image,
@@ -35,6 +38,7 @@ pub use image_book::{
 mod fallback;
 #[cfg(not(feature = "pdf"))]
 pub use fallback::{
-    close, close_image, extract_image_text, extract_text, open, open_image, outline,
-    page_has_text, page_image_has_text, render_image, render_page, thumbnail, thumbnail_image,
+    close, close_image, extract_document_text, extract_image_text, extract_text, open, open_image,
+    outline, page_has_text, page_image_has_text, render_image, render_page, thumbnail,
+    thumbnail_image,
 };

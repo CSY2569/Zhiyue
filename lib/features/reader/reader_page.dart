@@ -20,6 +20,7 @@ import 'package:rbwa/features/reader/widgets/reader_toolbar.dart';
 import 'package:rbwa/features/reader/widgets/sidebars/notes_rail.dart';
 import 'package:rbwa/features/reader/widgets/sidebars/outline_tree.dart';
 import 'package:rbwa/features/reader/widgets/sidebars/thumbnail_rail.dart';
+import 'package:rbwa/features/search/providers/search_providers.dart';
 
 /// Reader page (FEATURES §3 + §4 + §6).
 ///
@@ -50,9 +51,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   void initState() {
     super.initState();
     // Open the book on first build. Use post-frame to avoid provider
-    // mutation during the build phase.
+    // mutation during the build phase. A pending full-text search jump
+    // (M6, 3.5.2) overrides the restored progress position.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(viewerProvider.notifier).openBook(widget.bookId);
+      final jump = ref.read(searchHitProvider);
+      if (jump != null && jump.bookId == widget.bookId) {
+        ref
+            .read(viewerProvider.notifier)
+            .openBook(widget.bookId, jumpPage: jump.page + 1);
+      } else {
+        ref.read(viewerProvider.notifier).openBook(widget.bookId);
+      }
     });
 
     // Selection state drives the floating overlays (FEATURES 4.2/4.4).
@@ -116,6 +125,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.escape) {
       ref.read(selectionProvider.notifier).clear();
+      // Esc also dismisses the full-text search hit highlight (M6, 3.5.3).
+      ref.read(searchHitProvider.notifier).state = null;
       return KeyEventResult.handled;
     }
     if (HardwareKeyboard.instance.isControlPressed) {

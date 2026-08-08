@@ -245,3 +245,27 @@ pub fn close() {
     *DOC.lock().unwrap() = None;
     *DOC_PATH.lock().unwrap() = None;
 }
+
+/// Plain text of every page of [path] via an INDEPENDENT document (M6: the
+/// search-index builder uses this so it never touches the reader's open
+/// document -- pdfium keeps one global document and swapping it would
+/// corrupt what the reader renders). Each page's text is the per-character
+/// unicode strings concatenated -- exactly what the char-box layer builds,
+/// so hit highlighting offsets align with CharBox indices.
+pub fn extract_document_text(path: &str) -> AppResult<Vec<String>> {
+    let pdfium = pdfium()?;
+    let doc = pdfium.load_pdf_from_file(path, None)?;
+    let count = doc.pages().len();
+    let mut out = Vec::with_capacity(count as usize);
+    for i in 0..count {
+        let page = doc.pages().get(i as PdfPageIndex)?;
+        let text = page.text()?;
+        let s: String = text
+            .chars()
+            .iter()
+            .map(|c| c.unicode_string().unwrap_or_default())
+            .collect();
+        out.push(s);
+    }
+    Ok(out)
+}

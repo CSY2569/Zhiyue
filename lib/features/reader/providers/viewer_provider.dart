@@ -69,7 +69,9 @@ class ViewerNotifier extends StateNotifier<ViewerState> {
   LibraryRepository get _libraryRepo => _ref.read(libraryRepositoryProvider);
 
   /// Load the book, open its PDF, and restore saved progress (FEATURES 3.3.4).
-  Future<void> openBook(int bookId) async {
+  /// [jumpPage] (1-indexed) overrides the restored position -- the full-text
+  /// search jump target (M6, 3.5.2).
+  Future<void> openBook(int bookId, {int? jumpPage}) async {
     state = const ViewerState().copyWith(loading: true);
     try {
       final book = await _libraryRepo.getBook(bookId);
@@ -96,16 +98,21 @@ class ViewerNotifier extends StateNotifier<ViewerState> {
       }
       final pageCount = result.pageCount;
 
-      // Restore saved progress.
+      // Restore saved progress (a search jump wins over it).
       final progress = await _readerRepo.getProgress(bookId);
+      final page = jumpPage ?? progress?.page ?? 1;
       state = ViewerState(
         book: book,
         pageCount: pageCount,
-        currentPage: progress?.page ?? 1,
+        currentPage: page.clamp(1, pageCount),
         zoom: progress?.zoom ?? 1.2,
         mode: progress?.viewMode ?? ViewMode.single,
         loading: false,
       );
+      if (jumpPage != null) {
+        // A jump is a real position change: persist it like a page flip.
+        _scheduleSave();
+      }
     } catch (e) {
       state = const ViewerState().copyWith(
         loading: false,

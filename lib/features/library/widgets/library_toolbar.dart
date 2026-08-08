@@ -2,15 +2,16 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:rbwa/features/library/providers/library_providers.dart';
 
 /// Top toolbar for the library page (FEATURES 2.7).
 ///
-/// Hosts a debounced search field plus the theme / settings actions. Filters
-/// (favorites / type / category) live exclusively in the left rail, so they
-/// are not duplicated here; a small "clear filters" affordance appears when
-/// a filter is active.
+/// Hosts a debounced title search field plus the full-text search / theme /
+/// settings actions. Filters (favorites / type / category) live exclusively
+/// in the left rail, so they are not duplicated here; a small "clear
+/// filters" affordance appears when a filter is active.
 class LibraryToolbar extends ConsumerStatefulWidget implements PreferredSizeWidget {
   const LibraryToolbar({
     super.key,
@@ -82,6 +83,11 @@ class _LibraryToolbarState extends ConsumerState<LibraryToolbar> {
         ),
       ),
       actions: [
+        IconButton(
+          icon: const Icon(Icons.manage_search),
+          tooltip: '全文搜索',
+          onPressed: () => context.go('/search'),
+        ),
         IconButton(
           icon: const Icon(Icons.brightness_6_outlined),
           tooltip: '切换主题',

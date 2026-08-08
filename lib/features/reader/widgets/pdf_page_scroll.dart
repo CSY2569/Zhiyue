@@ -12,6 +12,7 @@ import 'package:rbwa/features/annotation/widgets/image_mark_layer.dart';
 import 'package:rbwa/features/annotation/widgets/selection_layer.dart';
 import 'package:rbwa/features/reader/providers/bitmap_cache.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
+import 'package:rbwa/features/reader/widgets/hit_highlight_layer.dart';
 import 'package:rbwa/features/reader/widgets/scan_overlay.dart';
 import 'package:rbwa/src/rust/models/annotation.dart' show TextAnnotation;
 import 'package:rbwa/src/rust/models/progress.dart';
@@ -772,6 +773,14 @@ class _PageItemState extends ConsumerState<_PageItem> {
               ),
               Positioned.fill(
                 child: HighlightLayer(annotations: pageAnns),
+              ),
+              // Search hit highlight (M6, 3.5.3): below the selection layer
+              // so selection previews stay visible on top of it.
+              Positioned.fill(
+                child: HitHighlightLayer(
+                  bookId: widget.bookId,
+                  page: widget.page,
+                ),
               ),
               Positioned.fill(
                 child: SelectionLayer(

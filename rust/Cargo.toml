@@ -77,6 +77,7 @@ uuid = { version = "1", features = ["v4"] }
 # (reqwest): models are provisioned by scripts/download_ocr_models.sh into
 # {data_dir}/models/ and the engine loads them with explicit paths.
 rapidocr-core = { version = "0.2.2", default-features = false, optional = true }
+jieba-rs = "0.10.3"
 
 [features]
 default = ["pdf", "ai", "ocr"]

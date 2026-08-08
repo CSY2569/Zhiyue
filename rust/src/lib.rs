@@ -16,10 +16,9 @@
 //!   - `pdf`      : PDF render / text / char-box service (M2)
 //!   - `ai`       : OpenAI-compatible streaming client (M4)
 //!   - `ocr`      : full-page OCR engine + cache chain (M5)
+//!   - `search`   : full-text index + FTS5 search (M6)
 //!   - `export`   : annotation Markdown / JSON export (M3)
 //!   - `error`    : unified `AppError`
-//!
-//! Milestone M6 (FTS5 search) will add its module here.
 
 pub mod ai;
 pub mod api;
@@ -29,6 +28,7 @@ pub mod export;
 pub mod models;
 pub mod ocr;
 pub mod pdf;
+pub mod search;
 
 // flutter_rust_bridge generated bindings (created by `flutter_rust_bridge_codegen`).
 // The `frb_generated` mod is generated into src/frb_generated.rs; declared here

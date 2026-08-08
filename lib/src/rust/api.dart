@@ -422,6 +422,32 @@ Future<ScanPageResult> scanPage({
   mode: mode,
 );
 
+/// Search the whole library's indexed text (FEATURES 3.5.2). Hits are
+/// ordered by book then page, capped at [limit] (default 200).
+Future<SearchResult> searchBooks({
+  required String query,
+  PlatformInt64? limit,
+}) => RustLib.instance.api.crateApiSearchBooks(query: query, limit: limit);
+
+/// Ensure [book_id]'s pages are indexed (3.5.1 pre-build): triggers a
+/// background build when the index is missing (builds run on an independent
+/// pdfium document, so they never disturb the reader). Returns nothing --
+/// poll [search_index_status] for progress.
+Future<void> ensureBookIndex({required PlatformInt64 bookId}) =>
+    RustLib.instance.api.crateApiEnsureBookIndex(bookId: bookId);
+
+/// Index status of a book: "missing" (nothing indexed) | "building"
+/// (background build in flight) | "ready" (fully built or has scanned
+/// pages). Drives the "索引中" badge and the search page footer.
+Future<String> searchIndexStatus({required PlatformInt64 bookId}) =>
+    RustLib.instance.api.crateApiSearchIndexStatus(bookId: bookId);
+
+/// Books whose pages are not indexed yet (PDFs only -- image books never
+/// index). The library page triggers [ensure_book_index] for these on app
+/// start, so legacy imports heal in the background.
+Future<Int64List> listUnindexedBooks() =>
+    RustLib.instance.api.crateApiListUnindexedBooks();
+
 /// Result of creating a persisted thread (FEATURES 6.5.4). `id` is -1 and
 /// `error` set on failure (sentinel convention: no `Result` across FRB).
 class AiThreadCreateResult {
@@ -689,5 +715,50 @@ class ScanPageResult {
           runtimeType == other.runtimeType &&
           lines == other.lines &&
           mode == other.mode &&
+          error == other.error;
+}
+
+/// One full-text search hit: the book, the 0-indexed page, and a context
+/// snippet around the first occurrence of the query.
+class SearchHit {
+  final PlatformInt64 bookId;
+  final PlatformInt64 page;
+  final String snippet;
+
+  const SearchHit({
+    required this.bookId,
+    required this.page,
+    required this.snippet,
+  });
+
+  @override
+  int get hashCode => bookId.hashCode ^ page.hashCode ^ snippet.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SearchHit &&
+          runtimeType == other.runtimeType &&
+          bookId == other.bookId &&
+          page == other.page &&
+          snippet == other.snippet;
+}
+
+/// Result of a library-wide full-text search.
+class SearchResult {
+  final List<SearchHit> hits;
+  final String? error;
+
+  const SearchResult({required this.hits, this.error});
+
+  @override
+  int get hashCode => hits.hashCode ^ error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SearchResult &&
+          runtimeType == other.runtimeType &&
+          hits == other.hits &&
           error == other.error;
 }
