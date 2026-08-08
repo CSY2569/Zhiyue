@@ -309,6 +309,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       visualDensity: VisualDensity.compact,
                       onSelected: (_) => _useSavedTemplate(t),
                     ),
+                  // The custom-prompt entry: a "+" (not a named template).
+                  ChoiceChip(
+                    label: const Text('+'),
+                    tooltip: '自定义提示词',
+                    selected: _promptTemplate == 'custom',
+                    visualDensity: VisualDensity.compact,
+                    onSelected: (_) => _selectTemplate('custom'),
+                  ),
                 ],
               ),
             ),
@@ -503,7 +511,6 @@ const _templateOptions = [
   (id: 'legal', label: '法律文书'),
   (id: 'classical', label: '文言文'),
   (id: 'ai', label: 'AI 技术'),
-  (id: 'custom', label: '自定义'),
 ];
 
 class _SectionTitle extends StatelessWidget {

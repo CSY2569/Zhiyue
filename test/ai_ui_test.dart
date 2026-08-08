@@ -134,7 +134,7 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pump();
-    await tester.tap(find.widgetWithText(ChoiceChip, '自定义'));
+    await tester.tap(find.widgetWithText(ChoiceChip, '+'));
     await tester.pumpAndSettle();
     await tester.enterText(
         find.widgetWithText(TextField, '自定义提示词（作为角色设定，动作指令自动保留）'),
@@ -170,7 +170,7 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pump();
-    await tester.tap(find.widgetWithText(ChoiceChip, '自定义'));
+    await tester.tap(find.widgetWithText(ChoiceChip, '+'));
     await tester.pumpAndSettle();
 
     // Name + text + save as a template.
