@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:rbwa/core/theme/theme_controller.dart';
+import 'package:rbwa/core/widgets/confirm_dialog.dart';
+import 'package:rbwa/core/widgets/empty_state.dart';
 import 'package:rbwa/features/library/providers/library_providers.dart';
 import 'package:rbwa/features/library/widgets/book_grid.dart';
 import 'package:rbwa/features/library/widgets/category_assign_dialog.dart';
@@ -51,7 +53,7 @@ class LibraryPage extends ConsumerWidget {
     );
   }
 
-  Future<void> _openBook(BuildContext context, WidgetRef ref, Book book) async {
+  void _openBook(BuildContext context, WidgetRef ref, Book book) {
     // Record the open for the recent-open sort (FEATURES 2.3).
     ref.read(libraryBooksProvider.notifier).touchLastOpened(book.id);
     if (context.mounted) {
@@ -135,30 +137,13 @@ class _Body extends ConsumerWidget {
     WidgetRef ref,
     Book book,
   ) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('删除书籍'),
-        content: Text(
-          '确定删除「${book.title}」？\n阅读进度、标注、OCR 缓存将一并清除。\n'
+    final ok = await showConfirmDialog(
+      context,
+      title: '删除书籍',
+      content: '确定删除「${book.title}」？\n阅读进度、标注、OCR 缓存将一并清除。\n'
           'AI 对话将保留，可在书库菜单或 AI 面板中查看。',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(context).colorScheme.error,
-            ),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
     );
-    if (ok == true) {
+    if (ok) {
       await ref.read(libraryBooksProvider.notifier).deleteBook(book.id);
     }
   }
@@ -171,30 +156,16 @@ class _EmptyLibraryGuide extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.menu_book_outlined,
-              size: 80, color: theme.colorScheme.outline),
-          const SizedBox(height: 16),
-          Text('书库为空', style: theme.textTheme.headlineSmall),
-          const SizedBox(height: 8),
-          Text(
-            '点击右下角「导入文档」添加 PDF 或图片',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '支持格式：PDF / PNG / JPG / WEBP / BMP / GIF / TIFF',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.outline,
-            ),
-          ),
-        ],
+    return EmptyState(
+      icon: Icons.menu_book_outlined,
+      iconSize: 80,
+      title: '书库为空',
+      titleStyle: theme.textTheme.headlineSmall,
+      message: '点击右下角「导入文档」添加 PDF 或图片',
+      messageStyle: theme.textTheme.bodyMedium?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
       ),
+      extra: '支持格式：PDF / PNG / JPG / WEBP / BMP / GIF / TIFF',
     );
   }
 }

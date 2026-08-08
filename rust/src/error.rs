@@ -12,7 +12,7 @@ use thiserror::Error;
 /// Variants are intentionally coarse-grained: the Dart side only needs to
 /// know *which subsystem* failed and a human-readable message, not the full
 /// causal chain (which is logged on the Rust side via `tracing`).
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error)]
 pub enum AppError {
     #[error("database error: {0}")]
     Database(String),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/core/widgets/toolbar_icon_button.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
 import 'package:rbwa/features/annotation/providers/image_mark_provider.dart'
     show MarkTool, markToolProvider;
@@ -39,28 +40,28 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
       child: Row(
         children: [
           // Sidebar toggles (3.4) -- leftmost.
-          _SidebarToggle(
+          ToolbarIconButton(
             icon: Icons.view_list_outlined,
-            label: '缩略图',
+            tooltip: '缩略图',
             active: state.openSidebar == SidebarType.thumbnails,
             onTap: () => notifier.toggleSidebar(SidebarType.thumbnails),
           ),
-          _SidebarToggle(
+          ToolbarIconButton(
             icon: Icons.account_tree_outlined,
-            label: '目录',
+            tooltip: '目录',
             active: state.openSidebar == SidebarType.outline,
             onTap: () => notifier.toggleSidebar(SidebarType.outline),
           ),
-          _SidebarToggle(
+          ToolbarIconButton(
             icon: Icons.bookmark_border,
-            label: '标注',
+            tooltip: '标注',
             active: state.openSidebar == SidebarType.annotations,
             onTap: () => notifier.toggleSidebar(SidebarType.annotations),
           ),
-          const _Divider(),
+          const VDivider(),
           // View mode selector (3.1): one popup for the three modes.
           const _ModeSelector(),
-          const _Divider(),
+          const VDivider(),
           // Zoom (3.2.1)
           IconButton(
             icon: const Icon(Icons.zoom_out, size: 20),
@@ -85,7 +86,7 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
             tooltip: '恢复缩放',
             onPressed: notifier.resetZoom,
           ),
-          const _Divider(),
+          const VDivider(),
           // Paging (3.3.1)
           IconButton(
             icon: const Icon(Icons.chevron_left, size: 20),
@@ -110,9 +111,9 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
           // 批注入口 (FEATURES §5): toggles the mark tools; the tool bar
           // itself floats above the reading area (MarkToolBar) so it has
           // room for the tools + style controls.
-          _SidebarToggle(
+          ToolbarIconButton(
             icon: Icons.brush_outlined,
-            label: '批注',
+            tooltip: '批注',
             active: ref.watch(markToolProvider.select((s) => s.tool != null)),
             onTap: () {
               final armed = ref.read(markToolProvider).tool != null;
@@ -137,9 +138,9 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
             },
           ),
           // AI side panel (FEATURES 6.5) -- independent of the three sidebars.
-          _SidebarToggle(
+          ToolbarIconButton(
             icon: Icons.auto_awesome_outlined,
-            label: 'AI',
+            tooltip: 'AI',
             active: ref.watch(aiProvider.select((s) => s.aiPanelOpen)),
             onTap: () => ref.read(aiProvider.notifier).togglePanel(),
           ),
@@ -250,44 +251,3 @@ class _ModeSelector extends ConsumerWidget {
   }
 }
 
-class _SidebarToggle extends StatelessWidget {
-  const _SidebarToggle({
-    required this.icon,
-    required this.label,
-    required this.active,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Tooltip(
-      message: label,
-      child: IconButton(
-        icon: Icon(icon, size: 20),
-        color: active ? theme.colorScheme.primary : null,
-        visualDensity: VisualDensity.compact,
-        onPressed: onTap,
-      ),
-    );
-  }
-}
-
-class _Divider extends StatelessWidget {
-  const _Divider();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 24,
-      margin: const EdgeInsets.symmetric(horizontal: 8),
-      color: Theme.of(context).colorScheme.outlineVariant,
-    );
-  }
-}

@@ -16,7 +16,7 @@ use crate::error::AppError;
 #[cfg(feature = "ocr")]
 mod engine;
 #[cfg(feature = "ocr")]
-pub use engine::RapidOcrEngine;
+pub(crate) use engine::RapidOcrEngine;
 
 /// A page image in raw RGBA (original resolution, FEATURES 7.1.8 -- never
 /// the on-screen resolution). Kept crate-agnostic so the engine can be

@@ -5,11 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:rbwa/data/repositories/reader_repository.dart';
-import 'package:rbwa/features/reader/providers/viewer_provider.dart';
+import 'helpers/widget_harness.dart';
 import 'package:rbwa/features/reader/widgets/pdf_page_scroll.dart';
 import 'package:rbwa/src/rust/api.dart' as rust;
-import 'package:rbwa/src/rust/models/book.dart';
-import 'package:rbwa/src/rust/models/progress.dart';
+import 'package:rbwa/src/rust/models/progress.dart' show ViewMode;
 import 'package:rbwa/src/rust/pdf/types.dart' show CharBox;
 
 import 'package:rbwa/features/annotation/providers/selection_provider.dart';
@@ -50,36 +49,18 @@ class _FakeRepo extends ReaderRepository {
   Future<bool> pageHasText(int bookId, int page) async => false;
 }
 
-Book _book() => Book(
-      id: 1,
-      title: 'test',
-      originalPath: '/x.pdf',
-      storedPath: '/x.pdf',
-      fileType: BookType.pdf,
-      pageCount: 3,
-      coverPath: null,
-      favorite: false,
-      categoryId: null,
-      lastOpenedAt: null,
-      importedAt: 'now',
-    );
-
 /// PdfPageScroll in a [width]x600 box. A narrow width + high zoom makes the
 /// page wider than the viewport (regression: overflow / zebra stripes).
 Widget _app(ViewMode mode, {double zoom = 1.2, double width = 800}) =>
     ProviderScope(
       overrides: [
-        viewerProvider.overrideWith((ref) {
-          final n = ViewerNotifier(ref);
-          n.state = ViewerState(
-            book: _book(),
-            pageCount: 4,
-            zoom: zoom,
-            loading: false,
-            mode: mode,
-          );
-          return n;
-        }),
+        seededViewer(ViewerState(
+          book: testBook(pageCount: 4),
+          pageCount: 4,
+          zoom: zoom,
+          loading: false,
+          mode: mode,
+        )),
         readerRepositoryProvider.overrideWithValue(_FakeRepo()),
       ],
       child: MaterialApp(

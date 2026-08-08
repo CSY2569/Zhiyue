@@ -4,9 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rbwa/data/repositories/ai_repository.dart';
 import 'package:rbwa/data/repositories/reader_repository.dart';
 import 'package:rbwa/features/reader/providers/scan_provider.dart';
-import 'package:rbwa/features/reader/providers/viewer_provider.dart';
+import 'helpers/widget_harness.dart';
 import 'package:rbwa/src/rust/api.dart' as rust;
-import 'package:rbwa/src/rust/models/book.dart';
 import 'package:rbwa/src/rust/ocr.dart' show OcrLine, OcrResult;
 
 import 'helpers/fake_ai_repo.dart';
@@ -55,35 +54,11 @@ class _FakeScanRepo extends ReaderRepository {
       ocrCache[page];
 }
 
-Book _book() => Book(
-      id: 1,
-      title: '扫描书',
-      originalPath: '/x.pdf',
-      storedPath: '/x.pdf',
-      fileType: BookType.pdf,
-      pageCount: 3,
-      coverPath: null,
-      favorite: false,
-      categoryId: null,
-      lastOpenedAt: null,
-      importedAt: 'now',
-    );
-
 ProviderContainer _container(_FakeScanRepo repo, {FakeAiRepo? aiRepo}) {
   final container = ProviderContainer(overrides: [
     readerRepositoryProvider.overrideWithValue(repo),
     if (aiRepo != null) aiRepositoryProvider.overrideWithValue(aiRepo),
-    viewerProvider.overrideWith((ref) {
-      final n = ViewerNotifier(ref);
-      n.state = ViewerState(
-        book: _book(),
-        pageCount: 3,
-        currentPage: 1,
-        zoom: 1.2,
-        loading: false,
-      );
-      return n;
-    }),
+    defaultViewer(book: testBook(title: '扫描书')),
   ]);
   addTearDown(container.dispose);
   return container;

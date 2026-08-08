@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:rbwa/app.dart';
-import 'package:rbwa/features/reader/providers/viewer_provider.dart';
+import 'helpers/widget_harness.dart';
 import 'package:rbwa/features/shell/app_title_bar.dart';
 import 'package:rbwa/router/app_router.dart';
 
@@ -12,11 +12,7 @@ void main() {
     // Rust calls happen during navigation.
     await tester.pumpWidget(ProviderScope(
       overrides: [
-        viewerProvider.overrideWith((ref) {
-          final n = ViewerNotifier(ref);
-          n.state = const ViewerState(loading: false, error: null);
-          return n;
-        }),
+        seededViewer(const ViewerState(loading: false, error: null)),
       ],
       child: const RbwaApp(),
     ));

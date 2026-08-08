@@ -31,48 +31,54 @@ pub fn close_image() {
     *IMAGE_DOC.lock().unwrap() = None;
 }
 
-/// Render the single page at `zoom * dpi_scale` of the original size
-/// (FEATURES 3.6.2: pages stay sharp when zooming).
-pub fn render_image(_page: i64, zoom: f32, dpi_scale: f32) -> AppResult<PageBitmap> {
+/// Lock the open document and run [f] with it; errors clearly when no image
+/// is open (both render paths share this guard + lookup).
+fn with_doc<T>(f: impl FnOnce(&ImageDoc) -> AppResult<T>) -> AppResult<T> {
     let guard = IMAGE_DOC.lock().unwrap();
     let doc = guard
         .as_ref()
         .ok_or_else(|| AppError::Internal("no image open -- call open_image first".into()))?;
-    let scale = (zoom * dpi_scale) as f64;
-    let w = ((doc.image.width() as f64) * scale).round().max(1.0) as u32;
-    let h = ((doc.image.height() as f64) * scale).round().max(1.0) as u32;
-    let resized = doc
-        .image
-        .resize(w, h, image::imageops::FilterType::Lanczos3);
-    Ok(PageBitmap {
-        width: w,
-        height: h,
-        rgba: resized.to_rgba8().into_raw(),
+    f(doc)
+}
+
+/// Render the single page at `zoom * dpi_scale` of the original size
+/// (FEATURES 3.6.2: pages stay sharp when zooming).
+pub fn render_image(_page: i64, zoom: f32, dpi_scale: f32) -> AppResult<PageBitmap> {
+    with_doc(|doc| {
+        let scale = (zoom * dpi_scale) as f64;
+        let w = ((doc.image.width() as f64) * scale).round().max(1.0) as u32;
+        let h = ((doc.image.height() as f64) * scale).round().max(1.0) as u32;
+        let resized = doc
+            .image
+            .resize(w, h, image::imageops::FilterType::Lanczos3);
+        Ok(PageBitmap {
+            width: w,
+            height: h,
+            rgba: resized.to_rgba8().into_raw(),
+        })
     })
 }
 
 /// Render a small thumbnail for the sidebar (FEATURES 3.4.1): the longest
 /// side is capped at [max_size], keeping the aspect ratio.
 pub fn thumbnail_image(_page: i64, max_size: u32) -> AppResult<PageBitmap> {
-    let guard = IMAGE_DOC.lock().unwrap();
-    let doc = guard
-        .as_ref()
-        .ok_or_else(|| AppError::Internal("no image open -- call open_image first".into()))?;
-    let (w, h) = doc.image.dimensions();
-    let (tw, th) = if w >= h {
-        let th = ((h as f64) * (max_size as f64) / (w as f64)).round().max(1.0) as u32;
-        (max_size, th)
-    } else {
-        let tw = ((w as f64) * (max_size as f64) / (h as f64)).round().max(1.0) as u32;
-        (tw, max_size)
-    };
-    let resized = doc
-        .image
-        .resize(tw, th, image::imageops::FilterType::Lanczos3);
-    Ok(PageBitmap {
-        width: tw,
-        height: th,
-        rgba: resized.to_rgba8().into_raw(),
+    with_doc(|doc| {
+        let (w, h) = doc.image.dimensions();
+        let (tw, th) = if w >= h {
+            let th = ((h as f64) * (max_size as f64) / (w as f64)).round().max(1.0) as u32;
+            (max_size, th)
+        } else {
+            let tw = ((w as f64) * (max_size as f64) / (h as f64)).round().max(1.0) as u32;
+            (tw, max_size)
+        };
+        let resized = doc
+            .image
+            .resize(tw, th, image::imageops::FilterType::Lanczos3);
+        Ok(PageBitmap {
+            width: tw,
+            height: th,
+            rgba: resized.to_rgba8().into_raw(),
+        })
     })
 }
 

@@ -70,7 +70,6 @@ class MarkToolNotifier extends Notifier<MarkToolState> {
   void setColor(String color) => state = state.copyWith(color: color);
   void setStrokeWidth(double w) => state = state.copyWith(strokeWidth: w);
   void toggleFill() => state = state.copyWith(fill: !state.fill);
-  void setFontSize(double s) => state = state.copyWith(fontSize: s);
   void setShapeType(String t) => state = state.copyWith(shapeType: t);
   void setStampFile(String? path) => state = state.copyWith(stampFile: path);
 }
@@ -92,9 +91,6 @@ class MarkVisibilityNotifier extends Notifier<Set<ImageMarkKind>> {
     if (!next.remove(kind)) next.add(kind);
     state = next;
   }
-
-  void showAll() => state = ImageMarkKind.values.toSet();
-  void hideAll() => state = <ImageMarkKind>{};
 }
 
 /// Which mark kinds are visible in the layer panel (default: all).
@@ -231,13 +227,9 @@ class ImageMarkNotifier extends AsyncNotifier<List<ImageMark>> {
   /// Delete one mark (FEATURES 5.5).
   Future<bool> delete(int id) async {
     final before = _snapshot;
-    ImageMark? mark;
-    for (final m in before) {
-      if (m.id == id) {
-        mark = m;
-        break;
-      }
-    }
+    final mark = before.cast<ImageMark?>().firstWhere(
+        (m) => m?.id == id,
+        orElse: () => null);
     final ok = await _repo.deleteImageAnnotation(id) > 0;
     if (!ok) return false;
     if (mark != null) {

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:rbwa/features/library/providers/library_providers.dart';
+import 'helpers/widget_harness.dart';
 import 'package:rbwa/features/library/widgets/book_tile.dart';
 import 'package:rbwa/features/library/widgets/category_assign_dialog.dart';
 import 'package:rbwa/features/library/widgets/library_toolbar.dart';
@@ -25,14 +26,7 @@ Book _book({int? categoryId}) => Book(
       importedAt: 'now',
     );
 
-/// Fixed category list for the assign dialog test.
-class _FakeCategoriesNotifier extends CategoriesNotifier {
-  @override
-  Future<List<Category>> build() async => const [
-        Category(id: 1, name: '小说', sortOrder: 0, createdAt: ''),
-        Category(id: 2, name: '技术', sortOrder: 0, createdAt: ''),
-      ];
-}
+
 
 void main() {
   testWidgets('toolbar no longer duplicates rail filters', (tester) async {
@@ -92,7 +86,7 @@ void main() {
     (int?, bool)? result;
     await tester.pumpWidget(ProviderScope(
       overrides: [
-        categoriesProvider.overrideWith(_FakeCategoriesNotifier.new),
+        categoriesProvider.overrideWith(FakeCategoriesNotifier.new),
       ],
       child: MaterialApp(
         home: Builder(
@@ -135,7 +129,7 @@ void main() {
     (int?, bool)? result;
     await tester.pumpWidget(ProviderScope(
       overrides: [
-        categoriesProvider.overrideWith(_FakeCategoriesNotifier.new),
+        categoriesProvider.overrideWith(FakeCategoriesNotifier.new),
       ],
       child: MaterialApp(
         home: Builder(

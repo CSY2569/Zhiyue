@@ -126,7 +126,7 @@ pub fn template_default_text(template_id: &str) -> String {
 /// The role segment of a template: the user's override wins when present
 /// (设置 → AI 回复 编辑模板), otherwise the built-in text; "custom" uses
 /// the user's custom prompt.
-pub fn template_prompt(
+fn template_prompt(
     template_id: &str,
     custom: &str,
     overrides: &std::collections::HashMap<String, String>,

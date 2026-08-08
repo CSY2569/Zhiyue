@@ -208,8 +208,7 @@ pub fn outline() -> AppResult<Vec<OutlineEntry>> {
     with_doc(|doc| {
         let bookmarks = doc.bookmarks();
         let mut out = Vec::new();
-        let mut iter = bookmarks.iter();
-        while let Some(bm) = iter.next() {
+        for bm in bookmarks.iter() {
             out.push(bookmark_to_entry(&bm));
         }
         Ok(out)

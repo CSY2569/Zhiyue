@@ -2,7 +2,10 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/core/widgets/toolbar_icon_button.dart';
 import 'package:rbwa/features/annotation/providers/image_mark_provider.dart';
+import 'package:rbwa/features/annotation/widgets/highlight_layer.dart'
+    show parseHexColor;
 
 /// Mark tools as a floating bar above the reading area (FEATURES 5.1-5.5):
 /// rendered by the reader page while a mark tool is armed. The toolbar keeps
@@ -43,13 +46,13 @@ class MarkToolBar extends ConsumerWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _Tool(
+            ToolbarIconButton(
               icon: Icons.near_me_outlined,
               tooltip: '选择/移动',
               active: tool == MarkTool.select,
               onTap: () => notifier.setTool(MarkTool.select),
             ),
-            _Tool(
+            ToolbarIconButton(
               icon: Icons.brush_outlined,
               tooltip: '画笔',
               active: tool == MarkTool.brush,
@@ -57,28 +60,28 @@ class MarkToolBar extends ConsumerWidget {
             ),
             // Shape tool: a popup also picks the shape type (5.4).
             _ShapeTool(active: tool == MarkTool.shape),
-            _Tool(
+            ToolbarIconButton(
               icon: Icons.sticky_note_2_outlined,
               tooltip: '便签',
               active: tool == MarkTool.sticky,
               onTap: () => notifier.setTool(MarkTool.sticky),
             ),
             _StampTool(active: tool == MarkTool.stamp),
-            const _Divider(),
-            _Tool(
+            const VDivider(),
+            ToolbarIconButton(
               icon: Icons.undo,
               tooltip: '撤销 (Ctrl+Z)',
               enabled: markNotifier.canUndo,
               onTap: markNotifier.canUndo ? () => markNotifier.undo() : null,
             ),
-            _Tool(
+            ToolbarIconButton(
               icon: Icons.redo,
               tooltip: '重做 (Ctrl+Shift+Z)',
               enabled: markNotifier.canRedo,
               onTap: markNotifier.canRedo ? () => markNotifier.redo() : null,
             ),
             if (showStyle) ...[
-              const _Divider(),
+              const VDivider(),
               for (final c in _palette)
                 _ColorDot(
                   color: c,
@@ -94,7 +97,7 @@ class MarkToolBar extends ConsumerWidget {
                   onChanged: notifier.setStrokeWidth,
                 ),
               ),
-              _Tool(
+              ToolbarIconButton(
                 icon: toolState.fill
                     ? Icons.circle
                     : Icons.circle_outlined,
@@ -103,47 +106,14 @@ class MarkToolBar extends ConsumerWidget {
                 onTap: notifier.toggleFill,
               ),
             ],
-            const _Divider(),
-            _Tool(
+            const VDivider(),
+            ToolbarIconButton(
               icon: Icons.check,
               tooltip: '退出批注',
               onTap: () => notifier.setTool(null),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Compact icon button for the mark tool bar.
-class _Tool extends StatelessWidget {
-  const _Tool({
-    required this.icon,
-    required this.tooltip,
-    this.active = false,
-    this.enabled = true,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final bool active;
-  final bool enabled;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Tooltip(
-      message: tooltip,
-      child: IconButton(
-        icon: Icon(icon, size: 18),
-        color: active
-            ? theme.colorScheme.primary
-            : (enabled ? null : theme.disabledColor),
-        visualDensity: VisualDensity.compact,
-        onPressed: enabled ? onTap : null,
       ),
     );
   }
@@ -240,7 +210,7 @@ class _ColorDot extends StatelessWidget {
         height: 14,
         margin: const EdgeInsets.symmetric(horizontal: 2),
         decoration: BoxDecoration(
-          color: _parseHex(color),
+          color: parseHexColor(color) ?? const Color(0xFFE53935),
           shape: BoxShape.circle,
           border: Border.all(
             color: selected ? theme.colorScheme.primary : Colors.grey,
@@ -252,21 +222,3 @@ class _ColorDot extends StatelessWidget {
   }
 }
 
-Color _parseHex(String hex) {
-  final v = int.tryParse(hex.replaceFirst('#', ''), radix: 16) ?? 0xE53935;
-  return Color(0xFF000000 | v);
-}
-
-class _Divider extends StatelessWidget {
-  const _Divider();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 20,
-      margin: const EdgeInsets.symmetric(horizontal: 6),
-      color: Theme.of(context).colorScheme.outlineVariant,
-    );
-  }
-}

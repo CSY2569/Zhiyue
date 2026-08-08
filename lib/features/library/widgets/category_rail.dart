@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:rbwa/features/library/models/library_filter.dart';
+import 'package:rbwa/core/widgets/confirm_dialog.dart';
 import 'package:rbwa/features/library/providers/library_providers.dart';
 import 'package:rbwa/features/library/widgets/category_edit_dialog.dart';
 import 'package:rbwa/src/rust/models/book.dart';
@@ -155,24 +156,13 @@ class CategoryRail extends ConsumerWidget {
     WidgetRef ref,
     Category c,
   ) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('删除分类'),
-        content: Text('删除「${c.name}」？该分类下的书籍将变为未分类。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+    final ok = await showConfirmDialog(
+      context,
+      title: '删除分类',
+      content: '删除「${c.name}」？该分类下的书籍将变为未分类。',
+      confirmStyle: ConfirmButtonStyle.plain,
     );
-    if (ok == true) {
+    if (ok) {
       await ref.read(categoriesProvider.notifier).delete(c.id);
     }
   }

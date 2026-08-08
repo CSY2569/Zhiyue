@@ -34,7 +34,8 @@ pub type ChunkStream =
 /// The AI client contract.
 ///
 /// Methods return `impl Future + Send` (RPITIT) so callers can run them on
-/// FRB's multi-threaded executor.
+/// FRB's multi-threaded executor (an `async fn` here would lose the `Send`
+/// bound, which `wrap_async` requires).
 pub trait AiClient: Send + Sync {
     /// Streaming chat completion. `history` carries prior turns (6.5.2),
     /// including any system prompt the caller prepended.
@@ -58,39 +59,42 @@ pub trait AiClient: Send + Sync {
 }
 
 /// Stub implementation, compiled only without the `ai` feature so the crate
-/// still builds when AI support is disabled.
+/// still builds when AI support is disabled. Stateless -- every call returns
+/// an explicit error.
 #[cfg(not(feature = "ai"))]
-pub struct StubAiClient {
-    pub _lock: tokio::sync::Mutex<()>,
-}
+pub struct StubAiClient;
 
 #[cfg(not(feature = "ai"))]
 impl StubAiClient {
     pub fn new() -> Self {
-        Self { _lock: tokio::sync::Mutex::new(()) }
+        Self
     }
 }
 
 #[cfg(not(feature = "ai"))]
 impl AiClient for StubAiClient {
-    async fn stream_chat(
+    fn stream_chat(
         &self,
         _config: &AiConfig,
         _history: &[AiMessage],
         _user_input: &str,
-    ) -> AppResult<ChunkStream> {
-        Err(crate::error::AppError::Ai(
-            "AI support not compiled in (feature 'ai' disabled)".into(),
-        ))
+    ) -> impl Future<Output = AppResult<ChunkStream>> + Send {
+        async {
+            Err(crate::error::AppError::Ai(
+                "AI support not compiled in (feature 'ai' disabled)".into(),
+            ))
+        }
     }
-    async fn stream_vision(
+    fn stream_vision(
         &self,
         _config: &AiConfig,
         _png: &[u8],
         _prompt: &str,
-    ) -> AppResult<ChunkStream> {
-        Err(crate::error::AppError::Ai(
-            "AI support not compiled in (feature 'ai' disabled)".into(),
-        ))
+    ) -> impl Future<Output = AppResult<ChunkStream>> + Send {
+        async {
+            Err(crate::error::AppError::Ai(
+                "AI support not compiled in (feature 'ai' disabled)".into(),
+            ))
+        }
     }
 }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/core/widgets/confirm_dialog.dart';
+import 'package:rbwa/core/widgets/empty_state.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
 import 'package:rbwa/features/ai/widgets/message_bubble.dart';
 
@@ -127,29 +129,12 @@ class _AiConversationsPageState extends ConsumerState<AiConversationsPage> {
 
   /// Per-book deletion (6.5.3) -- the only place conversations are removed.
   Future<void> _confirmDelete(AiThreadState window) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('删除对话'),
-        content: Text(
-          '确定删除「${window.title}」的对话？\n其中的所有消息将一并删除。',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(context).colorScheme.error,
-            ),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+    final ok = await showConfirmDialog(
+      context,
+      title: '删除对话',
+      content: '确定删除「${window.title}」的对话？\n其中的所有消息将一并删除。',
     );
-    if (ok == true) {
+    if (ok) {
       await ref.read(aiProvider.notifier).deleteWindow(window.id);
     }
   }
@@ -161,24 +146,10 @@ class _EmptyGuide extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.forum_outlined, size: 40, color: theme.colorScheme.outline),
-          const SizedBox(height: 12),
-          Text('暂无 AI 对话', style: theme.textTheme.titleMedium),
-          const SizedBox(height: 4),
-          Text(
-            '在阅读时使用翻译 / 解释 / 搜索 / 识图，\n对话会按书保存在这里',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
+    return const EmptyState(
+      icon: Icons.forum_outlined,
+      title: '暂无 AI 对话',
+      message: '在阅读时使用翻译 / 解释 / 搜索 / 识图，\n对话会按书保存在这里',
     );
   }
 }
@@ -189,21 +160,9 @@ class _NoSelection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.chevron_left, size: 40, color: theme.colorScheme.outline),
-          const SizedBox(height: 8),
-          Text(
-            '点击左侧书籍查看对话内容',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
+    return const EmptyState(
+      icon: Icons.chevron_left,
+      message: '点击左侧书籍查看对话内容',
     );
   }
 }

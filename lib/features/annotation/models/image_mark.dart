@@ -60,8 +60,13 @@ class ImageMarkStyle {
 /// center) + optional normalized size (w, h) + rotation + kind-specific JSON
 /// `payload`. Mirrors the Rust `ImageAnnotation` row; `id <= 0` means not
 /// persisted yet.
+///
+/// The JSON payload / style strings are decoded lazily and memoized: the
+/// paint path reads them for every mark on every frame, and repeated
+/// decodes of large brush paths are measurable (a few hundred marks would
+/// otherwise decode hundreds of times per frame).
 class ImageMark {
-  const ImageMark({
+  ImageMark({
     this.id = 0,
     required this.page,
     required this.kind,
@@ -85,7 +90,10 @@ class ImageMark {
   final String payload;
   final String style;
 
-  ImageMarkStyle get styleObj => ImageMarkStyle.fromJson(style);
+  ImageMarkStyle? _styleCache;
+  Map<String, dynamic>? _payloadCache;
+
+  ImageMarkStyle get styleObj => _styleCache ??= ImageMarkStyle.fromJson(style);
 
   /// Normalized bounding rect (empty for pure point marks).
   Offset get topLeft => Offset(x - (w ?? 0) / 2, y - (h ?? 0) / 2);
@@ -122,8 +130,14 @@ class ImageMark {
   String? get shapeType => _payloadValue?['shapeType'] as String?;
 
   Map<String, dynamic>? get _payloadValue {
+    final cached = _payloadCache;
+    if (cached != null) return cached;
     final v = jsonDecode(payload);
-    return v is Map<String, dynamic> ? v : null;
+    if (v is Map<String, dynamic>) {
+      _payloadCache = v;
+      return v;
+    }
+    return null;
   }
 
   ImageMark copyWith({

@@ -54,7 +54,7 @@ const REC_SHAPE: [usize; 3] = [3, 48, 320];
 
 /// The real OCR engine (zero-sized; all state lives in the per-mode
 /// [OnceLock] slots so the engine lazy-loads on first use).
-pub struct RapidOcrEngine;
+pub(crate) struct RapidOcrEngine;
 
 type LoadResult = Result<Mutex<RapidOcr>, String>;
 
@@ -121,18 +121,28 @@ impl RapidOcrEngine {
             }),
             rec: Some(RecConfig {
                 model_path: rec_path,
-                dict_path: dict_path,
+                dict_path,
                 image_shape: REC_SHAPE,
                 batch_size: 6,
             }),
         };
         RapidOcr::new(cfg)
-            .map(|engine| Mutex::new(engine))
+            .map(Mutex::new)
             .map_err(|e| format!("{e:#}"))
     }
 
     /// One scan run under the mode's engine lock.
     fn run(image: &PageImage<'_>, mode: &str) -> AppResult<OcrResult> {
+        // Pure CPU conversion -- touches no engine state, so do it outside
+        // the mode lock: a multi-MB RGBA→RGB conversion must not block scans
+        // of the other mode.
+        let rgb = RgbImage::from_raw(
+            image.width,
+            image.height,
+            to_rgb(image.rgba),
+        )
+        .ok_or_else(|| AppError::Ocr("页面图像数据无效".into()))?;
+
         let slot = &ENGINES[Self::slot(mode)];
         let loaded = slot.get_or_init(|| Self::load(mode));
         let mut engine = loaded
@@ -141,12 +151,6 @@ impl RapidOcrEngine {
             .lock()
             .map_err(|_| AppError::Ocr("OCR 引擎内部错误（锁中毒）".into()))?;
 
-        let rgb = RgbImage::from_raw(
-            image.width,
-            image.height,
-            to_rgb(image.rgba),
-        )
-        .ok_or_else(|| AppError::Ocr("页面图像数据无效".into()))?;
         let out = engine
             .run_image(&rgb)
             .map_err(|e| AppError::Ocr(format!("{e:#}")))?;

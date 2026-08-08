@@ -166,20 +166,11 @@ class ViewerNotifier extends StateNotifier<ViewerState> {
         state.book!.id,
         state.currentPage,
         state.zoom,
-        _viewModeString(state.mode),
+        // The generated enum's member names are the persisted values
+        // ('single' / 'double_scroll' / 'double_page').
+        state.mode.name,
       );
     } catch (_) {}
-  }
-
-  String _viewModeString(ViewMode m) {
-    switch (m) {
-      case ViewMode.single:
-        return 'single';
-      case ViewMode.doubleScroll:
-        return 'double_scroll';
-      case ViewMode.doublePage:
-        return 'double_page';
-    }
   }
 
   @override

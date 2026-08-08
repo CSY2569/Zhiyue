@@ -2,24 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:rbwa/features/reader/providers/viewer_provider.dart';
+import 'helpers/widget_harness.dart';
 import 'package:rbwa/features/reader/widgets/reader_toolbar.dart';
 import 'package:rbwa/src/rust/models/progress.dart';
 
 /// Fake viewer state so the toolbar renders without Rust.
 Widget _app({ViewMode mode = ViewMode.single}) => ProviderScope(
       overrides: [
-        viewerProvider.overrideWith((ref) {
-          final n = ViewerNotifier(ref);
-          n.state = ViewerState(
-            pageCount: 10,
-            currentPage: 1,
-            zoom: 1.2,
-            loading: false,
-            mode: mode,
-          );
-          return n;
-        }),
+        seededViewer(ViewerState(
+          pageCount: 10,
+          currentPage: 1,
+          zoom: 1.2,
+          loading: false,
+          mode: mode,
+        )),
       ],
       child: const MaterialApp(
         home: Scaffold(body: ReaderToolbar()),

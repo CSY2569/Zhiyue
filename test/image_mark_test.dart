@@ -7,11 +7,10 @@ import 'package:rbwa/data/repositories/reader_repository.dart';
 import 'package:rbwa/features/annotation/models/image_mark.dart';
 import 'package:rbwa/features/annotation/providers/image_mark_provider.dart';
 import 'package:rbwa/features/annotation/widgets/image_mark_layer.dart';
-import 'package:rbwa/features/reader/providers/viewer_provider.dart';
+import 'helpers/widget_harness.dart';
 import 'package:rbwa/src/rust/api.dart' as rust;
 import 'package:rbwa/src/rust/models/annotation.dart'
     show ImageAnnotation, ImageAnnotationKind;
-import 'package:rbwa/src/rust/models/book.dart';
 import 'package:rbwa/src/rust/ocr.dart' show OcrLine, OcrResult;
 
 /// Fake reader repository: image marks persist in memory; OCR returns
@@ -116,20 +115,6 @@ class _FakeReaderRepo extends ReaderRepository {
       null;
 }
 
-Book _book() => Book(
-      id: 1,
-      title: '扫描书',
-      originalPath: '/x.pdf',
-      storedPath: '/x.pdf',
-      fileType: BookType.pdf,
-      pageCount: 3,
-      coverPath: null,
-      favorite: false,
-      categoryId: null,
-      lastOpenedAt: null,
-      importedAt: 'now',
-    );
-
 /// Let an invalidated async provider's rebuild land before reading state
 /// (the rebuild is scheduled on the event loop; poll until the content stops
 /// changing).
@@ -147,17 +132,7 @@ Future<void> _settle(ProviderContainer container) async {
 ProviderContainer _container(_FakeReaderRepo repo) {
   final container = ProviderContainer(overrides: [
     readerRepositoryProvider.overrideWithValue(repo),
-    viewerProvider.overrideWith((ref) {
-      final n = ViewerNotifier(ref);
-      n.state = ViewerState(
-        book: _book(),
-        pageCount: 3,
-        currentPage: 1,
-        zoom: 1.2,
-        loading: false,
-      );
-      return n;
-    }),
+    defaultViewer(book: testBook(title: '扫描书')),
   ]);
   addTearDown(container.dispose);
   return container;

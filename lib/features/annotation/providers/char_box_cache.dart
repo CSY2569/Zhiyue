@@ -1,9 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:rbwa/data/repositories/reader_repository.dart';
-import 'package:rbwa/features/ai/providers/ai_config_provider.dart';
+import 'package:rbwa/features/reader/providers/ocr_helpers.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
-import 'package:rbwa/src/rust/api.dart' show OcrMode;
 import 'package:rbwa/src/rust/pdf/types.dart' show CharBox;
 
 /// LRU cache of per-page char boxes (selection hit-testing data, FEATURES
@@ -57,19 +56,12 @@ class CharBoxCache extends Notifier<Map<int, List<CharBox>>> {
   /// OCR invisible text layer (FEATURES 7.1.3): each cached line becomes one
   /// whole-line char box (line-level selection). Uses the configured model
   /// set (7.1.9) so the layer matches what the scan produced -- the OCR
-  /// cache is keyed by mode. Falls back to the OTHER mode's cache when the
-  /// configured one has no entry: switching 高精度/快速 in settings must not
-  /// make already-scanned pages lose their text layer.
+  /// cache is keyed by mode, and [cachedOcrAnyMode] falls back to the other
+  /// mode so switching 高精度/快速 in settings never makes already-scanned
+  /// pages lose their text layer.
   Future<List<CharBox>> _ocrBoxes(int bookId, int page) async {
     try {
-      final cfg = await ref.read(aiConfigProvider.future);
-      final mode =
-          cfg.ocrMode == 'fast' ? OcrMode.fast : OcrMode.highPrecision;
-      final fallback =
-          mode == OcrMode.fast ? OcrMode.highPrecision : OcrMode.fast;
-      final repo = ref.read(readerRepositoryProvider);
-      final ocr = await repo.getPageOcr(bookId, page, mode) ??
-          await repo.getPageOcr(bookId, page, fallback);
+      final ocr = await cachedOcrAnyMode(ref, bookId, page);
       if (ocr == null) return const [];
       return [
         for (final l in ocr.lines)

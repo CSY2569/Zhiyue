@@ -132,27 +132,26 @@ pub fn set_favorite(conn: &Connection, id: i64, fav: bool) -> AppResult<Option<B
 }
 
 /// Stamp `last_opened_at` to now (FEATURES 2.3: most-recently-opened sort).
-/// No-op if the book does not exist.
-pub fn touch_last_opened(conn: &Connection, id: i64) -> AppResult<()> {
-    conn.execute(
+/// Returns false (no error) if the book does not exist.
+pub fn touch_last_opened(conn: &Connection, id: i64) -> AppResult<bool> {
+    Ok(conn.execute(
         "UPDATE books SET last_opened_at = datetime('now') WHERE id = ?1",
         params![id],
-    )?;
-    Ok(())
+    )? > 0)
 }
 
 /// Assign or clear a book's category (FEATURES 2.8). Pass `None` to unclassify.
-/// The FK constraint ensures invalid category ids are rejected.
+/// The FK constraint ensures invalid category ids are rejected. Returns false
+/// (no error) if the book does not exist.
 pub fn set_category(
     conn: &Connection,
     book_id: i64,
     category_id: Option<i64>,
-) -> AppResult<()> {
-    conn.execute(
+) -> AppResult<bool> {
+    Ok(conn.execute(
         "UPDATE books SET category_id = ?1 WHERE id = ?2",
         params![category_id, book_id],
-    )?;
-    Ok(())
+    )? > 0)
 }
 
 /// Update the page count for a book (M2: populated via pdfium after import).

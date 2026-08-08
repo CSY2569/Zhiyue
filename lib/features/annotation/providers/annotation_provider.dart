@@ -95,8 +95,6 @@ class AnnotationTypeFilterNotifier extends Notifier<Set<TextAnnotationKind>> {
     if (!next.remove(kind)) next.add(kind);
     state = next;
   }
-
-  void showAll() => state = TextAnnotationKind.values.toSet();
 }
 
 /// Which text-annotation kinds are visible in the sidebar (default: all).

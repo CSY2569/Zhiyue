@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/core/widgets/confirm_dialog.dart';
+import 'package:rbwa/core/widgets/empty_state.dart';
 import 'package:rbwa/features/annotation/annotation_icons.dart';
 import 'package:rbwa/features/annotation/export_actions.dart';
 import 'package:rbwa/features/annotation/models/image_mark.dart';
@@ -322,27 +324,12 @@ class _EmptyHint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.edit_note, size: 48, color: theme.colorScheme.outline),
-            const SizedBox(height: 12),
-            Text('暂无标注', style: theme.textTheme.titleSmall),
-            const SizedBox(height: 4),
-            Text(
-              '在页面中拖选文字添加标注，\n或使用工具栏的批注工具（画笔 / 形状 / 便签 / 图章）',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
+    return EmptyState(
+      icon: Icons.edit_note,
+      iconSize: 48,
+      title: '暂无标注',
+      titleStyle: Theme.of(context).textTheme.titleSmall,
+      message: '在页面中拖选文字添加标注，\n或使用工具栏的批注工具（画笔 / 形状 / 便签 / 图章）',
     );
   }
 }
@@ -358,24 +345,14 @@ class _ClearMarksBar extends ConsumerWidget {
       child: TextButton.icon(
         onPressed: () async {
           // 二次确认：清空不可撤销（FEATURES 5.5 整体清空）。
-          final ok = await showDialog<bool>(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('清空全部标记？'),
-              content: const Text('将删除本书所有的画笔、形状、便签与图章标记，此操作不可撤销。'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('取消'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('清空'),
-                ),
-              ],
-            ),
+          final ok = await showConfirmDialog(
+            context,
+            title: '清空全部标记？',
+            content: '将删除本书所有的画笔、形状、便签与图章标记，此操作不可撤销。',
+            confirmLabel: '清空',
+            confirmStyle: ConfirmButtonStyle.filled,
           );
-          if (ok == true) {
+          if (ok) {
             await ref.read(imageMarkProvider.notifier).clearAll();
           }
         },

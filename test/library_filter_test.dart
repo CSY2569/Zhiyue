@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:rbwa/features/library/models/library_filter.dart';
 import 'package:rbwa/features/library/providers/library_providers.dart';
+import 'helpers/widget_harness.dart';
 import 'package:rbwa/features/library/widgets/category_rail.dart';
 import 'package:rbwa/src/rust/models/book.dart';
 
@@ -48,14 +49,7 @@ class _FakeBooksNotifier extends LibraryBooksNotifier {
       ];
 }
 
-/// Fixed category list for the rail test.
-class _FakeCategoriesNotifier extends CategoriesNotifier {
-  @override
-  Future<List<Category>> build() async => const [
-        Category(id: 1, name: '小说', sortOrder: 0, createdAt: ''),
-        Category(id: 2, name: '技术', sortOrder: 0, createdAt: ''),
-      ];
-}
+
 
 void main() {
   test('书库入口互斥：PDF/图片/收藏/分类各自独立，不叠加', () {
@@ -131,7 +125,7 @@ void main() {
   testWidgets('左侧栏：AI 对话在书库与分类之间，入口互斥切换', (tester) async {
     await tester.pumpWidget(ProviderScope(
       overrides: [
-        categoriesProvider.overrideWith(_FakeCategoriesNotifier.new),
+        categoriesProvider.overrideWith(FakeCategoriesNotifier.new),
         libraryBooksProvider.overrideWith(_FakeBooksNotifier.new),
       ],
       child: const MaterialApp(

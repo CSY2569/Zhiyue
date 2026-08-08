@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/core/widgets/empty_state.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
 import 'package:rbwa/features/ai/widgets/ai_utils.dart';
 import 'package:rbwa/features/ai/widgets/message_bubble.dart'
@@ -27,7 +28,6 @@ class AiPanelSide extends ConsumerStatefulWidget {
 class _AiPanelSideState extends ConsumerState<AiPanelSide> {
   final _input = TextEditingController();
   final _inputFocus = FocusNode();
-  bool _sending = false;
 
   @override
   void dispose() {
@@ -38,22 +38,14 @@ class _AiPanelSideState extends ConsumerState<AiPanelSide> {
 
   void _send() {
     final text = _input.text.trim();
-    if (text.isEmpty || _sending) return;
-    setState(() => _sending = true);
-    final state = ref.read(aiProvider);
-    final active = state.threadOf(state.activeThreadId);
+    if (text.isEmpty) return;
     _input.clear();
-    setState(() => _sending = false);
-    if (active == null) {
-      // No thread yet: asking directly creates a new chat thread (6.5.1).
-      ref.read(aiProvider.notifier).askQuestion(
-            text,
-            bookId: widget.bookId,
-            bookTitle: widget.bookTitle,
-          );
-    } else {
-      ref.read(aiProvider.notifier).sendMessage(active.id, text);
-    }
+    // Routes to the active thread, or starts a new chat thread (6.5.1).
+    ref.read(aiProvider.notifier).sendInput(
+          text,
+          bookId: widget.bookId,
+          bookTitle: widget.bookTitle,
+        );
   }
 
   /// Enter sends (when not shift); Shift+Enter falls through to the default
@@ -133,7 +125,7 @@ class _AiPanelSideState extends ConsumerState<AiPanelSide> {
                   focusNode: _inputFocus,
                   minLines: 1,
                   maxLines: 4,
-                  enabled: inputEnabled && !_sending,
+                  enabled: inputEnabled,
                   decoration: InputDecoration(
                     hintText: '向 AI 提问…（Enter 发送）',
                     isDense: true,
@@ -151,20 +143,30 @@ class _AiPanelSideState extends ConsumerState<AiPanelSide> {
   Widget _buildBody(AiState state, AiThreadState? active) {
     // After 「清空」 the panel stays on the empty guide until the next AI
     // action -- the window list must not reappear (6.5.3 view-only clear).
-    if (state.panelCleared) {
-      return const _EmptyGuide();
-    }
-    if (state.threads.isEmpty) {
-      return const _EmptyGuide();
+    if (state.panelCleared || state.threads.isEmpty) {
+      return const EmptyState(
+        icon: Icons.auto_awesome_outlined,
+        title: 'AI 助手',
+        message: '选择文字翻译 / 解释 / 搜索，\n或直接在下方向 AI 提问',
+      );
     }
     if (active == null) {
       // A fresh conversation opens on the empty guide (history is never
       // auto-selected); the window list appears via 查看历史对话 / the back
       // button.
       if (!state.showingThreadList) {
-        return _EmptyGuide(
-          onShowHistory: () =>
-              ref.read(aiProvider.notifier).showWindowList(),
+        return EmptyState(
+          icon: Icons.auto_awesome_outlined,
+          title: 'AI 助手',
+          message: '选择文字翻译 / 解释 / 搜索，\n或直接在下方向 AI 提问',
+          action: OutlinedButton.icon(
+            onPressed: () => ref.read(aiProvider.notifier).showWindowList(),
+            icon: const Icon(Icons.history, size: 16),
+            label: const Text('查看历史对话'),
+            style: OutlinedButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
         );
       }
       return _ThreadList(
@@ -178,52 +180,6 @@ class _AiPanelSideState extends ConsumerState<AiPanelSide> {
       streamingText: state.streamingThreadId == active.id
           ? state.streamingText
           : null,
-    );
-  }
-}
-
-class _EmptyGuide extends StatelessWidget {
-  const _EmptyGuide({this.onShowHistory});
-
-  /// When set (history exists and the panel is not in a 「清空」 state), the
-  /// guide offers one tap into the 对话列表.
-  final VoidCallback? onShowHistory;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.auto_awesome_outlined,
-                size: 40, color: theme.colorScheme.outline),
-            const SizedBox(height: 12),
-            Text('AI 助手', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 4),
-            Text(
-              '选择文字翻译 / 解释 / 搜索，\n或直接在下方向 AI 提问',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            if (onShowHistory != null) ...[
-              const SizedBox(height: 16),
-              OutlinedButton.icon(
-                onPressed: onShowHistory,
-                icon: const Icon(Icons.history, size: 16),
-                label: const Text('查看历史对话'),
-                style: OutlinedButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
     );
   }
 }

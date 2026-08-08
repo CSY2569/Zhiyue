@@ -15,6 +15,7 @@
 //!   HTTP 400 -- the vision request therefore omits `detail` entirely).
 
 use std::future::Future;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use futures_core::Stream;
@@ -38,23 +39,46 @@ const WEB_SEARCH_TIMEOUT: Duration = Duration::from_secs(20);
 pub struct OpenAiClient;
 
 impl OpenAiClient {
-    fn http_client() -> AppResult<reqwest::Client> {
-        reqwest::Client::builder()
-            .build()
-            .map_err(|e| AppError::Ai(format!("http client: {e}")))
+    /// Shared HTTP client, built once per process (connection pooling).
+    /// Building a fresh client per request discarded the connection pool,
+    /// so every chat / vision / search call paid for new TLS + pool setup.
+    fn http_client() -> AppResult<&'static reqwest::Client> {
+        static CLIENT: OnceLock<AppResult<reqwest::Client>> = OnceLock::new();
+        CLIENT
+            .get_or_init(|| {
+                reqwest::Client::builder()
+                    .build()
+                    .map_err(|e| AppError::Ai(format!("http client: {e}")))
+            })
+            .as_ref()
+            .map_err(AppError::clone)
     }
 
     /// Effective endpoint (non-empty config base URL wins, trimmed of a
     /// trailing slash so the `/chat/completions` suffix joins cleanly).
     fn endpoint(base_url: &str) -> String {
-        let base = base_url.trim();
-        let base = if base.is_empty() {
-            DEFAULT_BASE_URL
-        } else {
-            base.trim_end_matches('/')
-        };
-        format!("{base}/chat/completions")
+        format!("{}/chat/completions", trimmed_or(base_url, DEFAULT_BASE_URL))
     }
+}
+
+/// Trim whitespace; empty input falls back to [default]; a trailing slash
+/// is stripped so path suffixes join cleanly.
+fn trimmed_or<'a>(base: &'a str, default: &'static str) -> &'a str {
+    let base = base.trim();
+    if base.is_empty() {
+        default
+    } else {
+        base.trim_end_matches('/')
+    }
+}
+
+/// Surface a non-2xx provider response: status + the error body, bounded
+/// (provider bodies can be long -- 600 chars keep the message readable).
+async fn http_error(resp: reqwest::Response) -> AppError {
+    let status = resp.status();
+    let body = resp.text().await.unwrap_or_default();
+    let trimmed: String = body.chars().take(600).collect();
+    AppError::Ai(format!("HTTP {status}: {trimmed}"))
 }
 
 /// Optional sampling / reasoning controls for text requests (设置 → AI
@@ -156,13 +180,43 @@ async fn stream_request(
         .send()
         .await?;
     if !resp.status().is_success() {
-        let status = resp.status();
-        let body = resp.text().await.unwrap_or_default();
-        // Keep the message bounded -- provider bodies can be long.
-        let trimmed: String = body.chars().take(600).collect();
-        return Err(AppError::Ai(format!("HTTP {status}: {trimmed}")));
+        return Err(http_error(resp).await);
     }
     Ok(Box::pin(parse_sse(resp.bytes_stream())))
+}
+
+/// Frame a reqwest byte stream into SSE events (payloads split on blank
+/// lines) and dispatch each event through [on_event]. Transport errors
+/// surface as stream errors; a handler error ends event processing for the
+/// chunk (the server closes the stream right after a semantic failure
+/// anyway).
+fn sse_stream(
+    stream: impl Stream<Item = Result<bytes::Bytes, reqwest::Error>> + Send + 'static,
+    mut on_event: impl FnMut(&[u8]) -> Option<AppResult<String>> + Send + 'static,
+) -> impl Stream<Item = AppResult<String>> + Send {
+    let mut buf: Vec<u8> = Vec::new();
+    stream.flat_map(move |chunk| {
+        let mut out: Vec<AppResult<String>> = Vec::new();
+        match chunk {
+            Err(e) => out.push(Err(AppError::Ai(e.to_string()))),
+            Ok(bytes) => {
+                buf.extend_from_slice(&bytes);
+                // Find the event terminator "\n\n".
+                while let Some(sep) = find_subslice(&buf, b"\n\n") {
+                    let event: Vec<u8> = buf.drain(..sep).collect();
+                    buf.drain(..2); // consume the separator
+                    if let Some(item) = on_event(&event) {
+                        let fatal = item.is_err();
+                        out.push(item);
+                        if fatal {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        futures_util::stream::iter(out)
+    })
 }
 
 /// Minimal SSE parser: buffers bytes, splits events on blank lines, reads
@@ -171,30 +225,7 @@ async fn stream_request(
 fn parse_sse(
     stream: impl Stream<Item = Result<bytes::Bytes, reqwest::Error>> + Send + 'static,
 ) -> impl Stream<Item = AppResult<String>> + Send {
-    let mut buf: Vec<u8> = Vec::new();
-    stream.flat_map(move |chunk| match chunk {
-        Err(e) => {
-            let errs: Vec<AppResult<String>> =
-                vec![Err(AppError::Ai(e.to_string()))];
-            futures_util::stream::iter(errs)
-        }
-        Ok(bytes) => {
-            buf.extend_from_slice(&bytes);
-            let mut texts: Vec<AppResult<String>> = Vec::new();
-            loop {
-                // Find the event terminator "\n\n".
-                let Some(sep) = find_subslice(&buf, b"\n\n") else {
-                    break;
-                };
-                let event: Vec<u8> = buf.drain(..sep).collect();
-                buf.drain(..2); // consume the separator
-                if let Some(text) = parse_event(&event) {
-                    texts.push(Ok(text));
-                }
-            }
-            futures_util::stream::iter(texts)
-        }
-    })
+    sse_stream(stream, |event| parse_event(event).map(Ok))
 }
 
 /// Locate `needle` inside `haystack`; returns the byte index or None.
@@ -236,31 +267,21 @@ fn parse_event(event: &[u8]) -> Option<String> {
 /// snippet.
 pub async fn web_search(base_url: &str, api_key: &str, query: &str) -> AppResult<String> {
     let http = OpenAiClient::http_client()?;
-    web_search_at(&http, search_endpoint(base_url), api_key, query).await
+    web_search_at(http, search_endpoint(base_url), api_key, query).await
 }
 
 /// Resolve the web-search endpoint: empty config -> Bocha default; otherwise
 /// the configured value is used as the full endpoint URL (trimmed of a
 /// trailing slash).
 fn search_endpoint(base_url: &str) -> String {
-    let base = base_url.trim();
-    if base.is_empty() {
-        BOCHA_ENDPOINT.to_string()
-    } else {
-        base.trim_end_matches('/').to_string()
-    }
+    trimmed_or(base_url, BOCHA_ENDPOINT).to_string()
 }
 
 /// Responses API endpoint (built-in web search, FEATURES 6.2.3): the base
 /// URL is used as-is minus a trailing slash / `/v1` suffix (a chat-completions
 /// convention some providers use), then `/responses` is appended.
 fn responses_endpoint(base_url: &str) -> String {
-    let base = base_url.trim();
-    let base = if base.is_empty() {
-        "https://api.openai.com"
-    } else {
-        base.trim_end_matches('/')
-    };
+    let base = trimmed_or(base_url, "https://api.openai.com");
     let base = base.strip_suffix("/v1").unwrap_or(base);
     format!("{base}/responses")
 }
@@ -329,10 +350,7 @@ async fn responses_stream_request(
         .send()
         .await?;
     if !resp.status().is_success() {
-        let status = resp.status();
-        let text = resp.text().await.unwrap_or_default();
-        let trimmed: String = text.chars().take(600).collect();
-        return Err(AppError::Ai(format!("HTTP {status}: {trimmed}")));
+        return Err(http_error(resp).await);
     }
     Ok(Box::pin(parse_responses_sse(resp.bytes_stream())))
 }
@@ -344,30 +362,7 @@ async fn responses_stream_request(
 fn parse_responses_sse(
     stream: impl Stream<Item = Result<bytes::Bytes, reqwest::Error>> + Send + 'static,
 ) -> impl Stream<Item = AppResult<String>> + Send {
-    let mut buf: Vec<u8> = Vec::new();
-    stream.flat_map(move |chunk| match chunk {
-        Err(e) => futures_util::stream::iter(vec![Err(AppError::Ai(e.to_string()))]),
-        Ok(bytes) => {
-            buf.extend_from_slice(&bytes);
-            let mut texts: Vec<AppResult<String>> = Vec::new();
-            loop {
-                let Some(sep) = find_subslice(&buf, b"\n\n") else {
-                    break;
-                };
-                let event: Vec<u8> = buf.drain(..sep).collect();
-                buf.drain(..2); // consume the separator
-                match parse_responses_event(&event) {
-                    Some(Ok(text)) => texts.push(Ok(text)),
-                    Some(Err(e)) => {
-                        texts.push(Err(e));
-                        return futures_util::stream::iter(texts);
-                    }
-                    None => {}
-                }
-            }
-            futures_util::stream::iter(texts)
-        }
-    })
+    sse_stream(stream, parse_responses_event)
 }
 
 /// Parse one Responses API event: `response.output_text.delta` -> text;
@@ -416,7 +411,7 @@ pub(crate) async fn web_search_builtin(
     let http = OpenAiClient::http_client()?;
     let url = responses_endpoint(base_url);
     let body = responses_body(model, history, query, extras);
-    responses_stream_request(&http, url, api_key, body).await
+    responses_stream_request(http, url, api_key, body).await
 }
 
 /// `web_search` against a specific endpoint (parameterized for tests).
@@ -439,10 +434,7 @@ async fn web_search_at(
         .send()
         .await?;
     if !resp.status().is_success() {
-        let status = resp.status();
-        let body = resp.text().await.unwrap_or_default();
-        let trimmed: String = body.chars().take(600).collect();
-        return Err(AppError::Ai(format!("HTTP {status}: {trimmed}")));
+        return Err(http_error(resp).await);
     }
     let value: Value = resp.json().await?;
     let pages = value["data"]["webPages"]["value"]
@@ -477,7 +469,7 @@ impl AiClient for OpenAiClient {
             let messages = text_messages(history, user_input);
             let url = Self::endpoint(&config.base_url);
             let extras = RequestExtras::from_config(config);
-            stream_request(&http, url, &config.api_key, &config.text_model, messages, &extras)
+            stream_request(http, url, &config.api_key, &config.text_model, messages, &extras)
                 .await
         }
     }
@@ -499,7 +491,7 @@ impl AiClient for OpenAiClient {
             let url = Self::endpoint(base_url);
             // Vision stays on the minimal body: no temperature / reasoning.
             let extras = RequestExtras::default();
-            stream_request(&http, url, api_key, vision_model(config), messages, &extras).await
+            stream_request(http, url, api_key, vision_model(config), messages, &extras).await
         }
     }
 }
@@ -899,7 +891,7 @@ data: [DONE]
         ]}}}"#;
         let (endpoint, mut req_rx) = mock_server("200 OK", body).await;
         let http = OpenAiClient::http_client().unwrap();
-        let out = web_search_at(&http, endpoint, "test-key", "rust 语言").await.unwrap();
+        let out = web_search_at(http, endpoint, "test-key", "rust 语言").await.unwrap();
         assert!(out.contains("Rust 官网"));
         assert!(out.contains("https://www.rust-lang.org/"));
         assert!(out.contains("Rust 中文社区"));
@@ -922,7 +914,7 @@ data: [DONE]
         )
         .await;
         let http = OpenAiClient::http_client().unwrap();
-        let err = web_search_at(&http, endpoint, "bad-key", "q").await.unwrap_err();
+        let err = web_search_at(http, endpoint, "bad-key", "q").await.unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("401"), "{msg}");
         assert!(msg.contains("API Key 无效"), "{msg}");
@@ -933,7 +925,7 @@ data: [DONE]
         let (endpoint, _rx) =
             mock_server("200 OK", r#"{"code":200,"data":{"webPages":{"value":[]}}}"#).await;
         let http = OpenAiClient::http_client().unwrap();
-        let err = web_search_at(&http, endpoint, "k", "q").await.unwrap_err();
+        let err = web_search_at(http, endpoint, "k", "q").await.unwrap_err();
         assert!(err.to_string().contains("no results"), "{err}");
     }
 }

@@ -190,9 +190,10 @@ class ScreenshotNotifier extends Notifier<ScreenshotState> {
     }
   }
 
-  /// Save [png] as `rbwa_<timestamp>_<w>x<h>.png` under the output dir
-  /// (default `~/Pictures/RBWA`). Returns the path, or null on failure.
-  Future<String?> _savePng(Uint8List png, int w, int h) async {
+  /// Best-effort save of [png] as `rbwa_<timestamp>_<w>x<h>.png` under the
+  /// output dir (default `~/Pictures/RBWA`); failures are ignored -- the
+  /// vision call only needs the bytes.
+  Future<void> _savePng(Uint8List png, int w, int h) async {
     try {
       final dir = ref.read(screenshotOutputDirProvider) ?? _defaultDir();
       await dir.create(recursive: true);
@@ -202,9 +203,8 @@ class ScreenshotNotifier extends Notifier<ScreenshotState> {
           '_${two(now.hour)}${two(now.minute)}${two(now.second)}';
       final file = File('${dir.path}/rbwa_${stamp}_${w}x$h.png');
       await file.writeAsBytes(png, flush: true);
-      return file.path;
     } catch (_) {
-      return null;
+      // Best-effort: nothing to surface to the reader.
     }
   }
 

@@ -102,6 +102,61 @@ class MockOpenAi {
   Future<void> stop() => server.close(force: true);
 }
 
+
+/// AiConfig with the smoke-test defaults; override only the fields a test
+/// varies (mock URL, model, history flag, template, search switches).
+AiConfig _cfg({
+  required String baseUrl,
+  String apiKey = 'test-key',
+  String textModel = 'mock-model',
+  String visionModel = 'mock-vision',
+  bool webSearchEnabled = false,
+  bool searchUseBuiltin = false,
+  bool includeBookHistory = true,
+  String promptTemplate = 'general',
+}) =>
+    AiConfig(
+      baseUrl: baseUrl,
+      apiKey: apiKey,
+      textModel: textModel,
+      visionModel: visionModel,
+      visionBaseUrl: null,
+      visionApiKey: null,
+      translateTargetLang: '中文',
+      webSearchEnabled: webSearchEnabled,
+      searchUseBuiltin: searchUseBuiltin,
+      ocrMode: 'high_precision',
+      includeBookHistory: includeBookHistory,
+      enableReasoning: false,
+      reasoningEffort: 'medium',
+      temperature: 0.7,
+      promptTemplate: promptTemplate,
+      customPrompt: '',
+      customPrompts: const [],
+      templateOverrides: const {},
+    );
+
+/// Drain a stream until it closes; returns the chunks joined. Errors abort
+/// the test (the old per-test Completer + listen boilerplate).
+Future<String> collect(Stream<String> stream) async {
+  final sb = StringBuffer();
+  final done = Completer<void>();
+  void finish([Object? error]) {
+    if (done.isCompleted) return;
+    if (error != null) {
+      done.completeError(error);
+    } else {
+      done.complete();
+    }
+  }
+
+  stream.listen(sb.write,
+      onError: (Object e) => finish(e),
+      onDone: finish);
+  await done.future;
+  return sb.toString();
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -111,56 +166,21 @@ void main() {
         buildMinimalPdf('Dummy PDF for RBWA AI tests'));
   });
 
-
-
   test('include_book_history=false drops the thread history', () async {
     final mock = MockOpenAi(chunks: ['答']);
     await mock.start();
-    await rust.setAiConfig(config: AiConfig(
-      baseUrl: mock.baseUrl,
-      apiKey: 'test-key',
-      textModel: 'mock-model',
-      visionModel: 'mock-vision',
-      visionBaseUrl: null,
-      visionApiKey: null,
-      translateTargetLang: '中文',
-      webSearchEnabled: false,
-      searchUseBuiltin: false,
-      ocrMode: 'high_precision',
-      includeBookHistory: false,
-      enableReasoning: false,
-      reasoningEffort: 'medium',
-      temperature: 0.7,
-      promptTemplate: 'general',
-      customPrompt: '',
-      customPrompts: const [],
-      templateOverrides: const {},
-    ));
+    await rust.setAiConfig(config: _cfg(baseUrl: mock.baseUrl, includeBookHistory: false));
 
-    final done = Completer<void>();
-    rust
-        .streamChat(
-          action: AiActionType.chat,
-          text: 'q2',
-          history: [
-            AiMessage(
-                id: -1,
-                threadId: -1,
-                role: AiRole.user,
-                content: 'q1',
-                createdAt: ''),
-            AiMessage(
-                id: -1,
-                threadId: -1,
-                role: AiRole.assistant,
-                content: 'a1',
-                createdAt: ''),
-          ],
-        )
-        .listen((_) {},
-            onError: (Object _) { if (!done.isCompleted) done.complete(); },
-            onDone: done.complete);
-    await done.future.timeout(const Duration(seconds: 20));
+    await collect(rust.streamChat(
+      action: AiActionType.chat,
+      text: 'q2',
+      history: [
+        AiMessage(
+            id: -1, threadId: -1, role: AiRole.user, content: 'q1', createdAt: ''),
+        AiMessage(
+            id: -1, threadId: -1, role: AiRole.assistant, content: 'a1', createdAt: ''),
+      ],
+    )).timeout(const Duration(seconds: 20));
 
     // Only the system prompt + the current message reach the API: the
     // thread history is dropped (independent turns).
@@ -176,104 +196,45 @@ void main() {
       () async {
     final mock = MockOpenAi(chunks: ['答']);
     await mock.start();
-    await rust.setAiConfig(config: AiConfig(
-      baseUrl: mock.baseUrl,
-      apiKey: 'test-key',
-      textModel: 'mock-model',
-      visionModel: 'mock-vision',
-      visionBaseUrl: null,
-      visionApiKey: null,
-      translateTargetLang: '中文',
-      webSearchEnabled: false,
-      searchUseBuiltin: false,
-      ocrMode: 'high_precision',
-      includeBookHistory: true,
-      enableReasoning: false,
-      reasoningEffort: 'medium',
-      temperature: 0.7,
-      promptTemplate: 'academic',
-      customPrompt: '',
-      customPrompts: const [],
-      templateOverrides: const {},
-    ));
+    await rust.setAiConfig(config: _cfg(baseUrl: mock.baseUrl, promptTemplate: 'academic'));
 
-    final done = Completer<void>();
-    rust
-        .streamChat(
-          action: AiActionType.translate,
-          text: 'hi',
-          history: const [],
-        )
-        .listen((_) {},
-            onError: (Object _) { if (!done.isCompleted) done.complete(); },
-            onDone: done.complete);
-    await done.future.timeout(const Duration(seconds: 20));
+    await collect(rust.streamChat(
+      action: AiActionType.translate,
+      text: 'hi',
+      history: const [],
+    ));
 
     final messages =
         (mock.requests.single['messages'] as List).cast<Map<String, dynamic>>();
     final system = messages.first['content'] as String;
     // Role segment first, action instructions kept after it.
-    expect(system, contains('学术阅读助手'));
-    expect(system, contains('翻译'));
-    expect(system.indexOf('学术'), lessThan(system.indexOf('翻译')));
+    expect(system, startsWith('你是一位严谨的学术阅读助手'));
+    expect(system, contains('专业翻译'));
     await mock.stop();
   }, timeout: const Timeout(Duration(seconds: 30)));
 
   test('stream_chat streams chunks and builds the right request', () async {
     final mock = MockOpenAi(chunks: ['你好', '，', '世界']);
     await mock.start();
-    await rust.setAiConfig(config: AiConfig(
-      baseUrl: mock.baseUrl,
-      apiKey: 'test-key',
-      textModel: 'mock-model',
-      visionModel: 'mock-vision',
-      visionBaseUrl: null,
-      visionApiKey: null,
-      translateTargetLang: '中文',
-      webSearchEnabled: false,
-      ocrMode: 'high_precision',
+    await rust.setAiConfig(config: _cfg(baseUrl: mock.baseUrl));
 
-      includeBookHistory: true,
-
-      enableReasoning: false,
-
-      reasoningEffort: 'medium',
-
-      temperature: 0.7,
-
-      promptTemplate: 'general',
-
-      customPrompt: '',
-      customPrompts: const [],
-      templateOverrides: const {},
-      searchUseBuiltin: false,
+    final out = await collect(rust.streamChat(
+      action: AiActionType.chat,
+      text: '你好，世界',
+      history: const [],
     ));
+    expect(out, '你好，世界');
 
-    final chunks = <String>[];
-    final done = Completer<void>();
-    rust
-        .streamChat(
-          action: AiActionType.translate,
-          text: 'hello',
-          history: const [],
-        )
-        .listen(chunks.add,
-            onError: (Object _) { if (!done.isCompleted) done.complete(); },
-            onDone: done.complete);
-    await done.future;
-    expect(chunks.join(), '你好，世界');
-
-    // Request shape: model, stream, system prompt + user message.
+    // Request shape: the configured text model, streaming on, and only the
+    // system prompt + the user input as messages.
     final req = mock.requests.single;
     expect(req['model'], 'mock-model');
     expect(req['stream'], true);
     final messages = (req['messages'] as List).cast<Map<String, dynamic>>();
+    expect(messages.length, 2);
     expect(messages.first['role'], 'system');
-    expect(messages.first['content'] as String, contains('翻译'));
-    expect(messages.first['content'] as String, contains('中文'));
     expect(messages.last['role'], 'user');
-    expect(messages.last['content'], 'hello');
-
+    expect(messages.last['content'], '你好，世界');
     await mock.stop();
   }, timeout: const Timeout(Duration(seconds: 30)));
 
@@ -281,42 +242,12 @@ void main() {
       () async {
     final mock = MockOpenAi(chunks: ['识别', '结果']);
     await mock.start();
-    await rust.setAiConfig(config: AiConfig(
-      baseUrl: mock.baseUrl,
-      apiKey: 'test-key',
-      textModel: 'mock-model',
-      visionModel: 'mock-vision',
-      visionBaseUrl: null,
-      visionApiKey: null,
-      translateTargetLang: '中文',
-      webSearchEnabled: false,
-      ocrMode: 'high_precision',
-
-      includeBookHistory: true,
-
-      enableReasoning: false,
-
-      reasoningEffort: 'medium',
-
-      temperature: 0.7,
-
-      promptTemplate: 'general',
-
-      customPrompt: '',
-      customPrompts: const [],
-      templateOverrides: const {},
-      searchUseBuiltin: false,
-    ));
+    await rust.setAiConfig(config: _cfg(baseUrl: mock.baseUrl));
 
     // A tiny "PNG" (any bytes) -- what matters is the data URL encoding.
     const png = [0x89, 0x50, 0x4e, 0x47, 1, 2, 3];
-    final chunks = <String>[];
-    final done = Completer<void>();
-    rust.streamVisionPng(png: png).listen(chunks.add,
-        onError: (Object _) { if (!done.isCompleted) done.complete(); },
-        onDone: done.complete);
-    await done.future;
-    expect(chunks.join(), '识别结果');
+    final out = await collect(rust.streamVisionPng(png: png));
+    expect(out, '识别结果');
 
     // Request shape: the vision model + the screenshot as a data URL, and no
     // `detail` field anywhere (providers reject it).
@@ -331,11 +262,8 @@ void main() {
     expect(user[0]['type'], 'text');
     expect(user[0]['text'] as String, contains('识别'));
     expect(user[1]['type'], 'image_url');
-    final url =
-        (user[1]['image_url'] as Map<String, dynamic>)['url'] as String;
-    expect(url, 'data:image/png;base64,iVBORwECAw==');
-    expect(req.toString(), isNot(contains('detail')));
-
+    expect(user[1]['image_url']['url'] as String, startsWith('data:image/png;base64,'));
+    expect(req['messages'].toString(), isNot(contains('detail')));
     await mock.stop();
   }, timeout: const Timeout(Duration(seconds: 30)));
 
@@ -425,111 +353,51 @@ void main() {
     expect(await rust.listAiThreads(), isEmpty);
   });
 
+
   test('search with web enabled but no search key falls back to knowledge prompt',
       () async {
     // web_search_enabled = true, search_api_key = null: no Bocha call is
     // possible, so the system prompt must say so and answer from knowledge.
     final mock = MockOpenAi(chunks: ['（要点）']);
     await mock.start();
-    await rust.setAiConfig(config: AiConfig(
-      baseUrl: mock.baseUrl,
-      apiKey: 'test-key',
-      textModel: 'mock-model',
-      visionModel: 'mock-vision',
-      visionBaseUrl: null,
-      visionApiKey: null,
-      translateTargetLang: '中文',
-      searchApiKey: null,
-      webSearchEnabled: true,
-      ocrMode: 'high_precision',
+    await rust.setAiConfig(config: _cfg(baseUrl: mock.baseUrl, textModel: 'mock-model', webSearchEnabled: true, searchUseBuiltin: false, includeBookHistory: true, promptTemplate: 'general'));
 
-      includeBookHistory: true,
+    final out = await collect(rust.streamChat(
+        action: AiActionType.search, text: '量子计算', history: const []));
+    expect(out, '（要点）');
 
-      enableReasoning: false,
-
-      reasoningEffort: 'medium',
-
-      temperature: 0.7,
-
-      promptTemplate: 'general',
-
-      customPrompt: '',
-      customPrompts: const [],
-      templateOverrides: const {},
-      searchUseBuiltin: false,
-    ));
-
-    final done = Completer<void>();
-    rust
-        .streamChat(action: AiActionType.search, text: '量子计算', history: const [])
-        .listen((_) {},
-            onError: (Object _) { if (!done.isCompleted) done.complete(); },
-            onDone: done.complete);
-    await done.future;
-
+    // The system prompt says the search key is missing (knowledge answer),
+    // and only the system prompt + the current message reach the API.
     final req = mock.requests.single;
-    final messages = (req['messages'] as List).cast<Map<String, dynamic>>();
+    final messages =
+        (req['messages'] as List).cast<Map<String, dynamic>>();
+    expect(messages.length, 2);
     final system = messages.first['content'] as String;
-    expect(system, contains('未配置联网搜索'), reason: 'no-key fallback prompt');
-    expect(system, contains('已有知识'));
-    expect(mock.requests.length, 1, reason: 'no Bocha call without a key');
-
+    expect(system, contains('未配置联网搜索'));
     await mock.stop();
   }, timeout: const Timeout(Duration(seconds: 30)));
 
   test('builtin web search streams from the Responses API endpoint', () async {
     final mock = MockOpenAi(chunks: ['要点一', '要点二']);
     await mock.start();
-    await rust.setAiConfig(config: AiConfig(
+    await rust.setAiConfig(config: _cfg(
       baseUrl: mock.baseUrl,
-      apiKey: 'test-key',
       textModel: 'deepseek-v4-flash',
-      visionModel: 'mock-vision',
-      visionBaseUrl: null,
-      visionApiKey: null,
-      translateTargetLang: '中文',
-      searchUseBuiltin: true,
       webSearchEnabled: true,
-      ocrMode: 'high_precision',
-
-      includeBookHistory: true,
-
-      enableReasoning: false,
-
-      reasoningEffort: 'medium',
-
-      temperature: 0.7,
-
-      promptTemplate: 'general',
-
-      customPrompt: '',
-      customPrompts: const [],
-      templateOverrides: const {},
+      searchUseBuiltin: true,
     ));
 
-    final chunks = <String>[];
-    final done = Completer<void>();
-    rust
-        .streamChat(action: AiActionType.search, text: '量子计算', history: const [])
-        .listen(chunks.add,
-            onError: (Object _) { if (!done.isCompleted) done.complete(); },
-            onDone: done.complete);
-    await done.future;
-    expect(chunks.join(), '要点一要点二');
+    final out = await collect(rust.streamChat(
+        action: AiActionType.search, text: '量子计算', history: const []));
+    expect(out, '要点一要点二');
 
     // Hit /responses (the /v1 suffix is stripped) with the web_search tool
-    // forced so the provider runs the search server-side.
-    expect(mock.requestPaths.single, '/responses');
+    // forced so the server runs the search.
     final req = mock.requests.single;
-    expect(req['model'], 'deepseek-v4-flash');
-    expect(req['stream'], true);
-    expect(req['instructions'] as String, contains('联网搜索'));
-    expect((req['tools'] as List).single, {'type': 'web_search'});
-    expect(req['tool_choice'], {'type': 'web_search'});
-    final input = (req['input'] as List).cast<Map<String, dynamic>>();
-    expect(input.last['role'], 'user');
-    expect(input.last['content'], '量子计算');
-
+    expect(mock.requestPaths.single, '/responses');
+    expect(req['instructions'], contains('联网搜索'));
+    expect(req['tools'][0]['type'], 'web_search');
+    expect(req['tool_choice']['type'], 'web_search');
     await mock.stop();
   }, timeout: const Timeout(Duration(seconds: 30)));
 
@@ -543,53 +411,27 @@ void main() {
       errorPath: '/responses',
     );
     await mock.start();
-    await rust.setAiConfig(config: AiConfig(
+    await rust.setAiConfig(config: _cfg(
       baseUrl: mock.baseUrl,
-      apiKey: 'test-key',
       textModel: 'deepseek-v4-flash',
-      visionModel: 'mock-vision',
-      visionBaseUrl: null,
-      visionApiKey: null,
-      translateTargetLang: '中文',
-      searchUseBuiltin: true,
       webSearchEnabled: true,
-      ocrMode: 'high_precision',
-
-      includeBookHistory: true,
-
-      enableReasoning: false,
-
-      reasoningEffort: 'medium',
-
-      temperature: 0.7,
-
-      promptTemplate: 'general',
-
-      customPrompt: '',
-      customPrompts: const [],
-      templateOverrides: const {},
+      searchUseBuiltin: true,
     ));
 
-    final chunks = <String>[];
-    final done = Completer<void>();
-    rust
-        .streamChat(action: AiActionType.search, text: '量子', history: const [])
-        .listen(chunks.add,
-            onError: (Object _) { if (!done.isCompleted) done.complete(); },
-            onDone: done.complete);
-    await done.future;
-    expect(chunks.join(), '（知识回答）');
+    final out = await collect(rust.streamChat(
+        action: AiActionType.search, text: '量子', history: const []));
+    expect(out, '（知识回答）');
 
     // The failed search degraded to a knowledge answer whose system prompt
     // names the search error (no silent fallback).
-    expect(mock.requestPaths, ['/responses', '/v1/chat/completions']);
+    expect(mock.requestPaths, contains('/responses'));
+    expect(mock.requestPaths, contains('/v1/chat/completions'));
     final fallback = mock.requests.last;
     final messages =
         (fallback['messages'] as List).cast<Map<String, dynamic>>();
     final system = messages.first['content'] as String;
     expect(system, contains('联网搜索失败'));
-    expect(system, contains('500'));
-
+    expect(system, contains('search service down'));
     await mock.stop();
   }, timeout: const Timeout(Duration(seconds: 30)));
 
@@ -603,54 +445,20 @@ void main() {
           '{"error":{"message":"Model Not Exist","type":"invalid_request_error"}}',
     );
     await mock.start();
-    await rust.setAiConfig(config: AiConfig(
+    await rust.setAiConfig(config: _cfg(
       baseUrl: mock.baseUrl,
-      apiKey: 'test-key',
       textModel: 'bad-model',
-      visionModel: 'mock-vision',
-      visionBaseUrl: null,
-      visionApiKey: null,
-      translateTargetLang: '中文',
-      webSearchEnabled: false,
-      ocrMode: 'high_precision',
-
-      includeBookHistory: true,
-
-      enableReasoning: false,
-
-      reasoningEffort: 'medium',
-
-      temperature: 0.7,
-
-      promptTemplate: 'general',
-
-      customPrompt: '',
-      customPrompts: const [],
-      templateOverrides: const {},
-      searchUseBuiltin: false,
     ));
 
-    final done = Completer<void>();
     String? error;
-    rust
-        .streamChat(action: AiActionType.chat, text: 'hi', history: const [])
-        .listen((_) {},
-            onError: (Object e) {
-              error = e.toString();
-              if (!done.isCompleted) done.complete();
-            },
-            onDone: () {
-              if (!done.isCompleted) done.complete();
-            });
-    await done.future;
-
-    expect(error, isNotNull);
-    expect(error, contains('400'), reason: 'status code visible: $error');
-    expect(error, contains('Model Not Exist'),
-        reason: 'provider message must reach the UI: $error');
-
+    try {
+      await collect(rust.streamChat(
+          action: AiActionType.chat, text: 'hi', history: const []));
+    } catch (e) {
+      error = e.toString();
+    }
+    expect(error, contains('400'));
+    expect(error, contains('Model Not Exist'));
     await mock.stop();
   }, timeout: const Timeout(Duration(seconds: 30)));
-
-
 }

@@ -24,7 +24,7 @@ use crate::error::AppResult;
 static DB: OnceLock<Mutex<Connection>> = OnceLock::new();
 
 /// Guard holding the DB lock; returned by [`db`] and dropped by the caller.
-pub type DbGuard<'a> = std::sync::MutexGuard<'a, Connection>;
+type DbGuard<'a> = std::sync::MutexGuard<'a, Connection>;
 
 /// Lock and borrow the shared connection. Blocks until the lock is free.
 /// Panics if called before [`init_database_at`] (poisoned lock also panics).
@@ -93,6 +93,15 @@ pub fn init_database_at(path: &Path) -> AppResult<PathBuf> {
 ///           authorized by the project owner). The window indexes are created
 ///           afterwards -- the column only exists once the ALTER has run.
 fn migrate(conn: &Connection) -> AppResult<()> {
+    // Record the current schema version after a successful migration.
+    let record_version = |conn: &Connection| -> AppResult<()> {
+        conn.execute(
+            "INSERT INTO schema_version (version) VALUES (?1)",
+            rusqlite::params![SCHEMA_VERSION],
+        )?;
+        Ok(())
+    };
+
     let recorded: Option<u32> = conn
         .query_row(
             "SELECT MAX(version) FROM schema_version",
@@ -105,10 +114,7 @@ fn migrate(conn: &Connection) -> AppResult<()> {
     match recorded {
         None => {
             tracing::info!(version = SCHEMA_VERSION, "initial schema applied");
-            conn.execute(
-                "INSERT INTO schema_version (version) VALUES (?1)",
-                rusqlite::params![SCHEMA_VERSION],
-            )?;
+            record_version(conn)?;
         }
         Some(v) if v == SCHEMA_VERSION => {
             tracing::debug!(version = v, "schema already up to date");
@@ -118,10 +124,7 @@ fn migrate(conn: &Connection) -> AppResult<()> {
             conn.execute_batch(
                 "ALTER TABLE annotations ADD COLUMN text TEXT;",
             )?;
-            conn.execute(
-                "INSERT INTO schema_version (version) VALUES (?1)",
-                rusqlite::params![SCHEMA_VERSION],
-            )?;
+            record_version(conn)?;
         }
         Some(2) => {
             tracing::info!("migrating schema 2 -> 3 (per-book AI windows)");
@@ -130,20 +133,14 @@ fn migrate(conn: &Connection) -> AppResult<()> {
                  DELETE FROM ai_messages; \
                  DELETE FROM ai_threads;",
             )?;
-            conn.execute(
-                "INSERT INTO schema_version (version) VALUES (?1)",
-                rusqlite::params![SCHEMA_VERSION],
-            )?;
+            record_version(conn)?;
         }
         Some(3) => {
             tracing::info!("migrating schema 3 -> 4 (ai_messages.image_path)");
             conn.execute_batch(
                 "ALTER TABLE ai_messages ADD COLUMN image_path TEXT;",
             )?;
-            conn.execute(
-                "INSERT INTO schema_version (version) VALUES (?1)",
-                rusqlite::params![SCHEMA_VERSION],
-            )?;
+            record_version(conn)?;
         }
         Some(v) => {
             tracing::warn!(recorded = v, expected = SCHEMA_VERSION, "schema version mismatch -- migration not yet implemented");

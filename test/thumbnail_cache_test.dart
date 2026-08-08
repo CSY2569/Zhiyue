@@ -5,10 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:rbwa/data/repositories/reader_repository.dart';
-import 'package:rbwa/features/reader/providers/viewer_provider.dart';
+import 'helpers/widget_harness.dart';
 import 'package:rbwa/features/reader/widgets/sidebars/thumbnail_rail.dart';
 import 'package:rbwa/src/rust/api.dart' as rust;
-import 'package:rbwa/src/rust/models/book.dart';
 
 /// Counts renderThumbnail calls so the cache behavior is observable.
 class _FakeRepo extends ReaderRepository {
@@ -31,32 +30,9 @@ class _FakeRepo extends ReaderRepository {
   }
 }
 
-Book _book() => Book(
-      id: 1,
-      title: 'test',
-      originalPath: '/x.pdf',
-      storedPath: '/x.pdf',
-      fileType: BookType.pdf,
-      pageCount: 3,
-      coverPath: null,
-      favorite: false,
-      categoryId: null,
-      lastOpenedAt: null,
-      importedAt: 'now',
-    );
-
 Widget _rail() => ProviderScope(
       overrides: [
-        viewerProvider.overrideWith((ref) {
-          final n = ViewerNotifier(ref);
-          n.state = ViewerState(
-            book: _book(),
-            pageCount: 3,
-            zoom: 1.2,
-            loading: false,
-          );
-          return n;
-        }),
+        defaultViewer(),
         readerRepositoryProvider.overrideWithValue(_FakeRepo()),
       ],
       child: const MaterialApp(

@@ -188,24 +188,14 @@ class AiNotifier extends Notifier<AiState> {
     String text, {
     required int? bookId,
     required String? bookTitle,
-  }) async {
-    await _historyReady.future;
-    final (window, isNew) = _resolveWindow(action, bookId, bookTitle);
-    window.messages.add(AiChatMessage(role: AiRole.user, content: text));
-    if (isNew) {
-      _persistWindow(window, text); // create + first user message
-    } else {
-      _persistMessage(window, AiRole.user, text);
-    }
-    state = state.copyWith(
-      activeThreadId: window.id,
-      cardVisible: true,
-      cardPos: const Offset(80, 120),
-      panelCleared: false,
-      showingThreadList: false,
-    );
-    _stream(window, action, text);
-  }
+  }) =>
+      _startTurn(
+        action,
+        text,
+        bookId: bookId,
+        bookTitle: bookTitle,
+        startStream: (window) => _stream(window, action, text),
+      );
 
   /// Multi-turn follow-up (FEATURES 6.5.2): the thread's full history is sent
   /// along. The answer streams into the result card when it is visible (the
@@ -223,6 +213,24 @@ class AiNotifier extends Notifier<AiState> {
     );
     _persistMessage(thread, AiRole.user, text);
     _stream(thread, thread.action, text);
+  }
+
+  /// Send a typed question from any input surface (panel / card): routes to
+  /// the active thread when there is one, otherwise starts a new chat thread
+  /// (6.5.1). Trimming + the empty guard live here so both surfaces behave
+  /// identically.
+  Future<void> sendInput(
+    String text, {
+    required int? bookId,
+    required String? bookTitle,
+  }) {
+    final t = text.trim();
+    if (t.isEmpty) return Future.value();
+    final activeId = state.activeThreadId;
+    if (activeId == null) {
+      return askQuestion(t, bookId: bookId, bookTitle: bookTitle);
+    }
+    return sendMessage(activeId, t);
   }
 
   /// Ask a question without a selection (FEATURES 6.5.1): new chat thread.
@@ -246,18 +254,38 @@ class AiNotifier extends Notifier<AiState> {
     Uint8List png, {
     required int? bookId,
     required String? bookTitle,
+  }) =>
+      _startTurn(
+        AiActionType.vision,
+        '（区域截图）',
+        imagePng: png,
+        bookId: bookId,
+        bookTitle: bookTitle,
+        startStream: (window) => _streamVision(window, png),
+      );
+
+  /// Shared start of a new AI turn: route into [bookId]'s conversation
+  /// window (creating it when it does not exist yet), persist the user
+  /// message, surface the result card, and run [startStream] on the window.
+  Future<void> _startTurn(
+    AiActionType action,
+    String text, {
+    Uint8List? imagePng,
+    required int? bookId,
+    required String? bookTitle,
+    required void Function(AiThreadState window) startStream,
   }) async {
     await _historyReady.future;
-    final (window, isNew) = _resolveWindow(AiActionType.vision, bookId, bookTitle);
+    final (window, isNew) = _resolveWindow(action, bookId, bookTitle);
     window.messages.add(AiChatMessage(
       role: AiRole.user,
-      content: '（区域截图）',
-      imagePng: png,
+      content: text,
+      imagePng: imagePng,
     ));
     if (isNew) {
-      _persistWindow(window, '（区域截图）', imagePng: png);
+      _persistWindow(window, text, imagePng: imagePng);
     } else {
-      _persistMessage(window, AiRole.user, '（区域截图）', imagePng: png);
+      _persistMessage(window, AiRole.user, text, imagePng: imagePng);
     }
     state = state.copyWith(
       activeThreadId: window.id,
@@ -266,7 +294,7 @@ class AiNotifier extends Notifier<AiState> {
       panelCleared: false,
       showingThreadList: false,
     );
-    _streamVision(window, png);
+    startStream(window);
   }
 
   /// Shared streaming loop: accumulates chunks into [AiState.streamingText]

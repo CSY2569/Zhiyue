@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/core/widgets/empty_state.dart';
 import 'package:rbwa/features/library/providers/library_providers.dart';
 import 'package:rbwa/features/library/widgets/book_tile.dart';
 import 'package:rbwa/src/rust/models/book.dart';
@@ -30,7 +31,12 @@ class BookGrid extends ConsumerWidget {
     final books = ref.watch(filteredBooksProvider);
 
     if (books.isEmpty) {
-      return _NoMatches(theme: Theme.of(context));
+      return const EmptyState(
+        icon: Icons.search_off,
+        iconSize: 56,
+        title: '没有匹配的书籍',
+        message: '尝试调整搜索词或筛选条件',
+      );
     }
 
     return GridView.builder(
@@ -52,34 +58,6 @@ class BookGrid extends ConsumerWidget {
           onDelete: () => onDelete(book),
         );
       },
-    );
-  }
-}
-
-/// Shown when books exist but the current filter matches none.
-class _NoMatches extends StatelessWidget {
-  const _NoMatches({required this.theme});
-
-  final ThemeData theme;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.search_off, size: 56, color: theme.colorScheme.outline),
-          const SizedBox(height: 12),
-          Text('没有匹配的书籍', style: theme.textTheme.titleMedium),
-          const SizedBox(height: 4),
-          Text(
-            '尝试调整搜索词或筛选条件',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

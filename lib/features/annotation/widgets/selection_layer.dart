@@ -168,8 +168,7 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
   void _onTapUp(TapUpDetails d) {
     final size = (context.findRenderObject() as RenderBox?)?.size ?? Size.zero;
     if (size.isEmpty) return;
-    final norm = Offset(d.localPosition.dx / size.width,
-        d.localPosition.dy / size.height);
+    final norm = _toNorm(d.localPosition);
     final hit = _annotationAt(norm);
     if (hit != null) {
       ref.read(selectionProvider.notifier).openNote(hit.id);

@@ -20,6 +20,11 @@ import 'package:rbwa/src/rust/models/ai.dart';
 
 import 'helpers/fake_ai_repo.dart';
 
+/// 1x1 transparent PNG used as a fake vision capture.
+final kTinyPng = base64Decode(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==');
+
+
 ProviderScope _scope(Widget child, FakeAiRepo repo) => ProviderScope(
       // Stack so Positioned-based floating widgets (toolbar / selector)
       // render correctly.
@@ -387,9 +392,7 @@ void main() {
     await repo.appendAiMessage(threadId: res.id, role: AiRole.user, content: 'hello');
     await repo.appendAiMessage(
         threadId: res.id, role: AiRole.assistant, content: '你好');
-    final png = base64Decode(
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
-    );
+    final png = kTinyPng;
     await repo.appendAiMessage(
       threadId: res.id,
       role: AiRole.user,
@@ -458,9 +461,7 @@ void main() {
         ProviderScope.containerOf(tester.element(find.byType(ResultCard)));
 
     // A real 1x1 transparent PNG so the card can actually render it.
-    final png = base64Decode(
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
-    );
+    final png = kTinyPng;
     await container.read(aiProvider.notifier).startVision(png,
         bookId: null, bookTitle: null);
     await tester.pumpAndSettle();
@@ -497,9 +498,7 @@ void main() {
     final container =
         ProviderScope.containerOf(tester.element(find.byType(AiPanelSide)));
 
-    final png = base64Decode(
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
-    );
+    final png = kTinyPng;
     await container
         .read(aiProvider.notifier)
         .startVision(png, bookId: null, bookTitle: null);

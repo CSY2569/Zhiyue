@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/core/widgets/toolbar_icon_button.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
 import 'package:rbwa/features/ai/widgets/ai_utils.dart';
 import 'package:rbwa/features/ai/widgets/message_bubble.dart'
@@ -77,25 +78,25 @@ class ResultCard extends ConsumerWidget {
                       const Spacer(),
                       // Stop (while streaming) / copy / expand / close (6.4.1).
                       if (streamingHere)
-                        _CardButton(
+                        ToolbarIconButton(
                           icon: Icons.stop_circle_outlined,
                           tooltip: '停止生成',
                           onTap: () =>
                               ref.read(aiProvider.notifier).cancelStreaming(),
                         ),
-                      _CardButton(
+                      ToolbarIconButton(
                         icon: Icons.copy_outlined,
                         tooltip: '复制对话',
                         onTap: () => copyTextWithSnack(context, conversation,
                             okLabel: '已复制对话'),
                       ),
-                      _CardButton(
+                      ToolbarIconButton(
                         icon: Icons.open_in_full_outlined,
                         tooltip: '展开到侧栏',
                         onTap: () =>
                             ref.read(aiProvider.notifier).moveCardToPanel(),
                       ),
-                      _CardButton(
+                      ToolbarIconButton(
                         icon: Icons.close,
                         tooltip: '关闭',
                         onTap: () => ref.read(aiProvider.notifier).closeCard(),
@@ -198,19 +199,13 @@ class _CardInputState extends ConsumerState<_CardInput> {
   void _send() {
     final text = _input.text.trim();
     if (text.isEmpty || widget.streaming) return;
-    final state = ref.read(aiProvider);
-    final activeId = state.activeThreadId;
     _input.clear();
-    if (activeId == null) {
-      // No thread yet: asking directly creates a new chat thread (6.5.1).
-      ref.read(aiProvider.notifier).askQuestion(
-            text,
-            bookId: widget.bookId,
-            bookTitle: widget.bookTitle,
-          );
-    } else {
-      ref.read(aiProvider.notifier).sendMessage(activeId, text);
-    }
+    // Routes to the active thread, or starts a new chat thread (6.5.1).
+    ref.read(aiProvider.notifier).sendInput(
+          text,
+          bookId: widget.bookId,
+          bookTitle: widget.bookTitle,
+        );
   }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
@@ -251,29 +246,7 @@ class _CardInputState extends ConsumerState<_CardInput> {
 }
 
 /// Compact icon button for the card header.
-class _CardButton extends StatelessWidget {
-  const _CardButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onTap,
-  });
 
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      icon: Icon(icon, size: 18),
-      tooltip: tooltip,
-      visualDensity: VisualDensity.compact,
-      onPressed: onTap,
-    );
-  }
-}
-
-/// Blinking "generating" indicator (FEATURES 6.3.1).
 class _StreamingCursor extends StatefulWidget {
   const _StreamingCursor();
 

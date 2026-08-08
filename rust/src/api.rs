@@ -48,37 +48,31 @@ pub struct InitResult {
     pub error: Option<String>,
 }
 
+/// Build an [InitResult] without repeating the struct literal at every call
+/// site (success carries the resolved path; failure carries the error).
+fn init_result(ok: bool, path: Option<&Path>, error: Option<String>) -> InitResult {
+    InitResult {
+        ok,
+        db_path: path.map_or_else(String::new, |p| p.to_string_lossy().to_string()),
+        schema_version: if ok { db::schema::SCHEMA_VERSION } else { 0 },
+        error,
+    }
+}
+
 /// Initialize the Rust core. Called exactly once on app startup, before any
 /// other command. Opens SQLite, applies the schema (idempotent), and sets up
 /// tracing. Safe to call again; returns the cached result.
 pub fn init_core() -> InitResult {
     if INITIALIZED.get().is_some() {
-        return InitResult {
-            ok: true,
-            db_path: db::db_path()
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_default(),
-            schema_version: db::schema::SCHEMA_VERSION,
-            error: None,
-        };
+        return init_result(true, db::db_path().ok().as_deref(), None);
     }
 
     match try_init() {
         Ok(path) => {
             let _ = INITIALIZED.set(true);
-            InitResult {
-                ok: true,
-                db_path: path.to_string_lossy().to_string(),
-                schema_version: db::schema::SCHEMA_VERSION,
-                error: None,
-            }
+            init_result(true, Some(&path), None)
         }
-        Err(e) => InitResult {
-            ok: false,
-            db_path: String::new(),
-            schema_version: 0,
-            error: Some(e.to_string()),
-        },
+        Err(e) => init_result(false, None, Some(e.to_string())),
     }
 }
 
@@ -111,19 +105,9 @@ pub fn init_core_with_db_path(db_path: String) -> InitResult {
     match try_init_at(std::path::Path::new(&db_path)) {
         Ok(path) => {
             let _ = INITIALIZED.set(true);
-            InitResult {
-                ok: true,
-                db_path: path.to_string_lossy().to_string(),
-                schema_version: db::schema::SCHEMA_VERSION,
-                error: None,
-            }
+            init_result(true, Some(&path), None)
         }
-        Err(e) => InitResult {
-            ok: false,
-            db_path: String::new(),
-            schema_version: 0,
-            error: Some(e.to_string()),
-        },
+        Err(e) => init_result(false, None, Some(e.to_string())),
     }
 }
 
@@ -268,20 +252,17 @@ async fn import_book_inner(original_path: &str) -> AppResult<ImportResult> {
     std::fs::copy(src, &stored_path)?;
     let stored_path_str = stored_path.to_string_lossy().to_string();
 
-    // 5. Derive title from the filename stem; set page count / cover.
+    // 5. Derive title from the filename stem; set page count / cover. For
+    //    images the file itself is the cover; PDF page count and cover are
+    //    filled in below after pdfium open.
     let title = src
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("untitled")
         .to_string();
-    let page_count: i64 = match file_type {
-        BookType::Pdf => 0, // updated below after pdfium open
-        BookType::Image => 1,
-    };
-    // For images the file itself is the cover; PDF covers are rendered below.
-    let cover_path: Option<String> = match file_type {
-        BookType::Image => Some(stored_path_str.clone()),
-        BookType::Pdf => None,
+    let (page_count, cover_path) = match file_type {
+        BookType::Pdf => (0, None),
+        BookType::Image => (1, Some(stored_path_str.clone())),
     };
 
     // 6. Insert the book row.
@@ -313,7 +294,7 @@ async fn import_book_inner(original_path: &str) -> AppResult<ImportResult> {
                     // Render page 0 as a ~400px-wide thumbnail and encode to PNG.
                     match pdf::thumbnail(0, 400) {
                         Ok(bmp) => {
-                            save_rgba_as_png(&bmp, &p).ok()?;
+                            save_rgba_as_png(bmp, &p).ok()?;
                             Some(p.to_string_lossy().to_string())
                         }
                         Err(e) => {
@@ -394,33 +375,18 @@ pub fn toggle_favorite(id: i64) -> Option<Book> {
 /// Returns 1 on success, 0 if the book was not found.
 pub fn touch_last_opened(id: i64) -> i32 {
     let conn = db::db();
-    match book_repo::touch_last_opened(&conn, id) {
-        Ok(()) => {
-            // touch_last_opened is a no-op if the row is absent; verify.
-            if book_repo::get(&conn, id).ok().flatten().is_some() {
-                1
-            } else {
-                0
-            }
-        }
-        Err(_) => 0,
-    }
+    book_repo::touch_last_opened(&conn, id)
+        .map(|updated| updated as i32)
+        .unwrap_or(0)
 }
 
 /// Assign a book to a category, or unclassify it (`category_id = None`)
 /// (FEATURES 2.8). Returns 1 on success, 0 if the book was not found.
 pub fn assign_category(book_id: i64, category_id: Option<i64>) -> i32 {
     let conn = db::db();
-    match book_repo::set_category(&conn, book_id, category_id) {
-        Ok(()) => {
-            if book_repo::get(&conn, book_id).ok().flatten().is_some() {
-                1
-            } else {
-                0
-            }
-        }
-        Err(_) => 0,
-    }
+    book_repo::set_category(&conn, book_id, category_id)
+        .map(|updated| updated as i32)
+        .unwrap_or(0)
 }
 
 // -----------------------------------------------------------------------------
@@ -522,11 +488,7 @@ pub async fn open_book(stored_path: String) -> OpenBookResult {
                 has_outline: false, // images have no outline
                 error: None,
             },
-            Err(e) => OpenBookResult {
-                page_count: 0,
-                has_outline: false,
-                error: Some(e.to_string()),
-            },
+            Err(e) => open_error(e),
         }
     } else {
         match pdf::open(&stored_path) {
@@ -538,11 +500,7 @@ pub async fn open_book(stored_path: String) -> OpenBookResult {
                     error: None,
                 }
             }
-            Err(e) => OpenBookResult {
-                page_count: 0,
-                has_outline: false,
-                error: Some(e.to_string()),
-            },
+            Err(e) => open_error(e),
         }
     };
     if result.error.is_some() {
@@ -568,25 +526,7 @@ pub async fn render_page(book_id: i64, page: i64, zoom: f64, dpi_scale: f64) -> 
     // `book_id` is accepted for API symmetry but the active document is used;
     // the caller must have opened this book via `open_book` first.
     let _ = book_id;
-    let result = if OPENED_IMAGE.load(Ordering::Relaxed) {
-        pdf::render_image(page, zoom as f32, dpi_scale as f32)
-    } else {
-        pdf::render_page(page, zoom as f32, dpi_scale as f32)
-    };
-    match result {
-        Ok(bmp) => PageRenderResult {
-            width: bmp.width,
-            height: bmp.height,
-            rgba: bmp.rgba,
-            error: None,
-        },
-        Err(e) => PageRenderResult {
-            width: 0,
-            height: 0,
-            rgba: Vec::new(),
-            error: Some(e.to_string()),
-        },
-    }
+    page_render_result(current_bitmap(page, zoom as f32, dpi_scale as f32))
 }
 
 /// Render a small thumbnail for the sidebar (FEATURES 3.4.1 / 7.3).
@@ -594,25 +534,7 @@ pub async fn render_page(book_id: i64, page: i64, zoom: f64, dpi_scale: f64) -> 
 /// Async: rendering is heavyweight and must not block the UI.
 pub async fn render_thumbnail(book_id: i64, page: i64, max_size: u32) -> PageRenderResult {
     let _ = book_id;
-    let result = if OPENED_IMAGE.load(Ordering::Relaxed) {
-        pdf::thumbnail_image(page, max_size)
-    } else {
-        pdf::thumbnail(page, max_size)
-    };
-    match result {
-        Ok(bmp) => PageRenderResult {
-            width: bmp.width,
-            height: bmp.height,
-            rgba: bmp.rgba,
-            error: None,
-        },
-        Err(e) => PageRenderResult {
-            width: 0,
-            height: 0,
-            rgba: Vec::new(),
-            error: Some(e.to_string()),
-        },
-    }
+    page_render_result(current_thumbnail(page, max_size))
 }
 
 /// Fetch the document outline (FEATURES 3.4.2).
@@ -656,11 +578,77 @@ pub fn save_progress(book_id: i64, page: i64, zoom: f64, view_mode: String) -> i
 // Helpers
 // -----------------------------------------------------------------------------
 
-/// Encodes an RGBA bitmap as a PNG file using the `image` crate.
-fn save_rgba_as_png(bmp: &PageBitmap, path: &Path) -> AppResult<()> {
+/// Render the current document's [page] at [zoom]x[dpi_scale]. Image books
+/// go through the same pipeline as PDFs (7.3), so both open kinds share one
+/// dispatch point.
+fn current_bitmap(page: i64, zoom: f32, dpi_scale: f32) -> AppResult<PageBitmap> {
+    if OPENED_IMAGE.load(Ordering::Relaxed) {
+        pdf::render_image(page, zoom, dpi_scale)
+    } else {
+        pdf::render_page(page, zoom, dpi_scale)
+    }
+}
+
+/// Render a small thumbnail of [page] from the current document.
+fn current_thumbnail(page: i64, max_size: u32) -> AppResult<PageBitmap> {
+    if OPENED_IMAGE.load(Ordering::Relaxed) {
+        pdf::thumbnail_image(page, max_size)
+    } else {
+        pdf::thumbnail(page, max_size)
+    }
+}
+
+/// Extract the text-layer boxes of [page] from the current document.
+fn current_boxes(page: i64) -> AppResult<Vec<CharBox>> {
+    if OPENED_IMAGE.load(Ordering::Relaxed) {
+        pdf::extract_image_text(page)
+    } else {
+        pdf::extract_text(page)
+    }
+}
+
+/// Whether the current document's [page] has a text layer (7.1.2).
+fn current_page_has_text(page: i64) -> bool {
+    if OPENED_IMAGE.load(Ordering::Relaxed) {
+        pdf::page_image_has_text(page).unwrap_or(false)
+    } else {
+        pdf::page_has_text(page).unwrap_or(false)
+    }
+}
+
+/// Map a render outcome to the FFI result shape.
+fn page_render_result(result: AppResult<PageBitmap>) -> PageRenderResult {
+    match result {
+        Ok(bmp) => PageRenderResult {
+            width: bmp.width,
+            height: bmp.height,
+            rgba: bmp.rgba,
+            error: None,
+        },
+        Err(e) => PageRenderResult {
+            width: 0,
+            height: 0,
+            rgba: Vec::new(),
+            error: Some(e.to_string()),
+        },
+    }
+}
+
+/// OpenBookResult for a failed document open (both open kinds share it).
+fn open_error(e: AppError) -> OpenBookResult {
+    OpenBookResult {
+        page_count: 0,
+        has_outline: false,
+        error: Some(e.to_string()),
+    }
+}
+
+/// Encodes an RGBA bitmap as a PNG file using the `image` crate. Takes the
+/// bitmap by value -- the buffer is consumed, not cloned (multi-MB pages).
+fn save_rgba_as_png(bmp: PageBitmap, path: &Path) -> AppResult<()> {
     #[cfg(feature = "pdf")]
     {
-        let img = image::RgbaImage::from_raw(bmp.width, bmp.height, bmp.rgba.clone())
+        let img = image::RgbaImage::from_raw(bmp.width, bmp.height, bmp.rgba)
             .ok_or_else(|| AppError::Pdf("failed to create image from rgba buffer".into()))?;
         image::DynamicImage::ImageRgba8(img)
             .save(path)
@@ -714,12 +702,7 @@ pub struct ExportResult {
 /// Async: pdfium text traversal is heavyweight and must not block the UI.
 pub async fn extract_text(book_id: i64, page: i64) -> CharBoxResult {
     let _ = book_id;
-    let result = if OPENED_IMAGE.load(Ordering::Relaxed) {
-        pdf::extract_image_text(page)
-    } else {
-        pdf::extract_text(page)
-    };
-    match result {
+    match current_boxes(page) {
         Ok(boxes) => CharBoxResult {
             boxes,
             error: None,
@@ -997,7 +980,7 @@ pub fn append_ai_message(
     image_png: Option<Vec<u8>>,
     action_type: Option<AiActionType>,
 ) -> i32 {
-    let image_path = image_png.and_then(|png| save_ai_image(&png).ok()).flatten();
+    let image_path = image_png.and_then(|png| save_ai_image(&png).ok());
     let conn = db::db();
     match ai_repo::append_message(
         &conn,
@@ -1014,14 +997,14 @@ pub fn append_ai_message(
 
 /// Persist a vision screenshot under `{data_dir}/ai_images/`; returns the
 /// relative path (e.g. `ai_images/xxxx.png`).
-fn save_ai_image(png: &[u8]) -> AppResult<Option<String>> {
+fn save_ai_image(png: &[u8]) -> AppResult<String> {
     use std::io::Write;
     let dir = db::app_data_dir()?.join("ai_images");
     std::fs::create_dir_all(&dir)?;
     let name = format!("{}.png", uuid::Uuid::new_v4());
     let mut f = std::fs::File::create(dir.join(&name))?;
     f.write_all(png)?;
-    Ok(Some(format!("ai_images/{name}")))
+    Ok(format!("ai_images/{name}"))
 }
 
 /// Resolve a stored image path (relative to the app data dir) to an
@@ -1035,20 +1018,26 @@ fn resolve_ai_image_path(rel: &str) -> Option<String> {
 /// screenshots are removed from disk too). Returns 1 if the window existed,
 /// 0 otherwise (6.5.3 per-window deletion).
 pub fn delete_ai_thread(thread_id: i64) -> i32 {
-    let conn = db::db();
     // Collect the screenshots before the rows cascade so the files can be
     // cleaned up (they are not worth keeping after the conversation).
-    let images: Vec<String> = ai_repo::list_messages(&conn, thread_id)
-        .ok()
-        .map(|msgs| {
-            msgs.into_iter()
-                .filter_map(|m| m.image_path)
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
-    let deleted = match ai_repo::delete_thread(&conn, thread_id) {
-        Ok(true) => 1,
-        _ => 0,
+    let (deleted, images) = {
+        let conn = db::db();
+        let images: Vec<String> = ai_repo::list_messages(&conn, thread_id)
+            .ok()
+            .map(|msgs| {
+                msgs.into_iter()
+                    .filter_map(|m| m.image_path)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let deleted = match ai_repo::delete_thread(&conn, thread_id) {
+            Ok(true) => 1,
+            _ => 0,
+        };
+        // The lock is dropped here: file I/O must happen outside the DB
+        // mutex so a slow disk does not stall other queries (same scoping
+        // as delete_book).
+        (deleted, images)
     };
     if deleted == 1 {
         for rel in images {
@@ -1124,6 +1113,35 @@ async fn search_system_prompt(config: &AiConfig, _query: &str) -> String {
     ai::prompts::search_system(config.web_search_enabled)
 }
 
+/// The "no API key" error surfaced on a stream before it closes (10.4
+/// offline hint).
+const NO_API_KEY_MSG: &str =
+    "未配置 API Key：请在「设置 → AI 配置」中填写（FEATURES 10.4 离线提示）";
+
+/// Push the not-configured error to [sink] and return true when the key is
+/// missing (both text and vision paths guard identically).
+fn ensure_api_key(config: &AiConfig, sink: &StreamSink<String>) -> bool {
+    if config.api_key.trim().is_empty() {
+        let _ = sink.add_error(NO_API_KEY_MSG.to_string());
+        true
+    } else {
+        false
+    }
+}
+
+/// A synthetic system message carrying the composed system prompt (never
+/// persisted -- id/thread are placeholders).
+fn system_message(content: String) -> AiMessage {
+    AiMessage {
+        id: -1,
+        thread_id: -1,
+        role: AiRole::System,
+        content,
+        image_path: None,
+        created_at: String::new(),
+    }
+}
+
 /// Streaming text action (translate / explain / search / chat, FEATURES
 /// 6.2). `history` carries the thread's prior turns (6.5.2); the action's
 /// system prompt is prepended here. Emits SSE chunks; errors (including
@@ -1135,10 +1153,7 @@ pub async fn stream_chat(
     sink: StreamSink<String>,
 ) {
     let config = get_ai_config();
-    if config.api_key.trim().is_empty() {
-        let _ = sink.add_error(
-            "未配置 API Key：请在「设置 → AI 配置」中填写（FEATURES 10.4 离线提示）".to_string(),
-        );
+    if ensure_api_key(&config, &sink) {
         return;
     }
 
@@ -1149,14 +1164,7 @@ pub async fn stream_chat(
     }
 
     let client = ai_client();
-    let system = AiMessage {
-        id: -1,
-        thread_id: -1,
-        role: AiRole::System,
-        content: system_prompt_for(action, &config, &text).await,
-        image_path: None,
-        created_at: String::new(),
-    };
+    let system = system_message(system_prompt_for(action, &config, &text).await);
     // 设置 → AI 回复「携带书籍全部上下文」: on by default (the thread's
     // turns from the first question; 追问 keeps sending the full history).
     // Off: every turn is answered independently (no history).
@@ -1182,10 +1190,7 @@ pub async fn stream_chat(
 /// composited layer), so what the model sees is exactly what was selected.
 pub async fn stream_vision_png(png: Vec<u8>, sink: StreamSink<String>) {
     let config = get_ai_config();
-    if config.api_key.trim().is_empty() {
-        let _ = sink.add_error(
-            "未配置 API Key：请在「设置 → AI 配置」中填写（FEATURES 10.4 离线提示）".to_string(),
-        );
+    if ensure_api_key(&config, &sink) {
         return;
     }
     if png.is_empty() {
@@ -1241,20 +1246,17 @@ async fn builtin_search_stream(
     } else {
         Vec::new()
     };
-    let system = AiMessage {
-        id: -1,
-        thread_id: -1,
-        role: AiRole::System,
-        content: ai::prompts::system_prompt(
+    // Role template + the given action instructions (both search branches
+    // compose identically; the template survives the fallback too).
+    let compose = |base: String| {
+        ai::prompts::system_prompt(
             &config.prompt_template,
             &config.custom_prompt,
             &config.template_overrides,
-            &ai::prompts::search_system(true),
-        ),
-        image_path: None,
-        created_at: String::new(),
+            &base,
+        )
     };
-    messages.insert(0, system);
+    messages.insert(0, system_message(compose(ai::prompts::search_system(true))));
     let extras = ai::RequestExtras::from_config(config);
     match ai::web_search_builtin(
         &config.base_url,
@@ -1270,12 +1272,7 @@ async fn builtin_search_stream(
         Err(e) => {
             // Fallback: answer from knowledge, noting the search failure
             // (the role template stays prepended).
-            messages[0].content = ai::prompts::system_prompt(
-                &config.prompt_template,
-                &config.custom_prompt,
-                &config.template_overrides,
-                &ai::prompts::search_failed_system(&e.to_string()),
-            );
+            messages[0].content = compose(ai::prompts::search_failed_system(&e.to_string()));
             let client = ai_client();
             match client.stream_chat(config, &messages, query).await {
                 Ok(stream) => drain_stream(stream, sink).await,
@@ -1338,18 +1335,14 @@ pub struct ScanPageResult {
 /// image page). Drives the "扫描识别" prompt in the reader.
 pub async fn page_has_text(book_id: i64, page: i64) -> bool {
     let _ = book_id;
-    if OPENED_IMAGE.load(Ordering::Relaxed) {
-        pdf::page_image_has_text(page).unwrap_or(false)
-    } else {
-        pdf::page_has_text(page).unwrap_or(false)
-    }
+    current_page_has_text(page)
 }
 
 /// The cached scan result for a page, if any (FEATURES 7.1.4). The Flutter
 /// side queries this to build the invisible text layer without re-scanning.
 pub fn get_page_ocr(book_id: i64, page: i64, mode: OcrMode) -> Option<OcrResult> {
     let conn = db::db();
-    ocr_repo::get_page_ocr(&conn, book_id, page, mode.as_str()).unwrap_or(None)
+    ocr_repo::get_page_ocr(&conn, book_id, page, mode.as_str()).unwrap_or_default()
 }
 
 /// Full-page OCR scan (FEATURES 7.1.2 / 7.1.8): renders the page at its
@@ -1385,11 +1378,7 @@ pub async fn scan_page(book_id: i64, page: i64, mode: OcrMode) -> ScanPageResult
     }
 
     // Render the page at original resolution (7.1.8) and scan.
-    let bmp = if OPENED_IMAGE.load(Ordering::Relaxed) {
-        pdf::render_image(page, 1.0, 1.0)
-    } else {
-        pdf::render_page(page, 1.0, 1.0)
-    };
+    let bmp = current_bitmap(page, 1.0, 1.0);
     let bmp = match bmp {
         Ok(b) if !b.rgba.is_empty() => b,
         Ok(_) => {

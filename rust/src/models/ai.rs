@@ -196,6 +196,9 @@ fn default_prompt_template() -> String {
 
 impl Default for AiConfig {
     fn default() -> Self {
+        // The field defaults below intentionally mirror the serde default
+        // functions above -- keep both in sync (a drift breaks the
+        // "old JSON reads a valid config" guarantee).
         Self {
             base_url: String::new(), // empty -> provider default endpoint
             api_key: String::new(),
@@ -208,12 +211,12 @@ impl Default for AiConfig {
             search_api_key: None,
             translate_target_lang: "中文".to_string(),
             web_search_enabled: false,
-            ocr_mode: "high_precision".to_string(),
-            include_book_history: true,
+            ocr_mode: default_ocr_mode(),
+            include_book_history: default_true(),
             enable_reasoning: false,
-            reasoning_effort: "medium".to_string(),
-            temperature: 0.7,
-            prompt_template: "general".to_string(),
+            reasoning_effort: default_reasoning_effort(),
+            temperature: default_temperature(),
+            prompt_template: default_prompt_template(),
             custom_prompt: String::new(),
             custom_prompts: Vec::new(),
             template_overrides: std::collections::HashMap::new(),

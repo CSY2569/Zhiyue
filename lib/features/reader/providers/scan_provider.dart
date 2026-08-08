@@ -1,11 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:rbwa/data/repositories/reader_repository.dart';
-import 'package:rbwa/features/ai/providers/ai_config_provider.dart';
 import 'package:rbwa/features/annotation/providers/char_box_cache.dart';
+import 'package:rbwa/features/reader/providers/ocr_helpers.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
-import 'package:rbwa/src/rust/api.dart' show OcrMode;
-import 'package:rbwa/src/rust/ocr.dart' show OcrResult;
 
 /// Scan state machine per page (FEATURES 7.1.2): pages without a text layer
 /// show the "扫描识别" prompt; scanning runs the engine and lands in success /
@@ -47,12 +45,11 @@ class PageScanState {
   PageScanState copyWith({
     ScanPhase? phase,
     String? error,
-    bool clearError = false,
     int? lowConfidence,
   }) {
     return PageScanState(
       phase: phase ?? this.phase,
-      error: clearError ? null : (error ?? this.error),
+      error: error ?? this.error,
       lowConfidence: lowConfidence ?? this.lowConfidence,
     );
   }
@@ -77,14 +74,12 @@ class ScanState {
 
   PageScanState? of(int page) => pages[page];
 
-  ScanState copyWith({
-    int? bookId,
-    int? currentPage,
-    Map<int, PageScanState>? pages,
-  }) {
+  /// Copies only the per-page map -- bookId / currentPage are re-derived by
+  /// `build()` on every viewer change.
+  ScanState copyWith({Map<int, PageScanState>? pages}) {
     return ScanState(
-      bookId: bookId ?? this.bookId,
-      currentPage: currentPage ?? this.currentPage,
+      bookId: bookId,
+      currentPage: currentPage,
       pages: pages ?? this.pages,
     );
   }
@@ -126,7 +121,7 @@ class ScanNotifier extends Notifier<ScanState> {
       final hasText = await _repo.pageHasText(bookId, page0);
       if (state.of(page0) != null) return; // changed while awaiting
       if (!hasText) {
-        final cached = await _cachedOcr(bookId, page0);
+        final cached = await cachedOcrAnyMode(ref, bookId, page0);
         if (state.of(page0) != null) return;
         if (cached != null) {
           _set(page0, PageScanState(
@@ -146,21 +141,6 @@ class ScanNotifier extends Notifier<ScanState> {
     }
   }
 
-  /// The cached OCR result for [page0] in either mode (configured first,
-  /// then the other -- a mode switch must not hide existing results).
-  Future<OcrResult?> _cachedOcr(int bookId, int page0) async {
-    try {
-      final mode = await _ocrMode();
-      final fallback =
-          mode == OcrMode.fast ? OcrMode.highPrecision : OcrMode.fast;
-      final repo = ref.read(readerRepositoryProvider);
-      return await repo.getPageOcr(bookId, page0, mode) ??
-          await repo.getPageOcr(bookId, page0, fallback);
-    } catch (_) {
-      return null;
-    }
-  }
-
   void _set(int page0, PageScanState pageState) {
     state = state.copyWith(
       pages: {...state.pages, page0: pageState},
@@ -175,7 +155,7 @@ class ScanNotifier extends Notifier<ScanState> {
     if (state.of(page0)?.phase == ScanPhase.scanning) return;
     _set(page0, const PageScanState(phase: ScanPhase.scanning));
     try {
-      final mode = await _ocrMode();
+      final mode = await configuredOcrMode(ref);
       final res = await _repo.scanPage(state.bookId, page0, mode);
       if (res.error != null) {
         _set(page0, PageScanState(phase: ScanPhase.error, error: res.error));
@@ -192,18 +172,6 @@ class ScanNotifier extends Notifier<ScanState> {
       ));
     } catch (e) {
       _set(page0, PageScanState(phase: ScanPhase.error, error: e.toString()));
-    }
-  }
-
-  /// The configured OCR model set ("fast" -> fast, anything else -> high
-  /// precision), kept in sync with the settings page (7.1.9). Waits for the
-  /// async config load; defaults to high precision when unavailable.
-  Future<OcrMode> _ocrMode() async {
-    try {
-      final cfg = await ref.read(aiConfigProvider.future);
-      return cfg.ocrMode == 'fast' ? OcrMode.fast : OcrMode.highPrecision;
-    } catch (_) {
-      return OcrMode.highPrecision;
     }
   }
 
