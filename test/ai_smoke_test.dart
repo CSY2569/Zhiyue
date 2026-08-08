@@ -133,6 +133,7 @@ void main() {
       temperature: 0.7,
       promptTemplate: 'general',
       customPrompt: '',
+      customPrompts: const [],
     ));
 
     final done = Completer<void>();
@@ -191,6 +192,7 @@ void main() {
       temperature: 0.7,
       promptTemplate: 'academic',
       customPrompt: '',
+      customPrompts: const [],
     ));
 
     final done = Completer<void>();
@@ -240,6 +242,7 @@ void main() {
       promptTemplate: 'general',
 
       customPrompt: '',
+      customPrompts: const [],
       searchUseBuiltin: false,
     ));
 
@@ -297,6 +300,7 @@ void main() {
       promptTemplate: 'general',
 
       customPrompt: '',
+      customPrompts: const [],
       searchUseBuiltin: false,
     ));
 
@@ -446,6 +450,7 @@ void main() {
       promptTemplate: 'general',
 
       customPrompt: '',
+      customPrompts: const [],
       searchUseBuiltin: false,
     ));
 
@@ -493,6 +498,7 @@ void main() {
       promptTemplate: 'general',
 
       customPrompt: '',
+      customPrompts: const [],
     ));
 
     final chunks = <String>[];
@@ -554,6 +560,7 @@ void main() {
       promptTemplate: 'general',
 
       customPrompt: '',
+      customPrompts: const [],
     ));
 
     final chunks = <String>[];
@@ -611,6 +618,7 @@ void main() {
       promptTemplate: 'general',
 
       customPrompt: '',
+      customPrompts: const [],
       searchUseBuiltin: false,
     ));
 

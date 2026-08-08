@@ -37,6 +37,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   double _temperature = 0.7;
   String _promptTemplate = 'general';
   final _customPrompt = TextEditingController();
+  final _customPromptName = TextEditingController();
+  List<CustomPrompt> _savedTemplates = [];
   bool _loaded = false;
   bool _saving = false;
 
@@ -52,6 +54,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _searchBaseUrl.dispose();
     _searchApiKey.dispose();
     _customPrompt.dispose();
+    _customPromptName.dispose();
     super.dispose();
   }
 
@@ -79,6 +82,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _temperature = config.temperature.clamp(0.0, 2.0);
     _promptTemplate = config.promptTemplate;
     _customPrompt.text = config.customPrompt;
+    _savedTemplates = [...config.customPrompts];
   }
 
   Future<void> _save() async {
@@ -111,6 +115,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       temperature: _temperature,
       promptTemplate: _promptTemplate,
       customPrompt: _customPrompt.text.trim(),
+      customPrompts: _savedTemplates,
     );
     final ok = await ref.read(aiConfigProvider.notifier).save(config);
     if (!mounted) return;
@@ -288,19 +293,70 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               ),
             ),
           ),
-          if (_promptTemplate == 'custom')
+          if (_promptTemplate == 'custom') ...[
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: TextField(
-                controller: _customPrompt,
-                minLines: 3,
-                maxLines: 6,
+                controller: _customPromptName,
                 decoration: const InputDecoration(
-                  labelText: '自定义提示词（作为角色设定，动作指令自动保留）',
+                  labelText: '模板名称（保存后用于选择）',
                   border: OutlineInputBorder(),
+                  isDense: true,
                 ),
               ),
             ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _customPrompt,
+              minLines: 3,
+              maxLines: 6,
+              decoration: const InputDecoration(
+                labelText: '自定义提示词（作为角色设定，动作指令自动保留）',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: _saveTemplate,
+                icon: const Icon(Icons.bookmark_add_outlined, size: 16),
+                label: const Text('保存为模板'),
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ),
+            if (_savedTemplates.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                '已保存模板（点击选用，可删除）',
+                style: theme.textTheme.labelMedium
+                    ?.copyWith(color: theme.colorScheme.primary),
+              ),
+              for (final t in _savedTemplates)
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.description_outlined, size: 18),
+                  title: Text(t.name,
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(t.text,
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    tooltip: '删除模板',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => setState(() =>
+                        _savedTemplates.removeWhere((x) => x.name == t.name)),
+                  ),
+                  onTap: () {
+                    _customPrompt.text = t.text;
+                    setState(() {});
+                  },
+                ),
+            ],
+          ],
           const Divider(),
           _SectionTitle('OCR 整页扫描（本地离线，FEATURES 7.1.9）', theme),
           ListTile(
@@ -339,6 +395,17 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ],
       ),
     );
+  }
+
+  /// Save the current custom prompt as a named template (同名覆盖).
+  void _saveTemplate() {
+    final name = _customPromptName.text.trim();
+    final text = _customPrompt.text.trim();
+    if (name.isEmpty || text.isEmpty) return;
+    setState(() {
+      _savedTemplates.removeWhere((t) => t.name == name);
+      _savedTemplates.add(CustomPrompt(name: name, text: text));
+    });
   }
 }
 

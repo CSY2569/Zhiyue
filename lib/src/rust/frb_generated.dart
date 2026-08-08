@@ -1841,8 +1841,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   AiConfig dco_decode_ai_config(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 18)
-      throw Exception('unexpected arr length: expect 18 but see ${arr.length}');
+    if (arr.length != 19)
+      throw Exception('unexpected arr length: expect 19 but see ${arr.length}');
     return AiConfig(
       baseUrl: dco_decode_String(arr[0]),
       apiKey: dco_decode_String(arr[1]),
@@ -1862,6 +1862,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       temperature: dco_decode_f_64(arr[15]),
       promptTemplate: dco_decode_String(arr[16]),
       customPrompt: dco_decode_String(arr[17]),
+      customPrompts: dco_decode_list_custom_prompt(arr[18]),
     );
   }
 
@@ -2050,6 +2051,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  CustomPrompt dco_decode_custom_prompt(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return CustomPrompt(
+      name: dco_decode_String(arr[0]),
+      text: dco_decode_String(arr[1]),
+    );
+  }
+
+  @protected
   ExportResult dco_decode_export_result(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -2180,6 +2193,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<CharBox> dco_decode_list_char_box(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_char_box).toList();
+  }
+
+  @protected
+  List<CustomPrompt> dco_decode_list_custom_prompt(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_custom_prompt).toList();
   }
 
   @protected
@@ -2506,6 +2525,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_temperature = sse_decode_f_64(deserializer);
     var var_promptTemplate = sse_decode_String(deserializer);
     var var_customPrompt = sse_decode_String(deserializer);
+    var var_customPrompts = sse_decode_list_custom_prompt(deserializer);
     return AiConfig(
       baseUrl: var_baseUrl,
       apiKey: var_apiKey,
@@ -2525,6 +2545,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       temperature: var_temperature,
       promptTemplate: var_promptTemplate,
       customPrompt: var_customPrompt,
+      customPrompts: var_customPrompts,
     );
   }
 
@@ -2722,6 +2743,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  CustomPrompt sse_decode_custom_prompt(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_name = sse_decode_String(deserializer);
+    var var_text = sse_decode_String(deserializer);
+    return CustomPrompt(name: var_name, text: var_text);
+  }
+
+  @protected
   ExportResult sse_decode_export_result(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_content = sse_decode_String(deserializer);
@@ -2887,6 +2916,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <CharBox>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_char_box(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<CustomPrompt> sse_decode_list_custom_prompt(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <CustomPrompt>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_custom_prompt(deserializer));
     }
     return ans_;
   }
@@ -3314,6 +3357,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.temperature, serializer);
     sse_encode_String(self.promptTemplate, serializer);
     sse_encode_String(self.customPrompt, serializer);
+    sse_encode_list_custom_prompt(self.customPrompts, serializer);
   }
 
   @protected
@@ -3488,6 +3532,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_custom_prompt(CustomPrompt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.text, serializer);
+  }
+
+  @protected
   void sse_encode_export_result(ExportResult self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.content, serializer);
@@ -3622,6 +3673,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_char_box(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_custom_prompt(
+    List<CustomPrompt> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_custom_prompt(item, serializer);
     }
   }
 

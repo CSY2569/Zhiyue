@@ -97,6 +97,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CharBoxResult dco_decode_char_box_result(dynamic raw);
 
   @protected
+  CustomPrompt dco_decode_custom_prompt(dynamic raw);
+
+  @protected
   ExportResult dco_decode_export_result(dynamic raw);
 
   @protected
@@ -140,6 +143,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<CharBox> dco_decode_list_char_box(dynamic raw);
+
+  @protected
+  List<CustomPrompt> dco_decode_list_custom_prompt(dynamic raw);
 
   @protected
   List<ImageAnnotation> dco_decode_list_image_annotation(dynamic raw);
@@ -320,6 +326,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CharBoxResult sse_decode_char_box_result(SseDeserializer deserializer);
 
   @protected
+  CustomPrompt sse_decode_custom_prompt(SseDeserializer deserializer);
+
+  @protected
   ExportResult sse_decode_export_result(SseDeserializer deserializer);
 
   @protected
@@ -367,6 +376,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<CharBox> sse_decode_list_char_box(SseDeserializer deserializer);
+
+  @protected
+  List<CustomPrompt> sse_decode_list_custom_prompt(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<ImageAnnotation> sse_decode_list_image_annotation(
@@ -578,6 +592,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_char_box_result(CharBoxResult self, SseSerializer serializer);
 
   @protected
+  void sse_encode_custom_prompt(CustomPrompt self, SseSerializer serializer);
+
+  @protected
   void sse_encode_export_result(ExportResult self, SseSerializer serializer);
 
   @protected
@@ -633,6 +650,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_char_box(List<CharBox> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_custom_prompt(
+    List<CustomPrompt> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_image_annotation(

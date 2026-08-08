@@ -1833,6 +1833,8 @@ impl SseDecode for crate::models::ai::AiConfig {
         let mut var_temperature = <f64>::sse_decode(deserializer);
         let mut var_promptTemplate = <String>::sse_decode(deserializer);
         let mut var_customPrompt = <String>::sse_decode(deserializer);
+        let mut var_customPrompts =
+            <Vec<crate::models::ai::CustomPrompt>>::sse_decode(deserializer);
         return crate::models::ai::AiConfig {
             base_url: var_baseUrl,
             api_key: var_apiKey,
@@ -1852,6 +1854,7 @@ impl SseDecode for crate::models::ai::AiConfig {
             temperature: var_temperature,
             prompt_template: var_promptTemplate,
             custom_prompt: var_customPrompt,
+            custom_prompts: var_customPrompts,
         };
     }
 }
@@ -2024,6 +2027,18 @@ impl SseDecode for crate::api::CharBoxResult {
         return crate::api::CharBoxResult {
             boxes: var_boxes,
             error: var_error,
+        };
+    }
+}
+
+impl SseDecode for crate::models::ai::CustomPrompt {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_name = <String>::sse_decode(deserializer);
+        let mut var_text = <String>::sse_decode(deserializer);
+        return crate::models::ai::CustomPrompt {
+            name: var_name,
+            text: var_text,
         };
     }
 }
@@ -2212,6 +2227,18 @@ impl SseDecode for Vec<crate::pdf::types::CharBox> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<crate::pdf::types::CharBox>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::models::ai::CustomPrompt> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::models::ai::CustomPrompt>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -2739,6 +2766,7 @@ impl flutter_rust_bridge::IntoDart for crate::models::ai::AiConfig {
             self.temperature.into_into_dart().into_dart(),
             self.prompt_template.into_into_dart().into_dart(),
             self.custom_prompt.into_into_dart().into_dart(),
+            self.custom_prompts.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -2949,6 +2977,27 @@ impl flutter_rust_bridge::IntoDart for crate::api::CharBoxResult {
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::CharBoxResult {}
 impl flutter_rust_bridge::IntoIntoDart<crate::api::CharBoxResult> for crate::api::CharBoxResult {
     fn into_into_dart(self) -> crate::api::CharBoxResult {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::models::ai::CustomPrompt {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.name.into_into_dart().into_dart(),
+            self.text.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::models::ai::CustomPrompt
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::models::ai::CustomPrompt>
+    for crate::models::ai::CustomPrompt
+{
+    fn into_into_dart(self) -> crate::models::ai::CustomPrompt {
         self
     }
 }
@@ -3405,6 +3454,7 @@ impl SseEncode for crate::models::ai::AiConfig {
         <f64>::sse_encode(self.temperature, serializer);
         <String>::sse_encode(self.prompt_template, serializer);
         <String>::sse_encode(self.custom_prompt, serializer);
+        <Vec<crate::models::ai::CustomPrompt>>::sse_encode(self.custom_prompts, serializer);
     }
 }
 
@@ -3531,6 +3581,14 @@ impl SseEncode for crate::api::CharBoxResult {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Vec<crate::pdf::types::CharBox>>::sse_encode(self.boxes, serializer);
         <Option<String>>::sse_encode(self.error, serializer);
+    }
+}
+
+impl SseEncode for crate::models::ai::CustomPrompt {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.name, serializer);
+        <String>::sse_encode(self.text, serializer);
     }
 }
 
@@ -3679,6 +3737,16 @@ impl SseEncode for Vec<crate::pdf::types::CharBox> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::pdf::types::CharBox>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::models::ai::CustomPrompt> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::models::ai::CustomPrompt>::sse_encode(item, serializer);
         }
     }
 }

@@ -115,6 +115,49 @@ void main() {
     expect(repo.saved!.customPrompt, '你是一位诗人');
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('custom prompts can be named, saved and reused', (tester) async {
+    final repo = FakeAiRepo();
+    await tester.pumpWidget(_scope(const SettingsPage(), repo));
+    await tester.pumpAndSettle();
+
+    // Switch to the custom template chip.
+    await tester.scrollUntilVisible(
+      find.text('提示词模板'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+    await tester.tap(find.widgetWithText(ChoiceChip, '自定义'));
+    await tester.pumpAndSettle();
+
+    // Name + text + save as a template.
+    await tester.enterText(
+        find.widgetWithText(TextField, '模板名称（保存后用于选择）'), '诗人');
+    await tester.enterText(
+        find.widgetWithText(TextField, '自定义提示词（作为角色设定，动作指令自动保留）'),
+        '你是一位诗人');
+    await tester.tap(find.text('保存为模板'));
+    await tester.pumpAndSettle();
+    expect(find.text('诗人'), findsOneWidget); // saved list shows it
+
+    // Persist: the named template travels with the config.
+    await tester.scrollUntilVisible(
+      find.text('保存 AI 配置'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, '保存 AI 配置'));
+    await tester.pumpAndSettle();
+
+    expect(repo.saved!.customPrompts, hasLength(1));
+    expect(repo.saved!.customPrompts.single.name, '诗人');
+    expect(repo.saved!.customPrompts.single.text, '你是一位诗人');
+    expect(repo.saved!.customPrompt, '你是一位诗人');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('floating toolbar translate button starts an AI action',
       (tester) async {
     final repo = FakeAiRepo();

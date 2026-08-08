@@ -45,6 +45,7 @@ class FakeAiRepo extends AiRepository {
         temperature: 0.7,
         promptTemplate: 'general',
         customPrompt: '',
+        customPrompts: const [],
       );
 
   @override

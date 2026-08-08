@@ -69,6 +69,11 @@ class AiConfig {
   /// User-written role prompt when [prompt_template] is "custom".
   final String customPrompt;
 
+  /// The user's saved custom prompt templates (设置 → AI 回复 → 自定义):
+  /// named entries persist here; selecting one copies its text into
+  /// [custom_prompt] at save time.
+  final List<CustomPrompt> customPrompts;
+
   const AiConfig({
     required this.baseUrl,
     required this.apiKey,
@@ -88,6 +93,7 @@ class AiConfig {
     required this.temperature,
     required this.promptTemplate,
     required this.customPrompt,
+    required this.customPrompts,
   });
 
   @override
@@ -109,7 +115,8 @@ class AiConfig {
       reasoningEffort.hashCode ^
       temperature.hashCode ^
       promptTemplate.hashCode ^
-      customPrompt.hashCode;
+      customPrompt.hashCode ^
+      customPrompts.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -133,7 +140,8 @@ class AiConfig {
           reasoningEffort == other.reasoningEffort &&
           temperature == other.temperature &&
           promptTemplate == other.promptTemplate &&
-          customPrompt == other.customPrompt;
+          customPrompt == other.customPrompt &&
+          customPrompts == other.customPrompts;
 }
 
 /// A single message in a thread (table: ai_messages).
@@ -231,4 +239,23 @@ class AiThread {
           bookId == other.bookId &&
           createdAt == other.createdAt &&
           updatedAt == other.updatedAt;
+}
+
+/// One user-saved custom prompt template (name + text).
+class CustomPrompt {
+  final String name;
+  final String text;
+
+  const CustomPrompt({required this.name, required this.text});
+
+  @override
+  int get hashCode => name.hashCode ^ text.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CustomPrompt &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          text == other.text;
 }

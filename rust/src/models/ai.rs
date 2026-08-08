@@ -155,6 +155,18 @@ pub struct AiConfig {
     /// User-written role prompt when [prompt_template] is "custom".
     #[serde(default)]
     pub custom_prompt: String,
+    /// The user's saved custom prompt templates (设置 → AI 回复 → 自定义):
+    /// named entries persist here; selecting one copies its text into
+    /// [custom_prompt] at save time.
+    #[serde(default)]
+    pub custom_prompts: Vec<CustomPrompt>,
+}
+
+/// One user-saved custom prompt template (name + text).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CustomPrompt {
+    pub name: String,
+    pub text: String,
 }
 
 fn default_ocr_mode() -> String {
@@ -198,6 +210,7 @@ impl Default for AiConfig {
             temperature: 0.7,
             prompt_template: "general".to_string(),
             custom_prompt: String::new(),
+            custom_prompts: Vec::new(),
         }
     }
 }
@@ -260,6 +273,12 @@ mod tests {
             temperature: 0.3,
             prompt_template: "tech".into(),
             custom_prompt: "自定义角色".into(),
+            custom_prompts: vec![
+                CustomPrompt {
+                    name: "诗人".into(),
+                    text: "你是一位诗人".into(),
+                },
+            ],
         };
         let back: AiConfig = serde_json::from_str(&serde_json::to_string(&cfg).unwrap()).unwrap();
         assert_eq!(back.base_url, cfg.base_url);
@@ -280,6 +299,9 @@ mod tests {
         assert!((back.temperature - 0.3).abs() < 1e-9);
         assert_eq!(back.prompt_template, "tech");
         assert_eq!(back.custom_prompt, "自定义角色");
+        assert_eq!(back.custom_prompts.len(), 1);
+        assert_eq!(back.custom_prompts[0].name, "诗人");
+        assert_eq!(back.custom_prompts[0].text, "你是一位诗人");
 
         // A config saved by an older build (no ocr_mode) still loads: the
         // serde default kicks in.
@@ -292,5 +314,6 @@ mod tests {
         assert_eq!(legacy.reasoning_effort, "medium");
         assert!((legacy.temperature - 0.7).abs() < 1e-9);
         assert_eq!(legacy.prompt_template, "general");
+        assert!(legacy.custom_prompts.is_empty());
     }
 }
