@@ -6,12 +6,12 @@ import 'package:rbwa/features/annotation/providers/char_box_cache.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
 import 'package:rbwa/src/rust/api.dart' show OcrMode;
 
-/// Scan state machine (FEATURES 7.1.2): a page without a text layer shows
-/// the "扫描识别" prompt; scanning runs the engine and lands in success /
+/// Scan state machine per page (FEATURES 7.1.2): pages without a text layer
+/// show the "扫描识别" prompt; scanning runs the engine and lands in success /
 /// empty / error. The engine returns an explicit "模型未安装" error until
 /// scripts/download_ocr_models.sh has run (FEATURES 7.1.1).
 enum ScanPhase {
-  /// Page has a native text layer (or the check is still running): no prompt.
+  /// Page has a native text layer: no prompt.
   hasText,
   /// No text layer: offer 扫描识别.
   prompt,
@@ -27,40 +27,64 @@ enum ScanPhase {
   dismissed,
 }
 
-/// Confidence below which a recognized line is flagged for review (7.1.6).
-const double _lowConfidenceThreshold = 0.8;
-
-class ScanState {
-  const ScanState({
+/// One page's scan lifecycle. States are per page (0-indexed) so every page
+/// in view -- both halves of a spread -- can show its own prompt and be
+/// scanned independently (double-page modes, FEATURES 3.1.2 / 3.1.3).
+class PageScanState {
+  const PageScanState({
     required this.phase,
-    required this.bookId,
-    required this.page, // 1-indexed (viewer space)
     this.error,
     this.lowConfidence = 0,
   });
 
   final ScanPhase phase;
-  final int bookId;
-  final int page;
   final String? error;
 
   /// Lines below the review threshold in the last successful scan (7.1.6).
   final int lowConfidence;
 
-  ScanState copyWith({
+  PageScanState copyWith({
     ScanPhase? phase,
-    int? bookId,
-    int? page,
     String? error,
     bool clearError = false,
     int? lowConfidence,
   }) {
-    return ScanState(
+    return PageScanState(
       phase: phase ?? this.phase,
-      bookId: bookId ?? this.bookId,
-      page: page ?? this.page,
       error: clearError ? null : (error ?? this.error),
       lowConfidence: lowConfidence ?? this.lowConfidence,
+    );
+  }
+}
+
+class ScanState {
+  const ScanState({
+    required this.bookId,
+    required this.currentPage, // 1-indexed (viewer space)
+    this.pages = const {},
+  });
+
+  final int bookId;
+
+  /// The viewer's current page: the auto-detection anchor. Every page the
+  /// reader can see gets checked (current page + its right neighbour, which
+  /// covers both single and double-page modes).
+  final int currentPage;
+
+  /// Per-page scan state, keyed by 0-indexed page.
+  final Map<int, PageScanState> pages;
+
+  PageScanState? of(int page) => pages[page];
+
+  ScanState copyWith({
+    int? bookId,
+    int? currentPage,
+    Map<int, PageScanState>? pages,
+  }) {
+    return ScanState(
+      bookId: bookId ?? this.bookId,
+      currentPage: currentPage ?? this.currentPage,
+      pages: pages ?? this.pages,
     );
   }
 }
@@ -68,57 +92,74 @@ class ScanState {
 class ScanNotifier extends Notifier<ScanState> {
   ReaderRepository get _repo => ref.read(readerRepositoryProvider);
 
-  /// Track the open book + current page: page flips re-check the text layer.
+  /// Track the open book + current page: page flips re-check the text layer
+  /// of the pages in view.
   @override
   ScanState build() {
     final bookId = ref.watch(viewerProvider.select((s) => s.book?.id));
     final page = ref.watch(viewerProvider.select((s) => s.currentPage));
-    final state = ScanState(phase: ScanPhase.hasText, bookId: bookId ?? -1, page: page);
+    final state = ScanState(bookId: bookId ?? -1, currentPage: page);
     if (bookId != null) {
       _check(bookId, page);
     }
     return state;
   }
 
-  /// Whether the current page has a native text layer (7.1.2 detection).
-  Future<void> _check(int bookId, int page) async {
+  /// Whether the pages in view have a native text layer (7.1.2 detection):
+  /// the current page plus its right neighbour, covering both single and
+  /// double-page modes (in a spread the current page is the left half).
+  void _check(int bookId, int page1) {
+    for (final p0 in {page1 - 1, page1}) {
+      _checkPage(bookId, p0);
+    }
+  }
+
+  /// Detect one page (0-indexed). Pages with an established state are left
+  /// untouched: prompts survive page flips until acted on (7.1.2). The
+  /// state read happens after the await so it never runs mid-build.
+  Future<void> _checkPage(int bookId, int page0) async {
     try {
-      final hasText = await _repo.pageHasText(bookId, page - 1);
-      if (state.bookId != bookId || state.page != page) return;
-      state = state.copyWith(
+      final hasText = await _repo.pageHasText(bookId, page0);
+      if (state.of(page0) != null) return; // changed while awaiting
+      _set(page0, PageScanState(
         phase: hasText ? ScanPhase.hasText : ScanPhase.prompt,
-        clearError: true,
-      );
+      ));
     } catch (_) {
       // Check failure: stay quiet (hasText) rather than nag the reader.
     }
   }
 
-  /// Run the full-page scan (7.1.2 / 7.1.8): original resolution -> engine
-  /// -> cache, using the configured model set (7.1.9: high precision or
-  /// fast). On success the char-box cache is invalidated so the OCR text
-  /// layer becomes selectable (7.1.3).
-  Future<void> scan() async {
-    if (state.phase == ScanPhase.scanning) return;
-    state = state.copyWith(phase: ScanPhase.scanning, clearError: true);
+  void _set(int page0, PageScanState pageState) {
+    state = state.copyWith(
+      pages: {...state.pages, page0: pageState},
+    );
+  }
+
+  /// Run the full-page scan of [page0] (7.1.2 / 7.1.8): original resolution
+  /// -> engine -> cache, using the configured model set (7.1.9: high
+  /// precision or fast). On success the char-box cache is invalidated so the
+  /// OCR text layer becomes selectable (7.1.3).
+  Future<void> scan(int page0) async {
+    if (state.of(page0)?.phase == ScanPhase.scanning) return;
+    _set(page0, const PageScanState(phase: ScanPhase.scanning));
     try {
       final mode = await _ocrMode();
-      final res = await _repo.scanPage(state.bookId, state.page - 1, mode);
+      final res = await _repo.scanPage(state.bookId, page0, mode);
       if (res.error != null) {
-        state = state.copyWith(phase: ScanPhase.error, error: res.error);
+        _set(page0, PageScanState(phase: ScanPhase.error, error: res.error));
         return;
       }
       ref.invalidate(charBoxCacheProvider);
-      state = state.copyWith(
+      _set(page0, PageScanState(
         phase: res.lines.isEmpty ? ScanPhase.empty : ScanPhase.success,
         // 7.1.6: count lines below the review threshold so the UI can ask
         // the reader to double-check them.
         lowConfidence: res.lines
             .where((l) => l.confidence < _lowConfidenceThreshold)
             .length,
-      );
+      ));
     } catch (e) {
-      state = state.copyWith(phase: ScanPhase.error, error: e.toString());
+      _set(page0, PageScanState(phase: ScanPhase.error, error: e.toString()));
     }
   }
 
@@ -134,11 +175,18 @@ class ScanNotifier extends Notifier<ScanState> {
     }
   }
 
-  /// Hide the prompt for the current page.
-  void dismiss() => state = state.copyWith(phase: ScanPhase.dismissed);
+  /// Hide the prompt for [page0].
+  void dismiss(int page0) {
+    final p = state.of(page0);
+    if (p == null) return;
+    _set(page0, p.copyWith(phase: ScanPhase.dismissed));
+  }
 }
 
-/// Full-page scan state for the open book (auto-resets on page flips).
+/// Confidence below which a recognized line is flagged for review (7.1.6).
+const double _lowConfidenceThreshold = 0.8;
+
+/// Full-page scan state, per page of the open book.
 final scanStateProvider = NotifierProvider<ScanNotifier, ScanState>(
   ScanNotifier.new,
 );

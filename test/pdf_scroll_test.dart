@@ -10,6 +10,9 @@ import 'package:rbwa/features/reader/widgets/pdf_page_scroll.dart';
 import 'package:rbwa/src/rust/api.dart' as rust;
 import 'package:rbwa/src/rust/models/book.dart';
 import 'package:rbwa/src/rust/models/progress.dart';
+import 'package:rbwa/src/rust/pdf/types.dart' show CharBox;
+
+import 'package:rbwa/features/annotation/providers/selection_provider.dart';
 
 /// Fake repository: renders a real-proportioned A4 RGBA page (400x565)
 /// without touching Rust.
@@ -31,8 +34,17 @@ class _FakeRepo extends ReaderRepository {
   }
 
   @override
-  Future<rust.CharBoxResult> extractText(int bookId, int page) async =>
-      rust.CharBoxResult(boxes: const [], error: null);
+  Future<rust.CharBoxResult> extractText(int bookId, int page) async {
+    // One text line across the page middle (same for every page) so drag
+    // selection works on any page of a spread.
+    return rust.CharBoxResult(
+      boxes: [
+        for (var i = 0; i < 10; i++)
+          CharBox(char: '字', x: 0.1 + i * 0.07, y: 0.4, w: 0.06, h: 0.05),
+      ],
+      error: null,
+    );
+  }
 
   @override
   Future<bool> pageHasText(int bookId, int page) async => false;
@@ -154,7 +166,9 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
       await tester.pump(const Duration(milliseconds: 50));
-      expect(find.text('扫描识别'), findsOneWidget);
+      // Prompt bars appear on every text-less page in view (per-page
+      // state; the viewport cache may pre-build a few pages).
+      expect(find.text('扫描识别'), findsWidgets);
 
       // Structural: the bar is a descendant of the page's Stack (the one
       // hosting the page bitmap), so it scrolls with the page instead of
@@ -178,6 +192,42 @@ void main() {
       final page = tester.getTopLeft(find.byType(RawImage).first);
       expect(barLeft.dx - page.dx, closeTo(8, 1));
       expect(barLeft.dy - page.dy, closeTo(8, 1));
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  testWidgets('double-scroll mode: the right page supports selection',
+      (tester) async {
+    await tester.runAsync(() async {
+      await tester.pumpWidget(_app(ViewMode.doubleScroll));
+      await tester.pump();
+      await Future.delayed(const Duration(milliseconds: 300));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+
+      // The right page (page 1) has its own prompt: both halves of the
+      // spread get the scan offer (regression: only the left/current page
+      // used to).
+      expect(find.text('扫描识别'), findsWidgets);
+
+      // Drag along the text line on the RIGHT page: the selection must be
+      // created for page 1.
+      final right = tester.getTopLeft(find.byType(RawImage).at(1));
+      final rightSize = tester.getSize(find.byType(RawImage).at(1));
+      final from = right + Offset(rightSize.width * 0.2, rightSize.height * 0.42);
+      final to = right + Offset(rightSize.width * 0.6, rightSize.height * 0.42);
+      final gesture = await tester.startGesture(from);
+      await gesture.moveTo(to);
+      await gesture.up();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      final container = ProviderScope.containerOf(
+          tester.element(find.byType(PdfPageScroll)));
+      final sel = container.read(selectionProvider).selection;
+      expect(sel, isNotNull, reason: 'right page drag should select');
+      expect(sel!.page, 1);
       expect(tester.takeException(), isNull);
     });
   });

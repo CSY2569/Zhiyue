@@ -4,9 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rbwa/features/reader/providers/scan_provider.dart';
 
 /// Scan prompt card (FEATURES 7.1.2 / FLUTTER_UI_MIGRATION §6.5): a slim bar
-/// anchored to the page's top-left corner (each page hosts one instance;
-/// only the current page renders). Pages with a native text layer render
-/// nothing; otherwise it walks the state machine (prompt -> scanning ->
+/// anchored to the page's top-left corner. Each page hosts one instance and
+/// renders its own scan state (per-page, so both halves of a spread get
+/// their prompt and can be scanned independently); pages with a native text
+/// layer render nothing. Walks the state machine (prompt -> scanning ->
 /// success / empty / error).
 class ScanOverlay extends ConsumerWidget {
   const ScanOverlay({super.key, required this.page});
@@ -17,15 +18,16 @@ class ScanOverlay extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scan = ref.watch(scanStateProvider);
-    // The scan state tracks the current page only (1-indexed viewer space):
-    // this instance renders just for its own page, so the bar follows the
-    // page as it scrolls instead of floating over the viewport.
-    if (scan.page != page + 1) return const SizedBox.shrink();
+    final state = scan.of(page);
+    if (state == null || state.phase == ScanPhase.hasText) {
+      return const SizedBox.shrink();
+    }
     final notifier = ref.read(scanStateProvider.notifier);
     final theme = Theme.of(context);
 
-    switch (scan.phase) {
+    switch (state.phase) {
       case ScanPhase.hasText:
+        return const SizedBox.shrink();
       case ScanPhase.dismissed:
         return const SizedBox.shrink();
       case ScanPhase.prompt:
@@ -35,14 +37,14 @@ class ScanOverlay extends ConsumerWidget {
           text: '本页没有文本层，可整页扫描识别后选中 / 标记',
           actions: [
             TextButton(
-              onPressed: notifier.scan,
+              onPressed: () => notifier.scan(page),
               child: const Text('扫描识别'),
             ),
             IconButton(
               icon: const Icon(Icons.close, size: 16),
               tooltip: '关闭提示',
               visualDensity: VisualDensity.compact,
-              onPressed: notifier.dismiss,
+              onPressed: () => notifier.dismiss(page),
             ),
           ],
         );
@@ -63,16 +65,16 @@ class ScanOverlay extends ConsumerWidget {
         return _bar(
           theme,
           icon: Icons.check_circle_outline,
-          text: scan.lowConfidence > 0
+          text: state.lowConfidence > 0
               ? '识别完成，本页文字现在可以选中和标记了。'
-                  '${scan.lowConfidence} 行置信度较低，建议对照原文复核'
+                  '${state.lowConfidence} 行置信度较低，建议对照原文复核'
               : '识别完成，本页文字现在可以选中和标记了',
           actions: [
             IconButton(
               icon: const Icon(Icons.close, size: 16),
               tooltip: '关闭提示',
               visualDensity: VisualDensity.compact,
-              onPressed: notifier.dismiss,
+              onPressed: () => notifier.dismiss(page),
             ),
           ],
         );
@@ -86,7 +88,7 @@ class ScanOverlay extends ConsumerWidget {
               icon: const Icon(Icons.close, size: 16),
               tooltip: '关闭提示',
               visualDensity: VisualDensity.compact,
-              onPressed: notifier.dismiss,
+              onPressed: () => notifier.dismiss(page),
             ),
           ],
         );
@@ -94,13 +96,13 @@ class ScanOverlay extends ConsumerWidget {
         return _bar(
           theme,
           icon: Icons.error_outline,
-          text: scan.error ?? '扫描失败',
+          text: state.error ?? '扫描失败',
           actions: [
             IconButton(
               icon: const Icon(Icons.close, size: 16),
               tooltip: '关闭提示',
               visualDensity: VisualDensity.compact,
-              onPressed: notifier.dismiss,
+              onPressed: () => notifier.dismiss(page),
             ),
           ],
         );
