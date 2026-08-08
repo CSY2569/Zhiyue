@@ -334,6 +334,22 @@ void main() {
       notifier.toggleTool(MarkTool.brush);
       expect(container.read(markToolProvider).tool, isNull);
     });
+
+    test('selecting the armed tool keeps it armed (no accidental exit)', () {
+      final container = _container(_FakeReaderRepo());
+      final notifier = container.read(markToolProvider.notifier);
+
+      // The tool bar buttons use setTool (mutually exclusive selection);
+      // re-tapping the active tool must NOT exit the mark mode.
+      notifier.setTool(MarkTool.select);
+      notifier.setTool(MarkTool.select);
+      expect(container.read(markToolProvider).tool, MarkTool.select);
+      notifier.setTool(MarkTool.brush);
+      expect(container.read(markToolProvider).tool, MarkTool.brush);
+      // Exit is an explicit act.
+      notifier.setTool(null);
+      expect(container.read(markToolProvider).tool, isNull);
+    });
   });
 
   group('ImageMarkLayer 交互', () {

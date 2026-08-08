@@ -294,6 +294,10 @@ class _ImageMarkLayerState extends ConsumerState<ImageMarkLayer> {
             stampFile: toolState.stampFile,
             selectedId: _selectedId,
             stampImage: (path) => _stampCache[path],
+            previewColor:
+                parseHexColor(toolState.color) ?? const Color(0xFFE53935),
+            previewStrokeWidth: toolState.strokeWidth,
+            previewFill: toolState.fill,
           ),
         ),
       );
@@ -692,6 +696,9 @@ class _MarkPainter extends CustomPainter {
     required this.stampFile,
     required this.selectedId,
     required this.stampImage,
+    required this.previewColor,
+    required this.previewStrokeWidth,
+    required this.previewFill,
   });
 
   final List<ImageMark> marks;
@@ -703,6 +710,12 @@ class _MarkPainter extends CustomPainter {
   final String? stampFile;
   final int? selectedId;
   final ui.Image? Function(String path) stampImage;
+
+  /// Armed tool's style, used for the live drawing preview (FEATURES 5.5:
+  /// the preview must match the chosen color / thickness immediately).
+  final Color previewColor;
+  final double previewStrokeWidth;
+  final bool previewFill;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -728,8 +741,8 @@ class _MarkPainter extends CustomPainter {
       canvas.drawPath(
         path,
         Paint()
-          ..color = const Color(0xFFE53935)
-          ..strokeWidth = 3
+          ..color = previewColor
+          ..strokeWidth = previewStrokeWidth
           ..strokeCap = StrokeCap.round
           ..style = PaintingStyle.stroke,
       );
@@ -742,9 +755,9 @@ class _MarkPainter extends CustomPainter {
         Offset(shapeCurrent!.dx * size.width, shapeCurrent!.dy * size.height),
       );
       final paint = Paint()
-        ..color = const Color(0xFFE53935)
-        ..strokeWidth = 3
-        ..style = PaintingStyle.stroke;
+        ..color = previewColor
+        ..strokeWidth = previewStrokeWidth
+        ..style = previewFill ? PaintingStyle.fill : PaintingStyle.stroke;
       if (shapeType == 'ellipse') {
         canvas.drawOval(rect, paint);
       } else if (shapeType == 'arrow') {
@@ -764,5 +777,8 @@ class _MarkPainter extends CustomPainter {
       old.tool != tool ||
       old.shapeType != shapeType ||
       old.stampFile != stampFile ||
-      old.selectedId != selectedId;
+      old.selectedId != selectedId ||
+      old.previewColor != previewColor ||
+      old.previewStrokeWidth != previewStrokeWidth ||
+      old.previewFill != previewFill;
 }

@@ -47,13 +47,13 @@ class MarkToolBar extends ConsumerWidget {
               icon: Icons.near_me_outlined,
               tooltip: '选择/移动',
               active: tool == MarkTool.select,
-              onTap: () => notifier.toggleTool(MarkTool.select),
+              onTap: () => notifier.setTool(MarkTool.select),
             ),
             _Tool(
               icon: Icons.brush_outlined,
               tooltip: '画笔',
               active: tool == MarkTool.brush,
-              onTap: () => notifier.toggleTool(MarkTool.brush),
+              onTap: () => notifier.setTool(MarkTool.brush),
             ),
             // Shape tool: a popup also picks the shape type (5.4).
             _ShapeTool(active: tool == MarkTool.shape),
@@ -61,7 +61,7 @@ class MarkToolBar extends ConsumerWidget {
               icon: Icons.sticky_note_2_outlined,
               tooltip: '便签',
               active: tool == MarkTool.sticky,
-              onTap: () => notifier.toggleTool(MarkTool.sticky),
+              onTap: () => notifier.setTool(MarkTool.sticky),
             ),
             _StampTool(active: tool == MarkTool.stamp),
             const _Divider(),
@@ -86,7 +86,7 @@ class MarkToolBar extends ConsumerWidget {
                   onTap: () => notifier.setColor(c),
                 ),
               SizedBox(
-                width: 60,
+                width: 120,
                 child: Slider(
                   value: toolState.strokeWidth.clamp(1, 12),
                   min: 1,
@@ -96,9 +96,9 @@ class MarkToolBar extends ConsumerWidget {
               ),
               _Tool(
                 icon: toolState.fill
-                    ? Icons.format_color_fill
-                    : Icons.crop_outlined,
-                tooltip: toolState.fill ? '填充开' : '填充关',
+                    ? Icons.circle
+                    : Icons.circle_outlined,
+                tooltip: toolState.fill ? '实心填充开' : '空心（无填充）',
                 active: toolState.fill,
                 onTap: notifier.toggleFill,
               ),
