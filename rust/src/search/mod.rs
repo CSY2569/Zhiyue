@@ -71,6 +71,13 @@ pub fn build_book_index(book_id: i64) {
                 tracing::info!(id = book_id, pages, "search index built");
             }
             Err(e) => {
+                // Terminal failure (e.g. a corrupt PDF): record it so the
+                // build is not retried on every library visit. A vanished
+                // book is not a failure worth remembering.
+                if !matches!(e, AppError::NotFound(_)) {
+                    let conn = db::db();
+                    let _ = search_repo::mark_failed(&conn, book_id);
+                }
                 tracing::warn!(id = book_id, error = %e, "search index build failed");
             }
         }

@@ -22,6 +22,7 @@ pub struct SearchHit {
 }
 
 const READY_KEY: &str = "search_index_ready_";
+const FAILED_KEY: &str = "search_index_failed_";
 
 /// Upsert one page into the index. [original] is the raw page text
 /// (snippets / hit location); [segmented] the jieba-segmented form the FTS
@@ -155,11 +156,37 @@ pub fn mark_ready(conn: &Connection, book_id: i64, pages: i64) -> AppResult<()> 
     Ok(())
 }
 
-/// Drop the ready marker (book deletion).
-pub fn clear_ready(conn: &Connection, book_id: i64) -> AppResult<()> {
+/// Mark the book's index build as failed (unreadable document, e.g. a
+/// corrupt PDF): a terminal state so ensure_book_index stops retrying on
+/// every library visit. Cleared by re-importing the book.
+pub fn mark_failed(conn: &Connection, book_id: i64) -> AppResult<()> {
     conn.execute(
-        "DELETE FROM settings WHERE key = ?1",
-        rusqlite::params![format!("{READY_KEY}{book_id}")],
+        "INSERT INTO settings (key, value) VALUES (?1, ?2) \
+         ON CONFLICT (key) DO UPDATE SET value = excluded.value, \
+             updated_at = datetime('now')",
+        rusqlite::params![format!("{FAILED_KEY}{book_id}"), "{}"],
+    )?;
+    Ok(())
+}
+
+/// Whether a previous index build failed for this book (unreadable file).
+pub fn is_failed(conn: &Connection, book_id: i64) -> bool {
+    conn.query_row(
+        "SELECT 1 FROM settings WHERE key = ?1",
+        rusqlite::params![format!("{FAILED_KEY}{book_id}")],
+        |_| Ok(()),
+    )
+    .is_ok()
+}
+
+/// Drop every search marker of the book (deletion / re-import reset).
+pub fn clear_markers(conn: &Connection, book_id: i64) -> AppResult<()> {
+    conn.execute(
+        "DELETE FROM settings WHERE key IN (?1, ?2)",
+        rusqlite::params![
+            format!("{READY_KEY}{book_id}"),
+            format!("{FAILED_KEY}{book_id}")
+        ],
     )?;
     Ok(())
 }
@@ -286,13 +313,21 @@ mod tests {
     }
 
     #[test]
-    fn ready_marker_roundtrip() {
+    fn ready_and_failed_markers_roundtrip() {
         let conn = mem_db();
         assert!(!is_ready(&conn, 9));
+        assert!(!is_failed(&conn, 9));
         mark_ready(&conn, 9, 12).unwrap();
         assert!(is_ready(&conn, 9));
-        clear_ready(&conn, 9).unwrap();
+        clear_markers(&conn, 9).unwrap();
         assert!(!is_ready(&conn, 9));
+
+        mark_failed(&conn, 9).unwrap();
+        assert!(is_failed(&conn, 9));
+        assert!(!is_ready(&conn, 9));
+        // Re-import (clear_markers) resets both states.
+        clear_markers(&conn, 9).unwrap();
+        assert!(!is_failed(&conn, 9));
         assert!(!has_rows(&conn, 9));
     }
 }

@@ -431,20 +431,23 @@ Future<SearchResult> searchBooks({
 
 /// Ensure [book_id]'s pages are indexed (3.5.1 pre-build): triggers a
 /// background build when the index is missing (builds run on an independent
-/// pdfium document, so they never disturb the reader). Returns nothing --
-/// poll [search_index_status] for progress.
+/// pdfium document, so they never disturb the reader). Books whose build
+/// failed (unreadable file) are not retried until re-imported. Returns
+/// nothing -- poll [search_index_status] for progress.
 Future<void> ensureBookIndex({required PlatformInt64 bookId}) =>
     RustLib.instance.api.crateApiEnsureBookIndex(bookId: bookId);
 
 /// Index status of a book: "missing" (nothing indexed) | "building"
 /// (background build in flight) | "ready" (fully built or has scanned
-/// pages). Drives the "索引中" badge and the search page footer.
+/// pages) | "failed" (build failed -- unreadable document). Drives the
+/// "索引中" badge and the search page footer.
 Future<String> searchIndexStatus({required PlatformInt64 bookId}) =>
     RustLib.instance.api.crateApiSearchIndexStatus(bookId: bookId);
 
 /// Books whose pages are not indexed yet (PDFs only -- image books never
-/// index). The library page triggers [ensure_book_index] for these on app
-/// start, so legacy imports heal in the background.
+/// index; failed builds are excluded until re-imported). The library page
+/// triggers [ensure_book_index] for these on app start, so legacy imports
+/// heal in the background.
 Future<Int64List> listUnindexedBooks() =>
     RustLib.instance.api.crateApiListUnindexedBooks();
 

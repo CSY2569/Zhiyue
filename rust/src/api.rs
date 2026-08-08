@@ -320,7 +320,7 @@ pub fn delete_book(id: i64) -> i32 {
     // the search index rows). The ready marker is removed explicitly.
     let (stored_path, cover_path) = {
         let conn = db::db();
-        let _ = search_repo::clear_ready(&conn, id);
+        let _ = search_repo::clear_markers(&conn, id);
         match book_repo::get(&conn, id) {
             Ok(Some(book)) => {
                 let removed = book_repo::delete(&conn, id).unwrap_or(false);
@@ -1504,11 +1504,15 @@ pub fn search_books(query: String, limit: Option<i64>) -> SearchResult {
 
 /// Ensure [book_id]'s pages are indexed (3.5.1 pre-build): triggers a
 /// background build when the index is missing (builds run on an independent
-/// pdfium document, so they never disturb the reader). Returns nothing --
-/// poll [search_index_status] for progress.
+/// pdfium document, so they never disturb the reader). Books whose build
+/// failed (unreadable file) are not retried until re-imported. Returns
+/// nothing -- poll [search_index_status] for progress.
 pub async fn ensure_book_index(book_id: i64) {
     let conn = db::db();
-    if search_repo::is_ready(&conn, book_id) || search_repo::has_rows(&conn, book_id) {
+    if search_repo::is_ready(&conn, book_id)
+        || search_repo::has_rows(&conn, book_id)
+        || search_repo::is_failed(&conn, book_id)
+    {
         return;
     }
     drop(conn);
@@ -1517,7 +1521,8 @@ pub async fn ensure_book_index(book_id: i64) {
 
 /// Index status of a book: "missing" (nothing indexed) | "building"
 /// (background build in flight) | "ready" (fully built or has scanned
-/// pages). Drives the "索引中" badge and the search page footer.
+/// pages) | "failed" (build failed -- unreadable document). Drives the
+/// "索引中" badge and the search page footer.
 pub fn search_index_status(book_id: i64) -> String {
     let conn = db::db();
     if crate::search::is_building(book_id) {
@@ -1526,12 +1531,16 @@ pub fn search_index_status(book_id: i64) -> String {
     if search_repo::is_ready(&conn, book_id) || search_repo::has_rows(&conn, book_id) {
         return "ready".to_string();
     }
+    if search_repo::is_failed(&conn, book_id) {
+        return "failed".to_string();
+    }
     "missing".to_string()
 }
 
 /// Books whose pages are not indexed yet (PDFs only -- image books never
-/// index). The library page triggers [ensure_book_index] for these on app
-/// start, so legacy imports heal in the background.
+/// index; failed builds are excluded until re-imported). The library page
+/// triggers [ensure_book_index] for these on app start, so legacy imports
+/// heal in the background.
 pub fn list_unindexed_books() -> Vec<i64> {
     let conn = db::db();
     match book_repo::list(&conn) {
@@ -1542,6 +1551,7 @@ pub fn list_unindexed_books() -> Vec<i64> {
                     && !crate::search::is_building(b.id)
                     && !search_repo::is_ready(&conn, b.id)
                     && !search_repo::has_rows(&conn, b.id)
+                    && !search_repo::is_failed(&conn, b.id)
             })
             .map(|b| b.id)
             .collect(),
