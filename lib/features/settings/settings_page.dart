@@ -299,24 +299,27 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       runSpacing: 4,
                       children: [
                         for (final t in _templateOptions)
-                          _templateChip(
-                            t.label,
-                            _promptTemplate == t.id,
-                            () => _selectTemplate(t.id),
+                          ChoiceChip(
+                            label: Text(t.label),
+                            selected: _promptTemplate == t.id,
+                            visualDensity: VisualDensity.compact,
+                            onSelected: (_) => _selectTemplate(t.id),
                           ),
                         // Saved custom templates appear here too: tap to
                         // use; deleting them removes the chip at once.
                         for (final t in _savedTemplates)
-                          _templateChip(
-                            t.name,
-                            _promptTemplate == 'custom' &&
+                          ChoiceChip(
+                            label: Text(t.name),
+                            selected: _promptTemplate == 'custom' &&
                                 _customPrompt.text.trim() == t.text,
-                            () => _useSavedTemplate(t),
+                            visualDensity: VisualDensity.compact,
+                            onSelected: (_) => _useSavedTemplate(t),
                           ),
                       ],
                     ),
                   ),
                   const SizedBox(width: 8),
+                  // The "+" entry: animation-free, pinned to the far right.
                   Tooltip(
                     message: '自定义提示词',
                     child: _templateChip(

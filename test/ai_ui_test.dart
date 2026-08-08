@@ -80,7 +80,7 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pump();
-    await tester.tap(find.text('学术论文'));
+    await tester.tap(find.widgetWithText(ChoiceChip, '学术论文'));
     await tester.pumpAndSettle();
     expect(find.text('默认学术文本'), findsOneWidget);
 
@@ -184,10 +184,10 @@ void main() {
     // The saved list shows the named template (its delete button), and
     // the template picker gains a chip for it.
     expect(find.byTooltip('删除模板'), findsOneWidget);
-    expect(find.descendant(of: find.byType(Wrap), matching: find.text('诗人')), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, '诗人'), findsOneWidget);
 
     // Tapping the saved chip activates it (custom section fills).
-    await tester.tap(find.descendant(of: find.byType(Wrap), matching: find.text('诗人')));
+    await tester.tap(find.widgetWithText(ChoiceChip, '诗人'));
     await tester.pumpAndSettle();
     expect(
       find.widgetWithText(TextField, '自定义提示词（作为角色设定，动作指令自动保留）'),
@@ -219,7 +219,7 @@ void main() {
     await tester.tap(find.byTooltip('删除模板'));
     await tester.pumpAndSettle();
     expect(find.byTooltip('删除模板'), findsNothing);
-    expect(find.descendant(of: find.byType(Wrap), matching: find.text('诗人')), findsNothing);
+    expect(find.widgetWithText(ChoiceChip, '诗人'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
