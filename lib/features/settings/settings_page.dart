@@ -31,6 +31,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _webSearch = false;
   bool _searchBuiltin = false;
   String _ocrMode = 'high_precision';
+  bool _includeBookHistory = true;
+  bool _enableReasoning = false;
+  String _reasoningEffort = 'medium';
+  double _temperature = 0.7;
+  String _promptTemplate = 'general';
+  final _customPrompt = TextEditingController();
   bool _loaded = false;
   bool _saving = false;
 
@@ -45,6 +51,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _targetLang.dispose();
     _searchBaseUrl.dispose();
     _searchApiKey.dispose();
+    _customPrompt.dispose();
     super.dispose();
   }
 
@@ -64,6 +71,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _searchBuiltin = config.searchUseBuiltin;
     _webSearch = config.webSearchEnabled;
     _ocrMode = config.ocrMode == 'fast' ? 'fast' : 'high_precision';
+    _includeBookHistory = config.includeBookHistory;
+    _enableReasoning = config.enableReasoning;
+    _reasoningEffort = const {'low', 'medium', 'high'}.contains(config.reasoningEffort)
+        ? config.reasoningEffort
+        : 'medium';
+    _temperature = config.temperature.clamp(0.0, 2.0);
+    _promptTemplate = config.promptTemplate;
+    _customPrompt.text = config.customPrompt;
   }
 
   Future<void> _save() async {
@@ -90,6 +105,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       searchUseBuiltin: _searchBuiltin,
       webSearchEnabled: _webSearch,
       ocrMode: _ocrMode,
+      includeBookHistory: _includeBookHistory,
+      enableReasoning: _enableReasoning,
+      reasoningEffort: _reasoningEffort,
+      temperature: _temperature,
+      promptTemplate: _promptTemplate,
+      customPrompt: _customPrompt.text.trim(),
     );
     final ok = await ref.read(aiConfigProvider.notifier).save(config);
     if (!mounted) return;
@@ -201,6 +222,84 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             obscure: true,
           ),
           const Divider(),
+          _SectionTitle('AI 回复', theme),
+          SwitchListTile(
+            title: const Text('携带书籍对话上下文'),
+            subtitle: const Text('每次回复携带本书与 AI 的全部对话历史（追问从开始到本次）。关闭后每轮独立回答'),
+            value: _includeBookHistory,
+            onChanged: (v) => setState(() => _includeBookHistory = v),
+          ),
+          SwitchListTile(
+            title: const Text('思考模式'),
+            subtitle: const Text('开启后按官方 API 发送 reasoning_effort，需使用支持思考的模型（如 o 系列 / GPT-5 / DeepSeek-R1）'),
+            value: _enableReasoning,
+            onChanged: (v) => setState(() => _enableReasoning = v),
+          ),
+          if (_enableReasoning)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('思考等级'),
+              trailing: SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'low', label: Text('低')),
+                  ButtonSegment(value: 'medium', label: Text('中')),
+                  ButtonSegment(value: 'high', label: Text('高')),
+                ],
+                selected: {_reasoningEffort},
+                showSelectedIcon: false,
+                onSelectionChanged: (s) =>
+                    setState(() => _reasoningEffort = s.first),
+              ),
+            ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('温度'),
+            subtitle: Text('随机性（0.0 确定 – 2.0 发散）：${_temperature.toStringAsFixed(1)}'),
+            trailing: SizedBox(
+              width: 200,
+              child: Slider(
+                value: _temperature,
+                min: 0,
+                max: 2,
+                divisions: 20,
+                label: _temperature.toStringAsFixed(1),
+                onChanged: (v) => setState(() => _temperature = v),
+              ),
+            ),
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('提示词模板'),
+            subtitle: Text(_templateName(_promptTemplate)),
+            trailing: DropdownButton<String>(
+              value: _promptTemplate,
+              underline: const SizedBox.shrink(),
+              items: const [
+                DropdownMenuItem(value: 'general', child: Text('通用')),
+                DropdownMenuItem(value: 'academic', child: Text('学术论文')),
+                DropdownMenuItem(value: 'novel', child: Text('小说文学')),
+                DropdownMenuItem(value: 'tech', child: Text('技术文档')),
+                DropdownMenuItem(value: 'language', child: Text('外语学习')),
+                DropdownMenuItem(value: 'custom', child: Text('自定义')),
+              ],
+              onChanged: (v) =>
+                  v == null ? null : setState(() => _promptTemplate = v),
+            ),
+          ),
+          if (_promptTemplate == 'custom')
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: TextField(
+                controller: _customPrompt,
+                minLines: 3,
+                maxLines: 6,
+                decoration: const InputDecoration(
+                  labelText: '自定义提示词（作为角色设定，动作指令自动保留）',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+          const Divider(),
           _SectionTitle('OCR 整页扫描（本地离线，FEATURES 7.1.9）', theme),
           ListTile(
             contentPadding: EdgeInsets.zero,
@@ -238,6 +337,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ],
       ),
     );
+  }
+
+  /// Display name of the prompt template id (unknown ids -> 通用).
+  String _templateName(String id) {
+    switch (id) {
+      case 'academic':
+        return '学术论文';
+      case 'novel':
+        return '小说文学';
+      case 'tech':
+        return '技术文档';
+      case 'language':
+        return '外语学习';
+      case 'custom':
+        return '自定义（见下方输入框）';
+      default:
+        return '通用';
+    }
   }
 }
 

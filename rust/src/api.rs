@@ -1067,9 +1067,10 @@ fn ai_client() -> ai::StubAiClient {
 
 /// System prompt for a text action (FEATURES 6.2). For Search with real web
 /// search enabled this runs the Bocha query first (async), so the prompt
-/// construction is async too.
+/// construction is async too. The configured role template (设置 → AI 回复)
+/// is prepended to the action instructions.
 async fn system_prompt_for(action: AiActionType, config: &AiConfig, text: &str) -> String {
-    match action {
+    let base = match action {
         AiActionType::Translate => ai::prompts::translate_system(&config.translate_target_lang),
         AiActionType::Explain => ai::prompts::explain_system(),
         AiActionType::Search => search_system_prompt(config, text).await,
@@ -1078,7 +1079,8 @@ async fn system_prompt_for(action: AiActionType, config: &AiConfig, text: &str) 
         // screenshot data URL, see stream_vision_png); the enum value is
         // kept for thread compatibility.
         AiActionType::Vision => ai::prompts::chat_system(),
-    }
+    };
+    ai::prompts::system_prompt(&config.prompt_template, &config.custom_prompt, &base)
 }
 
 /// Search system prompt with real results (FEATURES 6.2.3): enabled + key ->
@@ -1144,8 +1146,16 @@ pub async fn stream_chat(
         image_path: None,
         created_at: String::new(),
     };
-    let mut messages = history;
-    messages.insert(0, system);
+    // 设置 → AI 回复「携带书籍全部上下文」: on by default (the thread's
+    // turns from the first question; 追问 keeps sending the full history).
+    // Off: every turn is answered independently (no history).
+    let messages = if config.include_book_history {
+        let mut messages = history;
+        messages.insert(0, system);
+        messages
+    } else {
+        vec![system]
+    };
     match client.stream_chat(&config, &messages, &text).await {
         Ok(stream) => drain_stream(stream, sink).await,
         Err(e) => {
@@ -1212,29 +1222,47 @@ async fn builtin_search_stream(
     history: &[AiMessage],
     sink: StreamSink<String>,
 ) {
-    let mut messages = history.to_vec();
+    // The history carries the thread's prior turns (设置 → AI 回复:
+    // include_book_history off = independent turns); the role template is
+    // prepended to the built-in search system prompt.
+    let mut messages = if config.include_book_history {
+        history.to_vec()
+    } else {
+        Vec::new()
+    };
     let system = AiMessage {
         id: -1,
         thread_id: -1,
         role: AiRole::System,
-        content: ai::prompts::search_system(true),
+        content: ai::prompts::system_prompt(
+            &config.prompt_template,
+            &config.custom_prompt,
+            &ai::prompts::search_system(true),
+        ),
         image_path: None,
         created_at: String::new(),
     };
     messages.insert(0, system);
+    let extras = ai::RequestExtras::from_config(config);
     match ai::web_search_builtin(
         &config.base_url,
         &config.api_key,
         &config.text_model,
         &messages,
         query,
+        &extras,
     )
     .await
     {
         Ok(stream) => drain_stream(stream, sink).await,
         Err(e) => {
-            // Fallback: answer from knowledge, noting the search failure.
-            messages[0].content = ai::prompts::search_failed_system(&e.to_string());
+            // Fallback: answer from knowledge, noting the search failure
+            // (the role template stays prepended).
+            messages[0].content = ai::prompts::system_prompt(
+                &config.prompt_template,
+                &config.custom_prompt,
+                &ai::prompts::search_failed_system(&e.to_string()),
+            );
             let client = ai_client();
             match client.stream_chat(config, &messages, query).await {
                 Ok(stream) => drain_stream(stream, sink).await,

@@ -57,14 +57,44 @@ impl OpenAiClient {
     }
 }
 
-/// Minimal request body: model + messages + stream only, so no provider
-/// rejects an unexpected field.
-fn build_request(model: &str, messages: Value) -> Value {
-    json!({
+/// Optional sampling / reasoning controls for text requests (设置 → AI
+/// 回复). Explicit struct so vision requests stay on the minimal body
+/// (providers reject unknown fields -- the `detail` lesson).
+#[derive(Debug, Clone, Default)]
+pub(crate) struct RequestExtras {
+    pub temperature: Option<f64>,
+    pub reasoning_effort: Option<String>,
+}
+
+impl RequestExtras {
+    /// Text requests: the configured temperature always applies; the
+    /// reasoning effort only when thinking mode is enabled (the official
+    /// API field is sent for reasoning models only).
+    pub(crate) fn from_config(config: &AiConfig) -> Self {
+        Self {
+            temperature: Some(config.temperature.clamp(0.0, 2.0)),
+            reasoning_effort: config
+                .enable_reasoning
+                .then(|| config.reasoning_effort.clone()),
+        }
+    }
+}
+
+/// Request body: model + messages + stream, plus the configured
+/// temperature / reasoning controls. Unknown ids keep the minimal shape.
+fn build_request(model: &str, messages: Value, extras: &RequestExtras) -> Value {
+    let mut body = json!({
         "model": model,
         "messages": messages,
         "stream": true,
-    })
+    });
+    if let Some(t) = extras.temperature {
+        body["temperature"] = json!(t);
+    }
+    if let Some(e) = &extras.reasoning_effort {
+        body["reasoning_effort"] = json!(e);
+    }
+    body
 }
 
 /// Convert history (system prompt first, then prior turns) + the new user
@@ -117,11 +147,12 @@ async fn stream_request(
     api_key: &str,
     model: &str,
     messages: Value,
+    extras: &RequestExtras,
 ) -> AppResult<ChunkStream> {
     let resp = http
         .post(&url)
         .bearer_auth(api_key)
-        .json(&build_request(model, messages))
+        .json(&build_request(model, messages, extras))
         .send()
         .await?;
     if !resp.status().is_success() {
@@ -238,7 +269,12 @@ fn responses_endpoint(base_url: &str) -> String {
 /// becomes `instructions` (the API's system slot), the rest of the history is
 /// converted to input items, and the `web_search` tool is forced so the
 /// server executes the search and answers from the results.
-fn responses_body(model: &str, history: &[AiMessage], user_input: &str) -> Value {
+fn responses_body(
+    model: &str,
+    history: &[AiMessage],
+    user_input: &str,
+    extras: &RequestExtras,
+) -> Value {
     let mut instructions = String::new();
     let mut items: Vec<Value> = Vec::new();
     for m in history {
@@ -258,14 +294,22 @@ fn responses_body(model: &str, history: &[AiMessage], user_input: &str) -> Value
         }
     }
     items.push(json!({"role": "user", "content": user_input}));
-    json!({
+    let mut body = json!({
         "model": model,
         "instructions": instructions,
         "input": items,
         "tools": [{"type": "web_search"}],
         "tool_choice": {"type": "web_search"},
         "stream": true,
-    })
+    });
+    if let Some(t) = extras.temperature {
+        body["temperature"] = json!(t);
+    }
+    if let Some(e) = &extras.reasoning_effort {
+        // Official Responses API reasoning control (o-series models).
+        body["reasoning"] = json!({"effort": e});
+    }
+    body
 }
 
 /// Run a streaming Responses API request (built-in web search). The protocol
@@ -361,16 +405,17 @@ fn parse_responses_event(event: &[u8]) -> Option<AppResult<String>> {
 /// the `web_search` tool forced, so the provider runs the search server-side
 /// and the model answers with citations. `history` already carries the
 /// search system prompt as its first (system) message.
-pub async fn web_search_builtin(
+pub(crate) async fn web_search_builtin(
     base_url: &str,
     api_key: &str,
     model: &str,
     history: &[AiMessage],
     query: &str,
+    extras: &RequestExtras,
 ) -> AppResult<ChunkStream> {
     let http = OpenAiClient::http_client()?;
     let url = responses_endpoint(base_url);
-    let body = responses_body(model, history, query);
+    let body = responses_body(model, history, query, extras);
     responses_stream_request(&http, url, api_key, body).await
 }
 
@@ -431,7 +476,9 @@ impl AiClient for OpenAiClient {
             let http = Self::http_client()?;
             let messages = text_messages(history, user_input);
             let url = Self::endpoint(&config.base_url);
-            stream_request(&http, url, &config.api_key, &config.text_model, messages).await
+            let extras = RequestExtras::from_config(config);
+            stream_request(&http, url, &config.api_key, &config.text_model, messages, &extras)
+                .await
         }
     }
 
@@ -450,7 +497,9 @@ impl AiClient for OpenAiClient {
             let api_key = config.vision_api_key.as_deref().unwrap_or(&config.api_key);
             let messages = vision_messages(prompt, png);
             let url = Self::endpoint(base_url);
-            stream_request(&http, url, api_key, vision_model(config), messages).await
+            // Vision stays on the minimal body: no temperature / reasoning.
+            let extras = RequestExtras::default();
+            stream_request(&http, url, api_key, vision_model(config), messages, &extras).await
         }
     }
 }
@@ -550,6 +599,69 @@ mod tests {
     }
 
     #[test]
+
+    #[test]
+    fn build_request_carries_temperature_and_reasoning_when_configured() {
+        // Both configured: temperature + reasoning_effort (o-series field).
+        let body = build_request(
+            "m",
+            json!([{"role": "user", "content": "hi"}]),
+            &RequestExtras {
+                temperature: Some(0.3),
+                reasoning_effort: Some("high".into()),
+            },
+        );
+        assert_eq!(body["temperature"], 0.3);
+        assert_eq!(body["reasoning_effort"], "high");
+
+        // Reasoning off: the field is absent (minimal-body principle),
+        // temperature still applies (default 0.7).
+        let minimal = build_request(
+            "m",
+            json!([]),
+            &RequestExtras {
+                temperature: Some(0.7),
+                reasoning_effort: None,
+            },
+        );
+        assert!(minimal.get("reasoning_effort").is_none());
+        assert_eq!(minimal["temperature"], 0.7);
+    }
+
+    #[test]
+    fn responses_body_carries_reasoning_object_when_configured() {
+        let body = responses_body(
+            "m",
+            &[],
+            "q",
+            &RequestExtras {
+                temperature: None,
+                reasoning_effort: Some("low".into()),
+            },
+        );
+        assert_eq!(body["reasoning"]["effort"], "low");
+        assert!(body.get("temperature").is_none());
+    }
+
+    #[test]
+    fn from_config_maps_fields_and_clamps_temperature() {
+        let cfg = AiConfig {
+            enable_reasoning: true,
+            reasoning_effort: "high".into(),
+            temperature: 9.0, // out of range -> clamped
+            ..Default::default()
+        };
+        let extras = RequestExtras::from_config(&cfg);
+        assert_eq!(extras.temperature, Some(2.0));
+        assert_eq!(extras.reasoning_effort.as_deref(), Some("high"));
+
+        // Thinking disabled -> no reasoning field at all.
+        let off = RequestExtras::from_config(&AiConfig::default());
+        assert!(off.reasoning_effort.is_none());
+        assert_eq!(off.temperature, Some(0.7));
+    }
+
+    #[test]
     fn responses_body_uses_instructions_and_forces_web_search() {
         let history = vec![
             AiMessage {
@@ -569,7 +681,8 @@ mod tests {
                 created_at: String::new(),
             },
         ];
-        let body = responses_body("deepseek-v4-flash", &history, "量子计算");
+        let body = responses_body(
+            "deepseek-v4-flash", &history, "量子计算", &RequestExtras::default());
         assert_eq!(body["model"], "deepseek-v4-flash");
         assert_eq!(body["instructions"], "你正在执行联网搜索。");
         assert_eq!(body["stream"], true);
@@ -626,7 +739,7 @@ data: {"type":"response.completed"}
             image_path: None,
             created_at: String::new(),
         }];
-        let mut stream = web_search_builtin(&base, "test-key", "deepseek-v4-flash", &history, "量子")
+        let mut stream = web_search_builtin(&base, "test-key", "deepseek-v4-flash", &history, "量子", &RequestExtras::default())
             .await
             .unwrap();
         let mut out = String::new();
@@ -651,14 +764,14 @@ data: {"type":"response.completed"}
 
 "#;
         let (base, _rx) = mock_responses_server(events, "200 OK").await;
-        let mut stream = web_search_builtin(&base, "k", "m", &[], "q").await.unwrap();
+        let mut stream = web_search_builtin(&base, "k", "m", &[], "q", &RequestExtras::default()).await.unwrap();
         let err = stream.next().await.unwrap().unwrap_err();
         assert!(err.to_string().contains("搜索服务不可用"), "{err}");
 
         // Non-2xx -> full error body.
         let (base2, _rx) =
             mock_responses_server(r#"{"error":"model not found"}"#, "404 Not Found").await;
-        let err2 = match web_search_builtin(&base2, "k", "m", &[], "q").await {
+        let err2 = match web_search_builtin(&base2, "k", "m", &[], "q", &RequestExtras::default()).await {
             Err(e) => e,
             Ok(_) => panic!("expected HTTP error"),
         };

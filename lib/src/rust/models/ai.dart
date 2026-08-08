@@ -42,8 +42,32 @@ class AiConfig {
   final bool webSearchEnabled;
 
   /// Full-page OCR model set (7.1.9): "high_precision" (server models,
-  /// accuracy first) or "fast" (mobile models, speed / size).
+  /// accuracy first) or "fast" (mobile models, speed / size). Field-level
+  /// default so configs saved by older builds read a valid value.
   final String ocrMode;
+
+  /// Carry the book's full conversation history on every request
+  /// (default: the window history -- 追问 always sends the thread's turns
+  /// from the start; off = every turn is answered independently).
+  final bool includeBookHistory;
+
+  /// Thinking mode (reasoning models): the request carries
+  /// `reasoning_effort` per the official API docs when enabled.
+  final bool enableReasoning;
+
+  /// Reasoning level when [enable_reasoning]: "low" | "medium" | "high".
+  final String reasoningEffort;
+
+  /// Sampling temperature for text replies (0.0-2.0, OpenAI range).
+  final double temperature;
+
+  /// Role template for text replies: "general" | "academic" | "novel" |
+  /// "tech" | "language" | "custom" (the role segment is prepended to the
+  /// per-action system prompt).
+  final String promptTemplate;
+
+  /// User-written role prompt when [prompt_template] is "custom".
+  final String customPrompt;
 
   const AiConfig({
     required this.baseUrl,
@@ -58,6 +82,12 @@ class AiConfig {
     required this.translateTargetLang,
     required this.webSearchEnabled,
     required this.ocrMode,
+    required this.includeBookHistory,
+    required this.enableReasoning,
+    required this.reasoningEffort,
+    required this.temperature,
+    required this.promptTemplate,
+    required this.customPrompt,
   });
 
   @override
@@ -73,7 +103,13 @@ class AiConfig {
       searchApiKey.hashCode ^
       translateTargetLang.hashCode ^
       webSearchEnabled.hashCode ^
-      ocrMode.hashCode;
+      ocrMode.hashCode ^
+      includeBookHistory.hashCode ^
+      enableReasoning.hashCode ^
+      reasoningEffort.hashCode ^
+      temperature.hashCode ^
+      promptTemplate.hashCode ^
+      customPrompt.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -91,7 +127,13 @@ class AiConfig {
           searchApiKey == other.searchApiKey &&
           translateTargetLang == other.translateTargetLang &&
           webSearchEnabled == other.webSearchEnabled &&
-          ocrMode == other.ocrMode;
+          ocrMode == other.ocrMode &&
+          includeBookHistory == other.includeBookHistory &&
+          enableReasoning == other.enableReasoning &&
+          reasoningEffort == other.reasoningEffort &&
+          temperature == other.temperature &&
+          promptTemplate == other.promptTemplate &&
+          customPrompt == other.customPrompt;
 }
 
 /// A single message in a thread (table: ai_messages).

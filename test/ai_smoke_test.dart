@@ -111,6 +111,110 @@ void main() {
         buildMinimalPdf('Dummy PDF for RBWA AI tests'));
   });
 
+
+
+  test('include_book_history=false drops the thread history', () async {
+    final mock = MockOpenAi(chunks: ['答']);
+    await mock.start();
+    await rust.setAiConfig(config: AiConfig(
+      baseUrl: mock.baseUrl,
+      apiKey: 'test-key',
+      textModel: 'mock-model',
+      visionModel: 'mock-vision',
+      visionBaseUrl: null,
+      visionApiKey: null,
+      translateTargetLang: '中文',
+      webSearchEnabled: false,
+      searchUseBuiltin: false,
+      ocrMode: 'high_precision',
+      includeBookHistory: false,
+      enableReasoning: false,
+      reasoningEffort: 'medium',
+      temperature: 0.7,
+      promptTemplate: 'general',
+      customPrompt: '',
+    ));
+
+    final done = Completer<void>();
+    rust
+        .streamChat(
+          action: AiActionType.chat,
+          text: 'q2',
+          history: [
+            AiMessage(
+                id: -1,
+                threadId: -1,
+                role: AiRole.user,
+                content: 'q1',
+                createdAt: ''),
+            AiMessage(
+                id: -1,
+                threadId: -1,
+                role: AiRole.assistant,
+                content: 'a1',
+                createdAt: ''),
+          ],
+        )
+        .listen((_) {},
+            onError: (Object _) { if (!done.isCompleted) done.complete(); },
+            onDone: done.complete);
+    await done.future.timeout(const Duration(seconds: 20));
+
+    // Only the system prompt + the current message reach the API: the
+    // thread history is dropped (independent turns).
+    final messages =
+        (mock.requests.single['messages'] as List).cast<Map<String, dynamic>>();
+    expect(messages.length, 2);
+    expect(messages.first['role'], 'system');
+    expect(messages.last['content'], 'q2');
+    await mock.stop();
+  }, timeout: const Timeout(Duration(seconds: 30)));
+
+  test('prompt template prepends the role segment to the action prompt',
+      () async {
+    final mock = MockOpenAi(chunks: ['答']);
+    await mock.start();
+    await rust.setAiConfig(config: AiConfig(
+      baseUrl: mock.baseUrl,
+      apiKey: 'test-key',
+      textModel: 'mock-model',
+      visionModel: 'mock-vision',
+      visionBaseUrl: null,
+      visionApiKey: null,
+      translateTargetLang: '中文',
+      webSearchEnabled: false,
+      searchUseBuiltin: false,
+      ocrMode: 'high_precision',
+      includeBookHistory: true,
+      enableReasoning: false,
+      reasoningEffort: 'medium',
+      temperature: 0.7,
+      promptTemplate: 'academic',
+      customPrompt: '',
+    ));
+
+    final done = Completer<void>();
+    rust
+        .streamChat(
+          action: AiActionType.translate,
+          text: 'hi',
+          history: const [],
+        )
+        .listen((_) {},
+            onError: (Object _) { if (!done.isCompleted) done.complete(); },
+            onDone: done.complete);
+    await done.future.timeout(const Duration(seconds: 20));
+
+    final messages =
+        (mock.requests.single['messages'] as List).cast<Map<String, dynamic>>();
+    final system = messages.first['content'] as String;
+    // Role segment first, action instructions kept after it.
+    expect(system, contains('学术阅读助手'));
+    expect(system, contains('翻译'));
+    expect(system.indexOf('学术'), lessThan(system.indexOf('翻译')));
+    await mock.stop();
+  }, timeout: const Timeout(Duration(seconds: 30)));
+
   test('stream_chat streams chunks and builds the right request', () async {
     final mock = MockOpenAi(chunks: ['你好', '，', '世界']);
     await mock.start();
@@ -124,6 +228,18 @@ void main() {
       translateTargetLang: '中文',
       webSearchEnabled: false,
       ocrMode: 'high_precision',
+
+      includeBookHistory: true,
+
+      enableReasoning: false,
+
+      reasoningEffort: 'medium',
+
+      temperature: 0.7,
+
+      promptTemplate: 'general',
+
+      customPrompt: '',
       searchUseBuiltin: false,
     ));
 
@@ -169,6 +285,18 @@ void main() {
       translateTargetLang: '中文',
       webSearchEnabled: false,
       ocrMode: 'high_precision',
+
+      includeBookHistory: true,
+
+      enableReasoning: false,
+
+      reasoningEffort: 'medium',
+
+      temperature: 0.7,
+
+      promptTemplate: 'general',
+
+      customPrompt: '',
       searchUseBuiltin: false,
     ));
 
@@ -306,6 +434,18 @@ void main() {
       searchApiKey: null,
       webSearchEnabled: true,
       ocrMode: 'high_precision',
+
+      includeBookHistory: true,
+
+      enableReasoning: false,
+
+      reasoningEffort: 'medium',
+
+      temperature: 0.7,
+
+      promptTemplate: 'general',
+
+      customPrompt: '',
       searchUseBuiltin: false,
     ));
 
@@ -341,6 +481,18 @@ void main() {
       searchUseBuiltin: true,
       webSearchEnabled: true,
       ocrMode: 'high_precision',
+
+      includeBookHistory: true,
+
+      enableReasoning: false,
+
+      reasoningEffort: 'medium',
+
+      temperature: 0.7,
+
+      promptTemplate: 'general',
+
+      customPrompt: '',
     ));
 
     final chunks = <String>[];
@@ -390,6 +542,18 @@ void main() {
       searchUseBuiltin: true,
       webSearchEnabled: true,
       ocrMode: 'high_precision',
+
+      includeBookHistory: true,
+
+      enableReasoning: false,
+
+      reasoningEffort: 'medium',
+
+      temperature: 0.7,
+
+      promptTemplate: 'general',
+
+      customPrompt: '',
     ));
 
     final chunks = <String>[];
@@ -435,6 +599,18 @@ void main() {
       translateTargetLang: '中文',
       webSearchEnabled: false,
       ocrMode: 'high_precision',
+
+      includeBookHistory: true,
+
+      enableReasoning: false,
+
+      reasoningEffort: 'medium',
+
+      temperature: 0.7,
+
+      promptTemplate: 'general',
+
+      customPrompt: '',
       searchUseBuiltin: false,
     ));
 

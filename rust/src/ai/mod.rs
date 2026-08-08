@@ -23,7 +23,9 @@ pub mod prompts;
 #[cfg(feature = "ai")]
 mod openai;
 #[cfg(feature = "ai")]
-pub use openai::{web_search, web_search_builtin, OpenAiClient};
+pub use openai::{web_search, OpenAiClient};
+#[cfg(feature = "ai")]
+pub(crate) use openai::{web_search_builtin, RequestExtras};
 
 /// A streamed text chunk from the model (FEATURES 6.3.1).
 pub type ChunkStream =

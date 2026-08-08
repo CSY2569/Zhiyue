@@ -1827,6 +1827,12 @@ impl SseDecode for crate::models::ai::AiConfig {
         let mut var_translateTargetLang = <String>::sse_decode(deserializer);
         let mut var_webSearchEnabled = <bool>::sse_decode(deserializer);
         let mut var_ocrMode = <String>::sse_decode(deserializer);
+        let mut var_includeBookHistory = <bool>::sse_decode(deserializer);
+        let mut var_enableReasoning = <bool>::sse_decode(deserializer);
+        let mut var_reasoningEffort = <String>::sse_decode(deserializer);
+        let mut var_temperature = <f64>::sse_decode(deserializer);
+        let mut var_promptTemplate = <String>::sse_decode(deserializer);
+        let mut var_customPrompt = <String>::sse_decode(deserializer);
         return crate::models::ai::AiConfig {
             base_url: var_baseUrl,
             api_key: var_apiKey,
@@ -1840,6 +1846,12 @@ impl SseDecode for crate::models::ai::AiConfig {
             translate_target_lang: var_translateTargetLang,
             web_search_enabled: var_webSearchEnabled,
             ocr_mode: var_ocrMode,
+            include_book_history: var_includeBookHistory,
+            enable_reasoning: var_enableReasoning,
+            reasoning_effort: var_reasoningEffort,
+            temperature: var_temperature,
+            prompt_template: var_promptTemplate,
+            custom_prompt: var_customPrompt,
         };
     }
 }
@@ -2721,6 +2733,12 @@ impl flutter_rust_bridge::IntoDart for crate::models::ai::AiConfig {
             self.translate_target_lang.into_into_dart().into_dart(),
             self.web_search_enabled.into_into_dart().into_dart(),
             self.ocr_mode.into_into_dart().into_dart(),
+            self.include_book_history.into_into_dart().into_dart(),
+            self.enable_reasoning.into_into_dart().into_dart(),
+            self.reasoning_effort.into_into_dart().into_dart(),
+            self.temperature.into_into_dart().into_dart(),
+            self.prompt_template.into_into_dart().into_dart(),
+            self.custom_prompt.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -3381,6 +3399,12 @@ impl SseEncode for crate::models::ai::AiConfig {
         <String>::sse_encode(self.translate_target_lang, serializer);
         <bool>::sse_encode(self.web_search_enabled, serializer);
         <String>::sse_encode(self.ocr_mode, serializer);
+        <bool>::sse_encode(self.include_book_history, serializer);
+        <bool>::sse_encode(self.enable_reasoning, serializer);
+        <String>::sse_encode(self.reasoning_effort, serializer);
+        <f64>::sse_encode(self.temperature, serializer);
+        <String>::sse_encode(self.prompt_template, serializer);
+        <String>::sse_encode(self.custom_prompt, serializer);
     }
 }
 

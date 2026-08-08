@@ -56,7 +56,65 @@ void main() {
     expect(repo.saved, isNotNull);
     expect(repo.saved!.apiKey, 'mock-key');
     expect(repo.saved!.webSearchEnabled, isTrue);
+    // AI reply defaults persist with the config.
+    expect(repo.saved!.includeBookHistory, isTrue);
+    expect(repo.saved!.enableReasoning, isFalse);
+    expect(repo.saved!.reasoningEffort, 'medium');
+    expect(repo.saved!.temperature, 0.7);
+    expect(repo.saved!.promptTemplate, 'general');
     expect(find.text('AI 配置已保存'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('AI reply settings: thinking level and custom prompt persist',
+      (tester) async {
+    final repo = FakeAiRepo();
+    await tester.pumpWidget(_scope(const SettingsPage(), repo));
+    await tester.pumpAndSettle();
+
+    // Enable thinking mode: the level selector appears.
+    await tester.scrollUntilVisible(
+      find.text('思考模式'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+    await tester.tap(find.text('思考模式'));
+    await tester.pumpAndSettle();
+    expect(find.text('思考等级'), findsOneWidget);
+    await tester.tap(find.text('高'));
+    await tester.pump();
+
+    // Switch to the custom template: the prompt editor appears.
+    await tester.scrollUntilVisible(
+      find.text('提示词模板'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+    await tester.tap(find.byType(DropdownButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('自定义').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.widgetWithText(TextField, '自定义提示词（作为角色设定，动作指令自动保留）'),
+        '你是一位诗人');
+    await tester.pump();
+
+    // Save and verify the new fields round-trip.
+    await tester.scrollUntilVisible(
+      find.text('保存 AI 配置'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, '保存 AI 配置'));
+    await tester.pumpAndSettle();
+
+    expect(repo.saved!.enableReasoning, isTrue);
+    expect(repo.saved!.reasoningEffort, 'high');
+    expect(repo.saved!.promptTemplate, 'custom');
+    expect(repo.saved!.customPrompt, '你是一位诗人');
     expect(tester.takeException(), isNull);
   });
   testWidgets('floating toolbar translate button starts an AI action',

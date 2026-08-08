@@ -39,6 +39,12 @@ class FakeAiRepo extends AiRepository {
         webSearchEnabled: true,
         searchUseBuiltin: false,
         ocrMode: ocrMode,
+        includeBookHistory: true,
+        enableReasoning: false,
+        reasoningEffort: 'medium',
+        temperature: 0.7,
+        promptTemplate: 'general',
+        customPrompt: '',
       );
 
   @override

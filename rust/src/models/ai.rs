@@ -132,10 +132,49 @@ pub struct AiConfig {
     /// default so configs saved by older builds read a valid value.
     #[serde(default = "default_ocr_mode")]
     pub ocr_mode: String,
+    /// Carry the book's full conversation history on every request
+    /// (default: the window history -- 追问 always sends the thread's turns
+    /// from the start; off = every turn is answered independently).
+    #[serde(default = "default_true")]
+    pub include_book_history: bool,
+    /// Thinking mode (reasoning models): the request carries
+    /// `reasoning_effort` per the official API docs when enabled.
+    #[serde(default)]
+    pub enable_reasoning: bool,
+    /// Reasoning level when [enable_reasoning]: "low" | "medium" | "high".
+    #[serde(default = "default_reasoning_effort")]
+    pub reasoning_effort: String,
+    /// Sampling temperature for text replies (0.0-2.0, OpenAI range).
+    #[serde(default = "default_temperature")]
+    pub temperature: f64,
+    /// Role template for text replies: "general" | "academic" | "novel" |
+    /// "tech" | "language" | "custom" (the role segment is prepended to the
+    /// per-action system prompt).
+    #[serde(default = "default_prompt_template")]
+    pub prompt_template: String,
+    /// User-written role prompt when [prompt_template] is "custom".
+    #[serde(default)]
+    pub custom_prompt: String,
 }
 
 fn default_ocr_mode() -> String {
     "high_precision".to_string()
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_reasoning_effort() -> String {
+    "medium".to_string()
+}
+
+fn default_temperature() -> f64 {
+    0.7
+}
+
+fn default_prompt_template() -> String {
+    "general".to_string()
 }
 
 impl Default for AiConfig {
@@ -153,6 +192,12 @@ impl Default for AiConfig {
             translate_target_lang: "中文".to_string(),
             web_search_enabled: false,
             ocr_mode: "high_precision".to_string(),
+            include_book_history: true,
+            enable_reasoning: false,
+            reasoning_effort: "medium".to_string(),
+            temperature: 0.7,
+            prompt_template: "general".to_string(),
+            custom_prompt: String::new(),
         }
     }
 }
@@ -209,6 +254,12 @@ mod tests {
             translate_target_lang: "中文".into(),
             web_search_enabled: true,
             ocr_mode: "fast".into(),
+            include_book_history: false,
+            enable_reasoning: true,
+            reasoning_effort: "high".into(),
+            temperature: 0.3,
+            prompt_template: "tech".into(),
+            custom_prompt: "自定义角色".into(),
         };
         let back: AiConfig = serde_json::from_str(&serde_json::to_string(&cfg).unwrap()).unwrap();
         assert_eq!(back.base_url, cfg.base_url);
@@ -223,6 +274,12 @@ mod tests {
         assert_eq!(back.translate_target_lang, "中文");
         assert!(back.web_search_enabled);
         assert_eq!(back.ocr_mode, "fast");
+        assert!(!back.include_book_history);
+        assert!(back.enable_reasoning);
+        assert_eq!(back.reasoning_effort, "high");
+        assert!((back.temperature - 0.3).abs() < 1e-9);
+        assert_eq!(back.prompt_template, "tech");
+        assert_eq!(back.custom_prompt, "自定义角色");
 
         // A config saved by an older build (no ocr_mode) still loads: the
         // serde default kicks in.
@@ -230,5 +287,10 @@ mod tests {
             serde_json::from_str(r#"{"base_url":"","api_key":"","text_model":"","vision_model":""}"#)
                 .unwrap();
         assert_eq!(legacy.ocr_mode, "high_precision");
+        assert!(legacy.include_book_history);
+        assert!(!legacy.enable_reasoning);
+        assert_eq!(legacy.reasoning_effort, "medium");
+        assert!((legacy.temperature - 0.7).abs() < 1e-9);
+        assert_eq!(legacy.prompt_template, "general");
     }
 }

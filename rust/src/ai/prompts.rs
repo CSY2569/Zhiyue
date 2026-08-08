@@ -78,6 +78,47 @@ pub fn chat_system() -> String {
         .to_string()
 }
 
+/// The built-in role templates (AI reply settings): each is a *role
+/// segment* prepended to the per-action system prompt, so translation /
+/// explanation / search keep their action instructions (settings 设置 →
+/// AI 回复). "general" adds nothing.
+pub fn template_prompt(template_id: &str, custom: &str) -> String {
+    match template_id {
+        "academic" => "你是一位严谨的学术阅读助手。面对论文、专著与学术材料时，\
+            侧重论证逻辑、研究方法和术语准确性；引用时区分原文观点与你的解读。"
+            .to_string(),
+        "novel" => "你是一位细腻的文学阅读伴侣。面对小说与文学作品时，\
+            关注人物、情节、主题与写作手法，回答带有文学品味且不过度剧透。"
+            .to_string(),
+        "tech" => "你是一位资深技术文档顾问。面对技术文档、手册与代码时，\
+            回答准确、结构化，优先给出可操作的结论，并指出关键注意事项。"
+            .to_string(),
+        "language" => "你是一位耐心的外语学习导师。面对外文材料时，\
+            除了内容本身，主动解释疑难句式和生词，并给出中文对照帮助理解。"
+            .to_string(),
+        "custom" => {
+            let custom = custom.trim();
+            if custom.is_empty() {
+                String::new()
+            } else {
+                custom.to_string()
+            }
+        }
+        _ => String::new(), // "general" and unknown ids
+    }
+}
+
+/// Compose the full system prompt: role template (if any) + the action
+/// instructions, joined by a blank line.
+pub fn system_prompt(template_id: &str, custom: &str, action_prompt: &str) -> String {
+    let role = template_prompt(template_id, custom);
+    if role.is_empty() {
+        action_prompt.to_string()
+    } else {
+        format!("{role}\n\n{action_prompt}")
+    }
+}
+
 /// Vision prompt (FEATURES 6.6.2 / 7.2, 区域识图): recognize and analyze the
 /// screenshot the user captured; extract any text verbatim, describe charts /
 /// figures, and answer in Markdown.
@@ -165,4 +206,24 @@ mod tests {
         assert!(p.contains("Markdown"));
     }
 
+
+    #[test]
+    fn system_prompt_prepends_role_template_to_action_instructions() {
+        // Built-in template: role segment first, action instructions after.
+        let p = system_prompt("academic", "", "动作指令");
+        assert!(p.contains("学术阅读助手"), "{p}");
+        assert!(p.contains("动作指令"));
+        assert!(p.find("学术").unwrap() < p.find("动作指令").unwrap());
+
+        // "general" and unknown ids add nothing.
+        assert_eq!(system_prompt("general", "", "动作指令"), "动作指令");
+        assert_eq!(system_prompt("unknown", "", "动作指令"), "动作指令");
+
+        // Custom: the user's text becomes the role segment; empty custom
+        // text degrades to the bare action instructions.
+        let c = system_prompt("custom", "你是一位诗人", "动作指令");
+        assert!(c.starts_with("你是一位诗人"), "{c}");
+        assert!(c.contains("动作指令"));
+        assert_eq!(system_prompt("custom", "   ", "动作指令"), "动作指令");
+    }
 }

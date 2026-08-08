@@ -1841,8 +1841,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   AiConfig dco_decode_ai_config(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 12)
-      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
+    if (arr.length != 18)
+      throw Exception('unexpected arr length: expect 18 but see ${arr.length}');
     return AiConfig(
       baseUrl: dco_decode_String(arr[0]),
       apiKey: dco_decode_String(arr[1]),
@@ -1856,6 +1856,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       translateTargetLang: dco_decode_String(arr[9]),
       webSearchEnabled: dco_decode_bool(arr[10]),
       ocrMode: dco_decode_String(arr[11]),
+      includeBookHistory: dco_decode_bool(arr[12]),
+      enableReasoning: dco_decode_bool(arr[13]),
+      reasoningEffort: dco_decode_String(arr[14]),
+      temperature: dco_decode_f_64(arr[15]),
+      promptTemplate: dco_decode_String(arr[16]),
+      customPrompt: dco_decode_String(arr[17]),
     );
   }
 
@@ -2494,6 +2500,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_translateTargetLang = sse_decode_String(deserializer);
     var var_webSearchEnabled = sse_decode_bool(deserializer);
     var var_ocrMode = sse_decode_String(deserializer);
+    var var_includeBookHistory = sse_decode_bool(deserializer);
+    var var_enableReasoning = sse_decode_bool(deserializer);
+    var var_reasoningEffort = sse_decode_String(deserializer);
+    var var_temperature = sse_decode_f_64(deserializer);
+    var var_promptTemplate = sse_decode_String(deserializer);
+    var var_customPrompt = sse_decode_String(deserializer);
     return AiConfig(
       baseUrl: var_baseUrl,
       apiKey: var_apiKey,
@@ -2507,6 +2519,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       translateTargetLang: var_translateTargetLang,
       webSearchEnabled: var_webSearchEnabled,
       ocrMode: var_ocrMode,
+      includeBookHistory: var_includeBookHistory,
+      enableReasoning: var_enableReasoning,
+      reasoningEffort: var_reasoningEffort,
+      temperature: var_temperature,
+      promptTemplate: var_promptTemplate,
+      customPrompt: var_customPrompt,
     );
   }
 
@@ -3290,6 +3308,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.translateTargetLang, serializer);
     sse_encode_bool(self.webSearchEnabled, serializer);
     sse_encode_String(self.ocrMode, serializer);
+    sse_encode_bool(self.includeBookHistory, serializer);
+    sse_encode_bool(self.enableReasoning, serializer);
+    sse_encode_String(self.reasoningEffort, serializer);
+    sse_encode_f_64(self.temperature, serializer);
+    sse_encode_String(self.promptTemplate, serializer);
+    sse_encode_String(self.customPrompt, serializer);
   }
 
   @protected
