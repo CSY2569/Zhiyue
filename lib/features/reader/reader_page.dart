@@ -17,7 +17,6 @@ import 'package:rbwa/features/annotation/widgets/note_popup.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
 import 'package:rbwa/features/reader/widgets/pdf_page_scroll.dart';
 import 'package:rbwa/features/reader/widgets/reader_toolbar.dart';
-import 'package:rbwa/features/reader/widgets/scan_overlay.dart';
 import 'package:rbwa/features/reader/widgets/sidebars/notes_rail.dart';
 import 'package:rbwa/features/reader/widgets/sidebars/outline_tree.dart';
 import 'package:rbwa/features/reader/widgets/sidebars/thumbnail_rail.dart';
@@ -196,14 +195,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               ],
             ),
             // Floating selection UI (rendered above everything, in the
-            // app-level Overlay so they are never clipped).
-            // Scan prompt (FEATURES 7.1.2): pages without a text layer get a
-            // "扫描识别" bar above the reading area.
-            Positioned(
-              top: 8,
-              left: 8,
-              child: ScanOverlay(),
-            ),
+            // app-level Overlay so they are never clipped). The scan prompt
+            // (FEATURES 7.1.2) lives inside each page instead: it anchors to
+            // the page's top-left corner and scrolls with it.
             // Mark tool bar (FEATURES §5): floats above the reading area
             // while a mark tool is armed.
             Positioned(

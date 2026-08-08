@@ -12,6 +12,7 @@ import 'package:rbwa/features/annotation/widgets/image_mark_layer.dart';
 import 'package:rbwa/features/annotation/widgets/selection_layer.dart';
 import 'package:rbwa/features/reader/providers/bitmap_cache.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
+import 'package:rbwa/features/reader/widgets/scan_overlay.dart';
 import 'package:rbwa/src/rust/models/annotation.dart' show TextAnnotation;
 import 'package:rbwa/src/rust/models/progress.dart';
 
@@ -785,6 +786,14 @@ class _PageItemState extends ConsumerState<_PageItem> {
               // hit-test transparent.
               Positioned.fill(
                 child: ImageMarkLayer(page: widget.page),
+              ),
+              // Scan prompt (FEATURES 7.1.2): anchored to this page's
+              // top-left corner so it scrolls with the page (only the
+              // current page renders it).
+              Positioned(
+                top: 8,
+                left: 8,
+                child: ScanOverlay(page: widget.page),
               ),
             ],
           ),

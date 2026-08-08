@@ -4,15 +4,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rbwa/features/reader/providers/scan_provider.dart';
 
 /// Scan prompt card (FEATURES 7.1.2 / FLUTTER_UI_MIGRATION §6.5): a slim bar
-/// above the reading area. Renders nothing for pages with a native text
-/// layer; otherwise it walks the state machine (prompt -> scanning ->
+/// anchored to the page's top-left corner (each page hosts one instance;
+/// only the current page renders). Pages with a native text layer render
+/// nothing; otherwise it walks the state machine (prompt -> scanning ->
 /// success / empty / error).
 class ScanOverlay extends ConsumerWidget {
-  const ScanOverlay({super.key});
+  const ScanOverlay({super.key, required this.page});
+
+  /// The hosting page, 0-indexed (matches the page stack's [widget.page]).
+  final int page;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scan = ref.watch(scanStateProvider);
+    // The scan state tracks the current page only (1-indexed viewer space):
+    // this instance renders just for its own page, so the bar follows the
+    // page as it scrolls instead of floating over the viewport.
+    if (scan.page != page + 1) return const SizedBox.shrink();
     final notifier = ref.read(scanStateProvider.notifier);
     final theme = Theme.of(context);
 

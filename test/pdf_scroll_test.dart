@@ -11,7 +11,8 @@ import 'package:rbwa/src/rust/api.dart' as rust;
 import 'package:rbwa/src/rust/models/book.dart';
 import 'package:rbwa/src/rust/models/progress.dart';
 
-/// Fake repository: renders a tiny 100x141 RGBA page without touching Rust.
+/// Fake repository: renders a real-proportioned A4 RGBA page (400x565)
+/// without touching Rust.
 class _FakeRepo extends ReaderRepository {
   @override
   Future<rust.PageRenderResult> renderPage(
@@ -20,7 +21,7 @@ class _FakeRepo extends ReaderRepository {
     double zoom,
     double dpiScale,
   ) async {
-    const w = 100, h = 141;
+    const w = 400, h = 565;
     return rust.PageRenderResult(
       width: w,
       height: h,
@@ -32,6 +33,9 @@ class _FakeRepo extends ReaderRepository {
   @override
   Future<rust.CharBoxResult> extractText(int bookId, int page) async =>
       rust.CharBoxResult(boxes: const [], error: null);
+
+  @override
+  Future<bool> pageHasText(int bookId, int page) async => false;
 }
 
 Book _book() => Book(
@@ -139,4 +143,42 @@ void main() {
       });
     });
   }
+
+  testWidgets('scan prompt anchors to the page top-left (not the viewport)',
+      (tester) async {
+    await tester.runAsync(() async {
+      await tester.pumpWidget(_app(ViewMode.single));
+      await tester.pump();
+      // The fake repo reports no text layer: the page's own prompt bar shows.
+      await Future.delayed(const Duration(milliseconds: 300));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.text('扫描识别'), findsOneWidget);
+
+      // Structural: the bar is a descendant of the page's Stack (the one
+      // hosting the page bitmap), so it scrolls with the page instead of
+      // floating over the viewport.
+      final pageStack = find
+          .ancestor(
+              of: find.byType(RawImage).first, matching: find.byType(Stack))
+          .first;
+      expect(
+        find.descendant(of: pageStack, matching: find.text('扫描识别')),
+        findsOneWidget,
+      );
+
+      // Anchored: the bar's left edge sits at the page origin + (8, 8)
+      // (the bar's Row sits 12/4 inside its padding).
+      final barLeft = tester.getTopLeft(find
+              .ancestor(
+                  of: find.text('扫描识别'), matching: find.byType(Row))
+              .first) -
+          const Offset(12, 4);
+      final page = tester.getTopLeft(find.byType(RawImage).first);
+      expect(barLeft.dx - page.dx, closeTo(8, 1));
+      expect(barLeft.dy - page.dy, closeTo(8, 1));
+      expect(tester.takeException(), isNull);
+    });
+  });
 }
