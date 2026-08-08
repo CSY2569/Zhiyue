@@ -303,7 +303,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               ),
             ),
           ),
-          if (_promptTemplate != 'general' && _promptTemplate != 'custom') ...[
+          if (_promptTemplate != 'custom') ...[
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: TextField(
@@ -441,7 +441,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _templateEdit.text =
           _templateEdits[id] ?? _templateDefaults[id] ?? '';
     });
-    if (id == 'general' || id == 'custom') return;
+    if (id == 'custom') return;
     if (_templateEdits.containsKey(id) || _templateDefaults.containsKey(id)) {
       return;
     }

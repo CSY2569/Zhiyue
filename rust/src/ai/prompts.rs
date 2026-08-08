@@ -87,6 +87,8 @@ pub fn chat_system() -> String {
 /// customize it. "general" and unknown ids have no text.
 pub fn template_default_text(template_id: &str) -> String {
     match template_id {
+        "general" => "你是一个乐于助人的 AI 助手，请使用 Markdown 格式回答，保持回答简洁明了。"
+            .to_string(),
         "academic" => "你是一位严谨的学术阅读助手。面对论文、专著与学术材料时，\
             侧重论证逻辑、研究方法和术语准确性；引用时区分原文观点与你的解读。"
             .to_string(),
@@ -115,7 +117,7 @@ pub fn template_default_text(template_id: &str) -> String {
             解释模型原理、算法与工程实现，关注技术可行性、局限性与最佳实践，\
             保持术语准确。"
             .to_string(),
-        _ => String::new(),
+        _ => String::new(), // unknown ids
     }
 }
 
@@ -258,8 +260,11 @@ mod tests {
         assert!(p.contains("动作指令"));
         assert!(p.find("学术").unwrap() < p.find("动作指令").unwrap());
 
-        // "general" and unknown ids add nothing.
-        assert_eq!(system_prompt("general", "", &no_override, "动作指令"), "动作指令");
+        // "general" carries its own neutral role segment; unknown ids add
+        // nothing.
+        let g = system_prompt("general", "", &no_override, "动作指令");
+        assert!(g.contains("乐于助人的 AI 助手"), "{g}");
+        assert!(g.contains("动作指令"));
         assert_eq!(system_prompt("unknown", "", &no_override, "动作指令"), "动作指令");
 
         // Custom: the user's text becomes the role segment; empty custom
@@ -289,7 +294,7 @@ mod tests {
 
         // template_default_text exposes the built-in texts for the UI.
         assert!(template_default_text("novel").contains("文学"));
-        assert_eq!(template_default_text("general"), "");
+        assert!(template_default_text("general").contains("AI 助手"));
         assert_eq!(template_default_text("unknown"), "");
     }
 }

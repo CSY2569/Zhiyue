@@ -181,7 +181,9 @@ void main() {
         '你是一位诗人');
     await tester.tap(find.text('保存为模板'));
     await tester.pumpAndSettle();
-    expect(find.text('诗人'), findsOneWidget); // saved list shows it
+    // The saved list shows the named template (the input field holds the
+    // same text, so scope the finder to the list tile).
+    expect(find.widgetWithText(ListTile, '诗人'), findsOneWidget);
 
     // Persist: the named template travels with the config.
     await tester.scrollUntilVisible(
