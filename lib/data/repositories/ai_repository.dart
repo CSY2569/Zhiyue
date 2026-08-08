@@ -56,17 +56,21 @@ class AiRepository {
       rust.createAiThread(title: title, actionType: actionType, bookId: bookId);
 
   /// Append a message and bump the window's `updated_at`; [actionType] (when
-  /// set) becomes the window's latest action for the history icon.
+  /// set) becomes the window's latest action for the history icon. [imagePng]
+  /// (a vision screenshot, 识图) is written to disk so history reloads can
+  /// show it again.
   Future<int> appendAiMessage({
     required int threadId,
     required AiRole role,
     required String content,
+    Uint8List? imagePng,
     AiActionType? actionType,
   }) =>
       rust.appendAiMessage(
         threadId: threadId,
         role: role,
         content: content,
+        imagePng: imagePng,
         actionType: actionType,
       );
 

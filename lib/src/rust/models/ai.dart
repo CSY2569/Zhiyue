@@ -95,6 +95,10 @@ class AiMessage {
 
   /// Markdown content (rendered with flutter_markdown + LaTeX on the Dart side).
   final String content;
+
+  /// Vision screenshot file (relative to the app data dir), when this
+  /// message carried a 区域识图 capture (v4, FEATURES 6.6.2).
+  final String? imagePath;
   final String createdAt;
 
   const AiMessage({
@@ -102,6 +106,7 @@ class AiMessage {
     required this.threadId,
     required this.role,
     required this.content,
+    this.imagePath,
     required this.createdAt,
   });
 
@@ -111,6 +116,7 @@ class AiMessage {
       threadId.hashCode ^
       role.hashCode ^
       content.hashCode ^
+      imagePath.hashCode ^
       createdAt.hashCode;
 
   @override
@@ -122,6 +128,7 @@ class AiMessage {
           threadId == other.threadId &&
           role == other.role &&
           content == other.content &&
+          imagePath == other.imagePath &&
           createdAt == other.createdAt;
 }
 

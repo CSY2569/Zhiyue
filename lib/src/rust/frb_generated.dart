@@ -88,6 +88,7 @@ abstract class RustLibApi extends BaseApi {
     required PlatformInt64 threadId,
     required AiRole role,
     required String content,
+    Uint8List? imagePng,
     AiActionType? actionType,
   });
 
@@ -307,6 +308,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required PlatformInt64 threadId,
     required AiRole role,
     required String content,
+    Uint8List? imagePng,
     AiActionType? actionType,
   }) {
     return handler.executeNormal(
@@ -316,6 +318,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_i_64(threadId, serializer);
           sse_encode_ai_role(role, serializer);
           sse_encode_String(content, serializer);
+          sse_encode_opt_list_prim_u_8_strict(imagePng, serializer);
           sse_encode_opt_box_autoadd_ai_action_type(actionType, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
@@ -329,7 +332,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: null,
         ),
         constMeta: kCrateApiAppendAiMessageConstMeta,
-        argValues: [threadId, role, content, actionType],
+        argValues: [threadId, role, content, imagePng, actionType],
         apiImpl: this,
       ),
     );
@@ -337,7 +340,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiAppendAiMessageConstMeta => const TaskConstMeta(
     debugName: "append_ai_message",
-    argNames: ["threadId", "role", "content", "actionType"],
+    argNames: ["threadId", "role", "content", "imagePng", "actionType"],
   );
 
   @override
@@ -1859,14 +1862,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   AiMessage dco_decode_ai_message(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return AiMessage(
       id: dco_decode_i_64(arr[0]),
       threadId: dco_decode_i_64(arr[1]),
       role: dco_decode_ai_role(arr[2]),
       content: dco_decode_String(arr[3]),
-      createdAt: dco_decode_String(arr[4]),
+      imagePath: dco_decode_opt_String(arr[4]),
+      createdAt: dco_decode_String(arr[5]),
     );
   }
 
@@ -2323,6 +2327,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_list_prim_u_8_strict(raw);
+  }
+
+  @protected
   OutlineEntry dco_decode_outline_entry(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -2504,12 +2514,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_threadId = sse_decode_i_64(deserializer);
     var var_role = sse_decode_ai_role(deserializer);
     var var_content = sse_decode_String(deserializer);
+    var var_imagePath = sse_decode_opt_String(deserializer);
     var var_createdAt = sse_decode_String(deserializer);
     return AiMessage(
       id: var_id,
       threadId: var_threadId,
       role: var_role,
       content: var_content,
+      imagePath: var_imagePath,
       createdAt: var_createdAt,
     );
   }
@@ -3090,6 +3102,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_list_prim_u_8_strict(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   OutlineEntry sse_decode_outline_entry(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_title = sse_decode_String(deserializer);
@@ -3272,6 +3295,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_64(self.threadId, serializer);
     sse_encode_ai_role(self.role, serializer);
     sse_encode_String(self.content, serializer);
+    sse_encode_opt_String(self.imagePath, serializer);
     sse_encode_String(self.createdAt, serializer);
   }
 
@@ -3788,6 +3812,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_reading_progress(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_list_prim_u_8_strict(
+    Uint8List? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_list_prim_u_8_strict(self, serializer);
     }
   }
 

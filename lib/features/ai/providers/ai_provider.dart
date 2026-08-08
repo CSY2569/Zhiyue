@@ -62,7 +62,13 @@ class AiNotifier extends Notifier<AiState> {
         );
         final msgs = await _repo.listAiMessages(t.id);
         ts.messages.addAll(
-          msgs.map((m) => AiChatMessage(role: m.role, content: m.content)),
+          msgs.map(
+            (m) => AiChatMessage(
+              role: m.role,
+              content: m.content,
+              imagePath: m.imagePath,
+            ),
+          ),
         );
         loaded.add(ts);
       }
@@ -74,11 +80,9 @@ class AiNotifier extends Notifier<AiState> {
     // The provider may already be disposed by the time this lands (the page
     // unmounted mid-load): a late state write must never crash the framework.
     try {
-      state = state.copyWith(
-        threads: [...loaded, ...state.threads],
-        activeThreadId:
-            state.activeThreadId ?? (loaded.isNotEmpty ? loaded.last.id : null),
-      );
+      // History loads without selecting a window: a fresh conversation opens
+      // on the empty guide, history stays one click away (对话列表).
+      state = state.copyWith(threads: [...loaded, ...state.threads]);
     } catch (_) {
       // Provider disposed; the DB is untouched and will reload next time.
     }
@@ -131,8 +135,10 @@ class AiNotifier extends Notifier<AiState> {
   }
 
   /// Persist the first user message together with a new window's row;
-  /// back-fills [AiThreadState.dbId].
-  void _persistWindow(AiThreadState window, String firstText) {
+  /// back-fills [AiThreadState.dbId]. [imagePng] is the vision screenshot
+  /// of a 识图 turn, stored to disk so history can show it again.
+  void _persistWindow(AiThreadState window, String firstText,
+      {Uint8List? imagePng}) {
     _enqueue(() async {
       final res = await _repo.createAiThread(
         title: window.title,
@@ -145,6 +151,7 @@ class AiNotifier extends Notifier<AiState> {
         threadId: res.id,
         role: AiRole.user,
         content: firstText,
+        imagePng: imagePng,
         actionType: window.action,
       );
     });
@@ -152,7 +159,8 @@ class AiNotifier extends Notifier<AiState> {
 
   /// Persist one message once the window has a database id; also refreshes
   /// the window's latest action in the shadow row.
-  void _persistMessage(AiThreadState window, AiRole role, String content) {
+  void _persistMessage(AiThreadState window, AiRole role, String content,
+      {Uint8List? imagePng}) {
     if (content.trim().isEmpty) return;
     _enqueue(() async {
       final dbId = window.dbId;
@@ -161,6 +169,7 @@ class AiNotifier extends Notifier<AiState> {
         threadId: dbId,
         role: role,
         content: content,
+        imagePng: imagePng,
         actionType: window.action,
       );
     });
@@ -193,6 +202,7 @@ class AiNotifier extends Notifier<AiState> {
       cardVisible: true,
       cardPos: const Offset(80, 120),
       panelCleared: false,
+      showingThreadList: false,
     );
     _stream(window, action, text);
   }
@@ -206,7 +216,11 @@ class AiNotifier extends Notifier<AiState> {
     final thread = state.threadOf(threadId);
     if (thread == null) return;
     thread.messages.add(AiChatMessage(role: AiRole.user, content: text));
-    state = state.copyWith(activeThreadId: threadId);
+    state = state.copyWith(
+      activeThreadId: threadId,
+      panelCleared: false,
+      showingThreadList: false,
+    );
     _persistMessage(thread, AiRole.user, text);
     _stream(thread, thread.action, text);
   }
@@ -241,15 +255,16 @@ class AiNotifier extends Notifier<AiState> {
       imagePng: png,
     ));
     if (isNew) {
-      _persistWindow(window, '（区域截图）');
+      _persistWindow(window, '（区域截图）', imagePng: png);
     } else {
-      _persistMessage(window, AiRole.user, '（区域截图）');
+      _persistMessage(window, AiRole.user, '（区域截图）', imagePng: png);
     }
     state = state.copyWith(
       activeThreadId: window.id,
       cardVisible: true,
       cardPos: const Offset(80, 120),
       panelCleared: false,
+      showingThreadList: false,
     );
     _streamVision(window, png);
   }
@@ -360,8 +375,10 @@ class AiNotifier extends Notifier<AiState> {
 
   void togglePanel() => state = state.copyWith(aiPanelOpen: !state.aiPanelOpen);
 
-  void openThread(int threadId) =>
-      state = state.copyWith(activeThreadId: threadId);
+  void openThread(int threadId) => state = state.copyWith(
+        activeThreadId: threadId,
+        showingThreadList: false,
+      );
 
   /// Clear the current view ("清空"): leaves the conversation, stops any
   /// streaming, and hides the result card -- but the in-memory windows and
@@ -375,6 +392,7 @@ class AiNotifier extends Notifier<AiState> {
       clearStreaming: true,
       cardVisible: false,
       panelCleared: true,
+      showingThreadList: false,
     );
   }
 
@@ -391,22 +409,29 @@ class AiNotifier extends Notifier<AiState> {
       clearActiveThread: state.activeThreadId == threadId,
       clearStreaming: state.streamingThreadId == threadId,
       cardVisible: state.activeThreadId == threadId ? false : state.cardVisible,
+      // Deleting the active window lands back on the window list.
+      showingThreadList: state.activeThreadId == threadId,
     );
     _enqueue(() => _repo.deleteAiThread(threadId).then((_) {}));
   }
 
   /// Follow the current book: select its window when one exists, otherwise
-  /// clear the selection (the panel falls back to the window list / guide).
+  /// clear the selection (the panel falls back to the empty guide; history
+  /// stays reachable through 对话列表).
   void selectWindowForBook(int? bookId) {
     final w = _windowOf(bookId);
     state = state.copyWith(
       activeThreadId: w?.id,
       clearActiveThread: w == null,
+      showingThreadList: false,
     );
   }
 
   /// Back to the window list (the panel header's back button).
-  void showWindowList() => state = state.copyWith(clearActiveThread: true);
+  void showWindowList() => state = state.copyWith(
+        clearActiveThread: true,
+        showingThreadList: true,
+      );
 
   String _errorText(Object e) {
     final s = e.toString();

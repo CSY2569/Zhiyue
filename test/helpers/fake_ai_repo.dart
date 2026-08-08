@@ -19,6 +19,10 @@ class FakeAiRepo extends AiRepository {
   final savedMessages = <int, List<AiChatMessage>>{};
   int _nextThreadId = 1;
 
+  /// Copies of the screenshots appended via [appendAiMessage] (a real
+  /// persistence layer would write them to disk; the fake just keeps them).
+  final savedImages = <int, List<Uint8List>>{};
+
   @override
   Future<AiConfig> getAiConfig() async => AiConfig(
         baseUrl: 'http://mock/v1',
@@ -60,6 +64,7 @@ class FakeAiRepo extends AiRepository {
             role: m.role,
             content: m.content,
             createdAt: '',
+            imagePath: m.imagePath,
           ),
       ];
 
@@ -81,9 +86,22 @@ class FakeAiRepo extends AiRepository {
     required int threadId,
     required AiRole role,
     required String content,
+    Uint8List? imagePng,
     AiActionType? actionType,
   }) async {
-    savedMessages[threadId]?.add(AiChatMessage(role: role, content: content));
+    final list = savedMessages[threadId] ??= [];
+    list.add(AiChatMessage(
+      role: role,
+      content: content,
+      imagePng: imagePng,
+      // A real persistence layer writes the PNG to disk and returns the
+      // absolute path on reload; the fake mirrors that with a stable id.
+      imagePath:
+          imagePng != null ? '/fake/ai_images/$threadId-${list.length}.png' : null,
+    ));
+    if (imagePng != null) {
+      (savedImages[threadId] ??= []).add(imagePng);
+    }
     return 1;
   }
 

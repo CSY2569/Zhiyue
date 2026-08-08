@@ -36,14 +36,20 @@ class AiChatMessage {
     required this.role,
     required this.content,
     this.imagePng,
+    this.imagePath,
   });
 
   final AiRole role;
   final String content;
 
-  /// Screenshot sent with a vision request (识图). In-memory only: the
-  /// persisted shadow row stores [content]; history reloads show the text.
+  /// Screenshot sent with a vision request (识图): in-memory PNG for the
+  /// live session. When the message comes back from persisted history the
+  /// PNG is gone and [imagePath] points at the stored screenshot file
+  /// (absolute path, set by [listAiMessages]).
   final Uint8List? imagePng;
+
+  /// Absolute path of the persisted screenshot (history reloads only).
+  final String? imagePath;
 }
 
 /// UI state for the AI subsystem (FEATURES 6.4 / 6.5).
@@ -58,6 +64,7 @@ class AiState {
     this.cardPos = const Offset(80, 120),
     this.aiPanelOpen = false,
     this.panelCleared = false,
+    this.showingThreadList = false,
   });
 
   final List<AiThreadState> threads;
@@ -83,6 +90,12 @@ class AiState {
   /// the next AI action; the windows and messages themselves are untouched.
   final bool panelCleared;
 
+  /// Whether the window list (对话列表) is showing. With no active thread the
+  /// panel shows either this list or the empty guide: startup and 「清空」 land
+  /// on the guide (history is never auto-selected), the list appears via the
+  /// back button or 「查看历史对话」.
+  final bool showingThreadList;
+
   AiThreadState? threadOf(int? id) {
     for (final t in threads) {
       if (t.id == id) return t;
@@ -102,6 +115,7 @@ class AiState {
     Offset? cardPos,
     bool? aiPanelOpen,
     bool? panelCleared,
+    bool? showingThreadList,
   }) {
     return AiState(
       threads: threads ?? this.threads,
@@ -116,6 +130,7 @@ class AiState {
       cardPos: cardPos ?? this.cardPos,
       aiPanelOpen: aiPanelOpen ?? this.aiPanelOpen,
       panelCleared: panelCleared ?? this.panelCleared,
+      showingThreadList: showingThreadList ?? this.showingThreadList,
     );
   }
 }

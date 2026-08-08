@@ -158,6 +158,15 @@ class _AiPanelSideState extends ConsumerState<AiPanelSide> {
       return const _EmptyGuide();
     }
     if (active == null) {
+      // A fresh conversation opens on the empty guide (history is never
+      // auto-selected); the window list appears via 查看历史对话 / the back
+      // button.
+      if (!state.showingThreadList) {
+        return _EmptyGuide(
+          onShowHistory: () =>
+              ref.read(aiProvider.notifier).showWindowList(),
+        );
+      }
       return _ThreadList(
         threads: state.threads,
         streamingThreadId: state.streamingThreadId,
@@ -174,7 +183,11 @@ class _AiPanelSideState extends ConsumerState<AiPanelSide> {
 }
 
 class _EmptyGuide extends StatelessWidget {
-  const _EmptyGuide();
+  const _EmptyGuide({this.onShowHistory});
+
+  /// When set (history exists and the panel is not in a 「清空」 state), the
+  /// guide offers one tap into the 对话列表.
+  final VoidCallback? onShowHistory;
 
   @override
   Widget build(BuildContext context) {
@@ -197,6 +210,17 @@ class _EmptyGuide extends StatelessWidget {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
+            if (onShowHistory != null) ...[
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: onShowHistory,
+                icon: const Icon(Icons.history, size: 16),
+                label: const Text('查看历史对话'),
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -272,6 +296,7 @@ class _ChatView extends StatelessWidget {
               role: m.role,
               content: m.content,
               imagePng: m.imagePng,
+              imagePath: m.imagePath,
             ),
           if (streamingText != null)
             AiMessageBubble(

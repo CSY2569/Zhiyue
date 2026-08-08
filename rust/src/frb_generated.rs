@@ -103,6 +103,7 @@ fn wire__crate__api__append_ai_message_impl(
             let api_thread_id = <i64>::sse_decode(&mut deserializer);
             let api_role = <crate::models::ai::AiRole>::sse_decode(&mut deserializer);
             let api_content = <String>::sse_decode(&mut deserializer);
+            let api_image_png = <Option<Vec<u8>>>::sse_decode(&mut deserializer);
             let api_action_type =
                 <Option<crate::models::ai::AiActionType>>::sse_decode(&mut deserializer);
             deserializer.end();
@@ -112,6 +113,7 @@ fn wire__crate__api__append_ai_message_impl(
                         api_thread_id,
                         api_role,
                         api_content,
+                        api_image_png,
                         api_action_type,
                     ))?;
                     Ok(output_ok)
@@ -1847,12 +1849,14 @@ impl SseDecode for crate::models::ai::AiMessage {
         let mut var_threadId = <i64>::sse_decode(deserializer);
         let mut var_role = <crate::models::ai::AiRole>::sse_decode(deserializer);
         let mut var_content = <String>::sse_decode(deserializer);
+        let mut var_imagePath = <Option<String>>::sse_decode(deserializer);
         let mut var_createdAt = <String>::sse_decode(deserializer);
         return crate::models::ai::AiMessage {
             id: var_id,
             thread_id: var_threadId,
             role: var_role,
             content: var_content,
+            image_path: var_imagePath,
             created_at: var_createdAt,
         };
     }
@@ -2441,6 +2445,17 @@ impl SseDecode for Option<crate::models::progress::ReadingProgress> {
     }
 }
 
+impl SseDecode for Option<Vec<u8>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<Vec<u8>>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for crate::pdf::types::OutlineEntry {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2723,6 +2738,7 @@ impl flutter_rust_bridge::IntoDart for crate::models::ai::AiMessage {
             self.thread_id.into_into_dart().into_dart(),
             self.role.into_into_dart().into_dart(),
             self.content.into_into_dart().into_dart(),
+            self.image_path.into_into_dart().into_dart(),
             self.created_at.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -3371,6 +3387,7 @@ impl SseEncode for crate::models::ai::AiMessage {
         <i64>::sse_encode(self.thread_id, serializer);
         <crate::models::ai::AiRole>::sse_encode(self.role, serializer);
         <String>::sse_encode(self.content, serializer);
+        <Option<String>>::sse_encode(self.image_path, serializer);
         <String>::sse_encode(self.created_at, serializer);
     }
 }
@@ -3829,6 +3846,16 @@ impl SseEncode for Option<crate::models::progress::ReadingProgress> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::models::progress::ReadingProgress>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<Vec<u8>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <Vec<u8>>::sse_encode(value, serializer);
         }
     }
 }

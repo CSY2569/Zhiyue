@@ -135,6 +135,16 @@ fn migrate(conn: &Connection) -> AppResult<()> {
                 rusqlite::params![SCHEMA_VERSION],
             )?;
         }
+        Some(3) => {
+            tracing::info!("migrating schema 3 -> 4 (ai_messages.image_path)");
+            conn.execute_batch(
+                "ALTER TABLE ai_messages ADD COLUMN image_path TEXT;",
+            )?;
+            conn.execute(
+                "INSERT INTO schema_version (version) VALUES (?1)",
+                rusqlite::params![SCHEMA_VERSION],
+            )?;
+        }
         Some(v) => {
             tracing::warn!(recorded = v, expected = SCHEMA_VERSION, "schema version mismatch -- migration not yet implemented");
         }

@@ -13,7 +13,7 @@ use crate::models::ai::{AiActionType, AiMessage, AiRole, AiThread};
 const THREAD_COLS: &str = "id, title, action_type, book_id, created_at, updated_at";
 
 /// Columns selected from `ai_messages`, in the order `row_to_message` expects.
-const MESSAGE_COLS: &str = "id, thread_id, role, content, created_at";
+const MESSAGE_COLS: &str = "id, thread_id, role, content, image_path, created_at";
 
 fn row_to_thread(row: &Row) -> rusqlite::Result<AiThread> {
     let action: String = row.get(2)?;
@@ -34,7 +34,8 @@ fn row_to_message(row: &Row) -> rusqlite::Result<AiMessage> {
         thread_id: row.get(1)?,
         role: AiRole::from_db_str(&role).unwrap_or(AiRole::User),
         content: row.get(3)?,
-        created_at: row.get(4)?,
+        image_path: row.get(4)?,
+        created_at: row.get(5)?,
     })
 }
 
@@ -90,12 +91,14 @@ pub fn append_message(
     thread_id: i64,
     role: AiRole,
     content: &str,
+    image_path: Option<&str>,
     action_type: Option<AiActionType>,
 ) -> AppResult<()> {
     let tx = conn.unchecked_transaction()?;
     tx.execute(
-        "INSERT INTO ai_messages (thread_id, role, content) VALUES (?1, ?2, ?3)",
-        params![thread_id, role.as_str(), content],
+        "INSERT INTO ai_messages (thread_id, role, content, image_path) \
+         VALUES (?1, ?2, ?3, ?4)",
+        params![thread_id, role.as_str(), content, image_path],
     )?;
     tx.execute(
         "UPDATE ai_threads SET updated_at = datetime('now'), \
@@ -169,9 +172,9 @@ mod tests {
         let conn = test_conn();
         let id = create_thread(&conn, "t", AiActionType::Chat, None).unwrap();
 
-        append_message(&conn, id, AiRole::User, "第一个问题", None).unwrap();
-        append_message(&conn, id, AiRole::Assistant, "第一个回答", None).unwrap();
-        append_message(&conn, id, AiRole::User, "追问", None).unwrap();
+        append_message(&conn, id, AiRole::User, "第一个问题", None, None).unwrap();
+        append_message(&conn, id, AiRole::Assistant, "第一个回答", None, None).unwrap();
+        append_message(&conn, id, AiRole::User, "追问", None, None).unwrap();
 
         let messages = list_messages(&conn, id).unwrap();
         assert_eq!(messages.len(), 3);
@@ -192,19 +195,20 @@ mod tests {
     fn append_refreshes_latest_action_for_the_window_icon() {
         let conn = test_conn();
         let id = create_thread(&conn, "t", AiActionType::Translate, Some(1)).unwrap();
-        append_message(&conn, id, AiRole::User, "q", None).unwrap();
+        append_message(&conn, id, AiRole::User, "q", None, None).unwrap();
         append_message(
             &conn,
             id,
             AiRole::User,
             "第二问",
+            None,
             Some(AiActionType::Vision),
         )
         .unwrap();
         let threads = list_threads(&conn).unwrap();
         assert_eq!(threads[0].action_type, AiActionType::Vision);
         // A message without an action keeps the latest one.
-        append_message(&conn, id, AiRole::Assistant, "a", None).unwrap();
+        append_message(&conn, id, AiRole::Assistant, "a", None, None).unwrap();
         let threads = list_threads(&conn).unwrap();
         assert_eq!(threads[0].action_type, AiActionType::Vision);
     }
@@ -213,7 +217,7 @@ mod tests {
     fn delete_thread_removes_window_and_messages() {
         let conn = test_conn();
         let id = create_thread(&conn, "t", AiActionType::Chat, Some(5)).unwrap();
-        append_message(&conn, id, AiRole::User, "q", None).unwrap();
+        append_message(&conn, id, AiRole::User, "q", None, None).unwrap();
 
         assert!(delete_thread(&conn, id).unwrap());
         assert!(list_threads(&conn).unwrap().is_empty());

@@ -13,7 +13,10 @@
 //! them and manages the schema version table.
 
 /// Schema version; bump on any breaking migration. Stored in `schema_version`.
-pub const SCHEMA_VERSION: u32 = 3;
+///
+/// 4: `ai_messages.image_path` -- vision screenshots persist for history
+/// reload (FEATURES 6.6.2: 区域识图截图在历史对话中保留).
+pub const SCHEMA_VERSION: u32 = 4;
 
 /// Indexes for per-book AI conversation windows (v3, FEATURES 6.5.4).
 ///
@@ -189,6 +192,7 @@ CREATE TABLE IF NOT EXISTS ai_messages (
     thread_id   INTEGER NOT NULL,
     role        TEXT NOT NULL,                 -- 'user' | 'assistant' | 'system'
     content     TEXT NOT NULL,                 -- markdown
+    image_path  TEXT,                          -- vision screenshot file (v4)
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (thread_id) REFERENCES ai_threads(id) ON DELETE CASCADE
 );

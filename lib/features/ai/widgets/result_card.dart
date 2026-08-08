@@ -127,6 +127,7 @@ class ResultCard extends ConsumerWidget {
                         role: m.role,
                         content: m.content,
                         imagePng: m.imagePng,
+                        imagePath: m.imagePath,
                         maxWidth: 380,
                         aiColor: theme.colorScheme.surfaceContainerHighest,
                       ),

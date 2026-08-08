@@ -211,9 +211,10 @@ void main() {
 
 
 
-  testWidgets('persisted history is restored on startup (6.5.4)', (tester) async {
+  testWidgets('新会话打开为空页，历史经「查看历史对话」进入 (6.5.4)', (tester) async {
     final repo = FakeAiRepo();
-    // A thread persisted by a previous session: user + assistant turns.
+    // A thread persisted by a previous session: user + assistant turns, plus
+    // a vision turn whose screenshot was persisted to disk.
     final res = await repo.createAiThread(
       title: '翻译：hello',
       actionType: AiActionType.translate,
@@ -222,8 +223,20 @@ void main() {
     await repo.appendAiMessage(threadId: res.id, role: AiRole.user, content: 'hello');
     await repo.appendAiMessage(
         threadId: res.id, role: AiRole.assistant, content: '你好');
+    final png = base64Decode(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+    );
+    await repo.appendAiMessage(
+      threadId: res.id,
+      role: AiRole.user,
+      content: '（区域截图）',
+      imagePng: png,
+    );
+    await repo.appendAiMessage(
+        threadId: res.id, role: AiRole.assistant, content: '识别结果');
 
-    // A fresh app: the panel boots, loads history, and shows the thread.
+    // A fresh app: the panel boots and loads history, but a new conversation
+    // opens on the EMPTY guide -- no historical messages are shown.
     await tester.pumpWidget(ProviderScope(
       overrides: [aiRepositoryProvider.overrideWithValue(repo)],
       child: const MaterialApp(
@@ -242,16 +255,34 @@ void main() {
     final state = container.read(aiProvider);
     expect(state.threads.length, 1);
     expect(state.threads.first.dbId, res.id);
-    // Both turns visible in the chat view.
+    // 需求1: history is loaded but never auto-selected.
+    expect(state.activeThreadId, isNull);
+    expect(find.textContaining('选择文字翻译'), findsOneWidget);
+    expect(find.text('hello'), findsNothing);
+    expect(find.text('你好'), findsNothing);
+    expect(find.text('查看历史对话'), findsOneWidget);
+
+    // The guide's button opens the window list; opening the window shows the
+    // full history, including the restored vision screenshot.
+    await tester.tap(find.text('查看历史对话'));
+    await tester.pumpAndSettle();
+    expect(find.text('对话窗口'), findsOneWidget);
+    await tester.tap(find.text('翻译：hello'));
+    await tester.pumpAndSettle();
     expect(find.text('hello'), findsOneWidget);
     expect(find.text('你好'), findsOneWidget);
+    expect(find.text('（区域截图）'), findsOneWidget);
+    final restored = state.threads.first.messages[2];
+    expect(restored.imagePath, isNotNull); // persisted screenshot restored
+    expect(restored.imagePng, isNull); // bytes live only in the live session
+    expect(find.byType(Image), findsOneWidget); // the screenshot thumbnail
 
     // A follow-up on the restored thread persists too.
     await tester.enterText(find.byType(TextField), '再说一次');
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
     expect(repo.savedMessages[res.id]!.map((m) => m.content).toList(),
-        ['hello', '你好', '再说一次', '答案']);
+        ['hello', '你好', '（区域截图）', '识别结果', '再说一次', '答案']);
     expect(tester.takeException(), isNull);
   });
 
@@ -277,7 +308,8 @@ void main() {
     expect(find.textContaining('答案'), findsOneWidget);
 
     // The vision thread: user turn carries the screenshot in memory, the
-    // answer is the assistant turn; both persisted as text rows.
+    // answer is the assistant turn; both persisted as text rows and the
+    // screenshot was persisted to disk (its path comes back on reload).
     final thread = container
         .read(aiProvider)
         .threadOf(container.read(aiProvider).activeThreadId)!;
@@ -287,6 +319,42 @@ void main() {
     expect(thread.messages.last.content, '答案');
     expect(repo.savedMessages.values.first.map((m) => m.content).toList(),
         ['（区域截图）', '答案']);
+    expect(repo.savedImages.values.first.single, png);
+    expect(repo.savedMessages.values.first.first.imagePath, isNotNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('点击截图缩略图弹出大图，再点关闭', (tester) async {
+    final repo = FakeAiRepo()..visionChunks = const ['答'];
+    await tester.pumpWidget(_scope(
+      const SizedBox(width: 320, height: 600, child: AiPanelSide()),
+      repo,
+    ));
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(AiPanelSide)));
+
+    final png = base64Decode(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+    );
+    await container
+        .read(aiProvider.notifier)
+        .startVision(png, bookId: null, bookTitle: null);
+    await tester.pumpAndSettle();
+
+    // The panel shows the vision turn with its screenshot thumbnail.
+    expect(find.text('（区域截图）'), findsOneWidget);
+    expect(find.byType(Image), findsOneWidget);
+
+    // Clicking the thumbnail pops the screenshot up at full size.
+    await tester.tap(find.byType(Image));
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsOneWidget);
+    expect(find.byType(InteractiveViewer), findsOneWidget);
+
+    // Clicking the dialog closes it again.
+    await tester.tap(find.byType(InteractiveViewer));
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -436,11 +504,12 @@ void main() {
     await tester.pumpAndSettle();
 
     // The current view is cleared to the empty guide -- the history window
-    // list must NOT reappear.
+    // list must NOT reappear (and neither does its entry button).
     expect(container.read(aiProvider).activeThreadId, isNull);
     expect(find.text('对话窗口'), findsNothing);
     expect(find.text('三体'), findsNothing);
     expect(find.textContaining('选择文字翻译'), findsOneWidget);
+    expect(find.text('查看历史对话'), findsNothing);
     expect(find.text('q1'), findsNothing);
     // ...but windows and messages are untouched, in memory and in the repo.
     expect(container.read(aiProvider).threads, hasLength(1));

@@ -92,6 +92,9 @@ pub struct AiMessage {
     pub role: AiRole,
     /// Markdown content (rendered with flutter_markdown + LaTeX on the Dart side).
     pub content: String,
+    /// Vision screenshot file (relative to the app data dir), when this
+    /// message carried a 区域识图 capture (v4, FEATURES 6.6.2).
+    pub image_path: Option<String>,
     pub created_at: String,
 }
 

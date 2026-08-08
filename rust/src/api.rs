@@ -949,7 +949,14 @@ pub fn list_ai_threads() -> Vec<AiThread> {
 /// List one thread's messages in conversation order (6.5.4).
 pub fn list_ai_messages(thread_id: i64) -> Vec<AiMessage> {
     let conn = db::db();
-    ai_repo::list_messages(&conn, thread_id).unwrap_or_default()
+    let mut msgs = ai_repo::list_messages(&conn, thread_id).unwrap_or_default();
+    // The Dart side does not know the app data dir: hand it absolute paths.
+    for m in &mut msgs {
+        if let Some(rel) = &m.image_path {
+            m.image_path = resolve_ai_image_path(rel);
+        }
+    }
+    msgs
 }
 
 /// Persist a new conversation window; returns its id (-1 on failure).
@@ -972,28 +979,79 @@ pub fn create_ai_thread(
 
 /// Append a message to a window and bump its `updated_at`; `action_type`
 /// (when set) becomes the window's latest action for the history icon.
+///
+/// `image_png` (vision screenshots, 识图) is written to
+/// `{data_dir}/ai_images/{uuid}.png` and its relative path stored on the
+/// row, so history reloads can show the capture (v4, FEATURES 6.6.2).
 /// Returns 1 on success (0 if the window does not exist).
 pub fn append_ai_message(
     thread_id: i64,
     role: AiRole,
     content: String,
+    image_png: Option<Vec<u8>>,
     action_type: Option<AiActionType>,
 ) -> i32 {
+    let image_path = image_png.and_then(|png| save_ai_image(&png).ok()).flatten();
     let conn = db::db();
-    match ai_repo::append_message(&conn, thread_id, role, &content, action_type) {
+    match ai_repo::append_message(
+        &conn,
+        thread_id,
+        role,
+        &content,
+        image_path.as_deref(),
+        action_type,
+    ) {
         Ok(()) => 1,
         Err(_) => 0,
     }
 }
 
-/// Delete one conversation window (its messages cascade). Returns 1 if the
-/// window existed, 0 otherwise (6.5.3 per-window deletion).
+/// Persist a vision screenshot under `{data_dir}/ai_images/`; returns the
+/// relative path (e.g. `ai_images/xxxx.png`).
+fn save_ai_image(png: &[u8]) -> AppResult<Option<String>> {
+    use std::io::Write;
+    let dir = db::app_data_dir()?.join("ai_images");
+    std::fs::create_dir_all(&dir)?;
+    let name = format!("{}.png", uuid::Uuid::new_v4());
+    let mut f = std::fs::File::create(dir.join(&name))?;
+    f.write_all(png)?;
+    Ok(Some(format!("ai_images/{name}")))
+}
+
+/// Resolve a stored image path (relative to the app data dir) to an
+/// absolute path for the Dart side (which does not know the data dir).
+fn resolve_ai_image_path(rel: &str) -> Option<String> {
+    let base = db::app_data_dir().ok()?;
+    Some(base.join(rel).to_string_lossy().to_string())
+}
+
+/// Delete one conversation window (its messages cascade; their persisted
+/// screenshots are removed from disk too). Returns 1 if the window existed,
+/// 0 otherwise (6.5.3 per-window deletion).
 pub fn delete_ai_thread(thread_id: i64) -> i32 {
     let conn = db::db();
-    match ai_repo::delete_thread(&conn, thread_id) {
+    // Collect the screenshots before the rows cascade so the files can be
+    // cleaned up (they are not worth keeping after the conversation).
+    let images: Vec<String> = ai_repo::list_messages(&conn, thread_id)
+        .ok()
+        .map(|msgs| {
+            msgs.into_iter()
+                .filter_map(|m| m.image_path)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let deleted = match ai_repo::delete_thread(&conn, thread_id) {
         Ok(true) => 1,
         _ => 0,
+    };
+    if deleted == 1 {
+        for rel in images {
+            let _ = std::fs::remove_file(
+                db::app_data_dir().unwrap_or_default().join(rel),
+            );
+        }
     }
+    deleted
 }
 
 /// The AI client for this build (real impl with the `ai` feature).
@@ -1083,6 +1141,7 @@ pub async fn stream_chat(
         thread_id: -1,
         role: AiRole::System,
         content: system_prompt_for(action, &config, &text).await,
+        image_path: None,
         created_at: String::new(),
     };
     let mut messages = history;
@@ -1159,6 +1218,7 @@ async fn builtin_search_stream(
         thread_id: -1,
         role: AiRole::System,
         content: ai::prompts::search_system(true),
+        image_path: None,
         created_at: String::new(),
     };
     messages.insert(0, system);

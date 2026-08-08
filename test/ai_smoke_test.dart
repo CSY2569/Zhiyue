@@ -234,6 +234,24 @@ void main() {
     threads = await rust.listAiThreads();
     expect(threads.single.actionType, AiActionType.vision);
 
+    // A vision screenshot (识图) is written to disk; history reloads resolve
+    // the row to the absolute path of the stored PNG.
+    final pngBytes = base64Decode(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+    );
+    await rust.appendAiMessage(
+      threadId: res.id,
+      role: AiRole.user,
+      content: '（区域截图）',
+      imagePng: pngBytes,
+    );
+    final withImage = await rust.listAiMessages(threadId: res.id);
+    final vision = withImage.last;
+    expect(vision.imagePath, isNotNull);
+    final imageFile = File(vision.imagePath!);
+    expect(imageFile.existsSync(), isTrue);
+    expect(imageFile.readAsBytesSync(), pngBytes);
+
     // One window per book is enforced in the database.
     final dup = await rust.createAiThread(
       title: '重复',
@@ -253,8 +271,11 @@ void main() {
     final all = await rust.listAiThreads();
     expect(all.map((t) => t.bookId).toSet(), {42, null});
 
-    // Per-window deletion (messages cascade).
+    // Per-window deletion (messages cascade; the screenshot file is removed
+    // from disk together with its row).
+    expect(imageFile.existsSync(), isTrue);
     expect(await rust.deleteAiThread(threadId: res.id), 1);
+    expect(imageFile.existsSync(), isFalse);
     expect(await rust.deleteAiThread(threadId: res.id), 0);
     expect((await rust.listAiThreads()).map((t) => t.id).toSet(),
         {noBook.id});

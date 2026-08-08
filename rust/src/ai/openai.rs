@@ -557,6 +557,7 @@ mod tests {
                 thread_id: -1,
                 role: AiRole::System,
                 content: "你正在执行联网搜索。".into(),
+                image_path: None,
                 created_at: String::new(),
             },
             AiMessage {
@@ -564,6 +565,7 @@ mod tests {
                 thread_id: -1,
                 role: AiRole::User,
                 content: "之前的问题".into(),
+                image_path: None,
                 created_at: String::new(),
             },
         ];
@@ -621,6 +623,7 @@ data: {"type":"response.completed"}
             thread_id: -1,
             role: AiRole::System,
             content: "你正在执行联网搜索。".into(),
+            image_path: None,
             created_at: String::new(),
         }];
         let mut stream = web_search_builtin(&base, "test-key", "deepseek-v4-flash", &history, "量子")

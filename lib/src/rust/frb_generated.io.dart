@@ -202,6 +202,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ReadingProgress? dco_decode_opt_box_autoadd_reading_progress(dynamic raw);
 
   @protected
+  Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
+
+  @protected
   OutlineEntry dco_decode_outline_entry(dynamic raw);
 
   @protected
@@ -436,6 +439,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ReadingProgress? sse_decode_opt_box_autoadd_reading_progress(
     SseDeserializer deserializer,
   );
+
+  @protected
+  Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
   OutlineEntry sse_decode_outline_entry(SseDeserializer deserializer);
@@ -715,6 +721,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_reading_progress(
     ReadingProgress? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_list_prim_u_8_strict(
+    Uint8List? self,
     SseSerializer serializer,
   );
 

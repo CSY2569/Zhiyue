@@ -12,7 +12,7 @@ import 'ocr.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'pdf/types.dart';
 
-// These functions are ignored because they are not marked as `pub`: `ai_client`, `builtin_search_stream`, `drain_stream`, `err`, `import_book_inner`, `ok`, `save_rgba_as_png`, `search_system_prompt`, `system_prompt_for`, `try_init_at`, `try_init`
+// These functions are ignored because they are not marked as `pub`: `ai_client`, `builtin_search_stream`, `drain_stream`, `err`, `import_book_inner`, `ok`, `resolve_ai_image_path`, `save_ai_image`, `save_rgba_as_png`, `search_system_prompt`, `system_prompt_for`, `try_init_at`, `try_init`
 
 /// Crate version, surfaced in the About / settings UI.
 Future<String> appVersion() => RustLib.instance.api.crateApiAppVersion();
@@ -334,16 +334,22 @@ Future<AiThreadCreateResult> createAiThread({
 
 /// Append a message to a window and bump its `updated_at`; `action_type`
 /// (when set) becomes the window's latest action for the history icon.
+///
+/// `image_png` (vision screenshots, 识图) is written to
+/// `{data_dir}/ai_images/{uuid}.png` and its relative path stored on the
+/// row, so history reloads can show the capture (v4, FEATURES 6.6.2).
 /// Returns 1 on success (0 if the window does not exist).
 Future<int> appendAiMessage({
   required PlatformInt64 threadId,
   required AiRole role,
   required String content,
+  Uint8List? imagePng,
   AiActionType? actionType,
 }) => RustLib.instance.api.crateApiAppendAiMessage(
   threadId: threadId,
   role: role,
   content: content,
+  imagePng: imagePng,
   actionType: actionType,
 );
 
