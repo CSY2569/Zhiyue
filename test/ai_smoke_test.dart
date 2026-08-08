@@ -123,6 +123,7 @@ void main() {
       visionApiKey: null,
       translateTargetLang: '中文',
       webSearchEnabled: false,
+      ocrMode: 'high_precision',
       searchUseBuiltin: false,
     ));
 
@@ -167,6 +168,7 @@ void main() {
       visionApiKey: null,
       translateTargetLang: '中文',
       webSearchEnabled: false,
+      ocrMode: 'high_precision',
       searchUseBuiltin: false,
     ));
 
@@ -303,6 +305,7 @@ void main() {
       translateTargetLang: '中文',
       searchApiKey: null,
       webSearchEnabled: true,
+      ocrMode: 'high_precision',
       searchUseBuiltin: false,
     ));
 
@@ -337,6 +340,7 @@ void main() {
       translateTargetLang: '中文',
       searchUseBuiltin: true,
       webSearchEnabled: true,
+      ocrMode: 'high_precision',
     ));
 
     final chunks = <String>[];
@@ -385,6 +389,7 @@ void main() {
       translateTargetLang: '中文',
       searchUseBuiltin: true,
       webSearchEnabled: true,
+      ocrMode: 'high_precision',
     ));
 
     final chunks = <String>[];
@@ -429,6 +434,7 @@ void main() {
       visionApiKey: null,
       translateTargetLang: '中文',
       webSearchEnabled: false,
+      ocrMode: 'high_precision',
       searchUseBuiltin: false,
     ));
 

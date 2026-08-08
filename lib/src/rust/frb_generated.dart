@@ -1841,8 +1841,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   AiConfig dco_decode_ai_config(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 11)
-      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    if (arr.length != 12)
+      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
     return AiConfig(
       baseUrl: dco_decode_String(arr[0]),
       apiKey: dco_decode_String(arr[1]),
@@ -1855,6 +1855,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       searchApiKey: dco_decode_opt_String(arr[8]),
       translateTargetLang: dco_decode_String(arr[9]),
       webSearchEnabled: dco_decode_bool(arr[10]),
+      ocrMode: dco_decode_String(arr[11]),
     );
   }
 
@@ -2492,6 +2493,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_searchApiKey = sse_decode_opt_String(deserializer);
     var var_translateTargetLang = sse_decode_String(deserializer);
     var var_webSearchEnabled = sse_decode_bool(deserializer);
+    var var_ocrMode = sse_decode_String(deserializer);
     return AiConfig(
       baseUrl: var_baseUrl,
       apiKey: var_apiKey,
@@ -2504,6 +2506,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       searchApiKey: var_searchApiKey,
       translateTargetLang: var_translateTargetLang,
       webSearchEnabled: var_webSearchEnabled,
+      ocrMode: var_ocrMode,
     );
   }
 
@@ -3286,6 +3289,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.searchApiKey, serializer);
     sse_encode_String(self.translateTargetLang, serializer);
     sse_encode_bool(self.webSearchEnabled, serializer);
+    sse_encode_String(self.ocrMode, serializer);
   }
 
   @protected

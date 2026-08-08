@@ -30,6 +30,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _searchApiKey = TextEditingController();
   bool _webSearch = false;
   bool _searchBuiltin = false;
+  String _ocrMode = 'high_precision';
   bool _loaded = false;
   bool _saving = false;
 
@@ -62,6 +63,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _searchApiKey.text = config.searchApiKey ?? '';
     _searchBuiltin = config.searchUseBuiltin;
     _webSearch = config.webSearchEnabled;
+    _ocrMode = config.ocrMode == 'fast' ? 'fast' : 'high_precision';
   }
 
   Future<void> _save() async {
@@ -87,6 +89,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           : _searchApiKey.text.trim(),
       searchUseBuiltin: _searchBuiltin,
       webSearchEnabled: _webSearch,
+      ocrMode: _ocrMode,
     );
     final ok = await ref.read(aiConfigProvider.notifier).save(config);
     if (!mounted) return;
@@ -196,6 +199,35 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             label: '搜索 API Key',
             hint: '留空 = 降级为基于已有知识回答',
             obscure: true,
+          ),
+          const Divider(),
+          _SectionTitle('OCR 整页扫描（本地离线，FEATURES 7.1.9）', theme),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('识别模式'),
+            subtitle: Text(
+              _ocrMode == 'fast'
+                  ? '快速：mobile 模型，速度与体积优先（约 16MB）'
+                  : '高精度：server 模型，准确率优先（约 200MB，需先运行 '
+                      'scripts/download_ocr_models.sh 下载）',
+            ),
+            trailing: SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(
+                  value: 'high_precision',
+                  label: Text('高精度'),
+                  icon: Icon(Icons.high_quality_outlined, size: 16),
+                ),
+                ButtonSegment(
+                  value: 'fast',
+                  label: Text('快速'),
+                  icon: Icon(Icons.bolt_outlined, size: 16),
+                ),
+              ],
+              selected: {_ocrMode},
+              showSelectedIcon: false,
+              onSelectionChanged: (s) => setState(() => _ocrMode = s.first),
+            ),
           ),
           const SizedBox(height: 12),
           FilledButton.icon(

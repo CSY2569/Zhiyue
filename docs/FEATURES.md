@@ -177,6 +177,7 @@
 ## 7. OCR（双引擎）
 
 ### 7.1 本地整页扫描（免费、离线，中 / 英文，**精准优先**）
+> 已实现（2026-08）：7.1.1–7.1.6、7.1.8、7.1.9 —— rapidocr-core 引擎（PP-OCRv4 det/cls/rec，ONNX Runtime 静态链接，完全离线），`scripts/download_ocr_models.sh` 从 ModelScope 下载模型（sha256 校验）；实测 release 性能：快速 ~0.4s/页、高精度 ~1.8s/页（A4 合成页）。
 | 编号 | 优先级 | 需求 |
 |---|---|---|
 | 7.1.1 | P0 | 模型：PP-OCRv4（det / cls / rec + 字符表）；提供下载脚本（含完整性校验）；模型缺失时应用内明确提示 |

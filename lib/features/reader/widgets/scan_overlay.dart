@@ -55,7 +55,10 @@ class ScanOverlay extends ConsumerWidget {
         return _bar(
           theme,
           icon: Icons.check_circle_outline,
-          text: '识别完成，本页文字现在可以选中和标记了',
+          text: scan.lowConfidence > 0
+              ? '识别完成，本页文字现在可以选中和标记了。'
+                  '${scan.lowConfidence} 行置信度较低，建议对照原文复核'
+              : '识别完成，本页文字现在可以选中和标记了',
           actions: [
             IconButton(
               icon: const Icon(Icons.close, size: 16),

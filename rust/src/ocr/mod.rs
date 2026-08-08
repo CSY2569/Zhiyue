@@ -1,14 +1,22 @@
 //! OCR subsystem (FEATURES §7, TECH_ROADMAP §3.4).
 //!
-//! Full-page OCR chain (M5 skeleton): the engine contract is fixed and the
-//! cache + invisible-text-layer pipeline is wired; the actual rapidocr-core
-//! engine lands once the models are installed (`scripts/download_ocr_models.sh`,
-//! FEATURES 7.1.1). Until then a [StubOcrEngine] returns an explicit,
-//! actionable error instead of failing silently.
+//! Full-page OCR chain: the engine contract, the page cache and the
+//! invisible-text-layer pipeline are wired; the real rapidocr-core engine
+//! (`ocr` feature, `engine.rs`) loads PP-OCRv4 models from
+//! `{data_dir}/models/` (installed by `scripts/download_ocr_models.sh`,
+//! FEATURES 7.1.1). Without the `ocr` feature a [StubOcrEngine] returns an
+//! explicit, actionable error instead of failing silently.
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{AppError, AppResult};
+use crate::error::AppResult;
+#[cfg(not(feature = "ocr"))]
+use crate::error::AppError;
+
+#[cfg(feature = "ocr")]
+mod engine;
+#[cfg(feature = "ocr")]
+pub use engine::RapidOcrEngine;
 
 /// A page image in raw RGBA (original resolution, FEATURES 7.1.8 -- never
 /// the on-screen resolution). Kept crate-agnostic so the engine can be
@@ -41,18 +49,20 @@ pub struct OcrResult {
 }
 
 /// The OCR engine contract: scan a page image at its original resolution
-/// (FEATURES 7.1.8 -- never the on-screen resolution).
+/// (FEATURES 7.1.8 -- never the on-screen resolution). [mode] selects the
+/// model set (`"high_precision"` server models or `"fast"` mobile models,
+/// FEATURES 7.1.9).
 ///
-/// Implementations: [StubOcrEngine] (models not installed) and, once models
-/// are downloaded, a rapidocr-core engine (default PP-OCRv4 server
-/// high-precision det/rec; fast mode = mobile + int8, FEATURES 7.1.9).
+/// Implementations: [RapidOcrEngine] (the `ocr` feature, PP-OCRv4 via
+/// rapidocr-core) and [StubOcrEngine] (models not installed / no `ocr`
+/// feature, returns an actionable error).
 pub trait OcrEngine: Send + Sync {
     /// Whether the engine can run right now (models present, 7.1.5 lazy
     /// loading: the engine must not be loaded before the first scan).
     fn is_available(&self) -> bool;
 
-    /// Recognize text lines in a page image.
-    fn scan(&self, image: &PageImage<'_>) -> AppResult<OcrResult>;
+    /// Recognize text lines in a page image with the given model set.
+    fn scan(&self, image: &PageImage<'_>, mode: &str) -> AppResult<OcrResult>;
 }
 
 /// Placeholder engine: the chain (cache + text layer injection) is wired,
@@ -67,20 +77,28 @@ impl StubOcrEngine {
         "OCR 模型未安装：请运行 scripts/download_ocr_models.sh 下载模型后重试";
 }
 
+#[cfg(not(feature = "ocr"))]
+static STUB: StubOcrEngine = StubOcrEngine;
+
+/// The active engine. With the `ocr` feature this is the real rapidocr-core
+/// engine (lazily loaded on first scan, 7.1.5); otherwise the stub.
+#[cfg(feature = "ocr")]
+pub fn engine() -> &'static dyn OcrEngine {
+    &RapidOcrEngine
+}
+
+#[cfg(not(feature = "ocr"))]
+pub fn engine() -> &'static dyn OcrEngine {
+    &STUB
+}
+
+#[cfg(not(feature = "ocr"))]
 impl OcrEngine for StubOcrEngine {
     fn is_available(&self) -> bool {
         false
     }
 
-    fn scan(&self, _image: &PageImage<'_>) -> AppResult<OcrResult> {
+    fn scan(&self, _image: &PageImage<'_>, _mode: &str) -> AppResult<OcrResult> {
         Err(AppError::Ocr(Self::MISSING_MODELS.into()))
     }
-}
-
-static STUB: StubOcrEngine = StubOcrEngine;
-
-/// The active engine. Returns the stub until a real engine is wired in
-/// (engine lazy-loads on first scan, 7.1.5).
-pub fn engine() -> &'static dyn OcrEngine {
-    &STUB
 }

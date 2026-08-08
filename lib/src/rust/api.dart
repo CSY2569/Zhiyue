@@ -353,8 +353,9 @@ Future<int> appendAiMessage({
   actionType: actionType,
 );
 
-/// Delete one conversation window (its messages cascade). Returns 1 if the
-/// window existed, 0 otherwise (6.5.3 per-window deletion).
+/// Delete one conversation window (its messages cascade; their persisted
+/// screenshots are removed from disk too). Returns 1 if the window existed,
+/// 0 otherwise (6.5.3 per-window deletion).
 Future<int> deleteAiThread({required PlatformInt64 threadId}) =>
     RustLib.instance.api.crateApiDeleteAiThread(threadId: threadId);
 

@@ -127,6 +127,15 @@ pub struct AiConfig {
     pub translate_target_lang: String,
     /// Web search toggle (6.1.4).
     pub web_search_enabled: bool,
+    /// Full-page OCR model set (7.1.9): "high_precision" (server models,
+    /// accuracy first) or "fast" (mobile models, speed / size). Field-level
+    /// default so configs saved by older builds read a valid value.
+    #[serde(default = "default_ocr_mode")]
+    pub ocr_mode: String,
+}
+
+fn default_ocr_mode() -> String {
+    "high_precision".to_string()
 }
 
 impl Default for AiConfig {
@@ -143,6 +152,7 @@ impl Default for AiConfig {
             search_api_key: None,
             translate_target_lang: "中文".to_string(),
             web_search_enabled: false,
+            ocr_mode: "high_precision".to_string(),
         }
     }
 }
@@ -198,6 +208,7 @@ mod tests {
             search_api_key: Some("sk-s".into()),
             translate_target_lang: "中文".into(),
             web_search_enabled: true,
+            ocr_mode: "fast".into(),
         };
         let back: AiConfig = serde_json::from_str(&serde_json::to_string(&cfg).unwrap()).unwrap();
         assert_eq!(back.base_url, cfg.base_url);
@@ -211,5 +222,13 @@ mod tests {
         assert_eq!(back.search_api_key, cfg.search_api_key);
         assert_eq!(back.translate_target_lang, "中文");
         assert!(back.web_search_enabled);
+        assert_eq!(back.ocr_mode, "fast");
+
+        // A config saved by an older build (no ocr_mode) still loads: the
+        // serde default kicks in.
+        let legacy: AiConfig =
+            serde_json::from_str(r#"{"base_url":"","api_key":"","text_model":"","vision_model":""}"#)
+                .unwrap();
+        assert_eq!(legacy.ocr_mode, "high_precision");
     }
 }

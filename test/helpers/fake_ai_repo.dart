@@ -13,6 +13,10 @@ class FakeAiRepo extends AiRepository {
   AiConfig? saved;
   bool failStream = false;
 
+  /// OCR model set served by [getAiConfig] (7.1.9); tests flip this to
+  /// verify the scan pipeline follows the setting.
+  String ocrMode = 'high_precision';
+
   /// In-memory "database": thread id -> (title, messages).
   final savedThreads = <int, String>{};
   final savedBookIds = <int, int?>{};
@@ -34,6 +38,7 @@ class FakeAiRepo extends AiRepository {
         translateTargetLang: '中文',
         webSearchEnabled: true,
         searchUseBuiltin: false,
+        ocrMode: ocrMode,
       );
 
   @override

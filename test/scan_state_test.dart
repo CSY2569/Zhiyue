@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:rbwa/data/repositories/ai_repository.dart';
 import 'package:rbwa/data/repositories/reader_repository.dart';
 import 'package:rbwa/features/reader/providers/scan_provider.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
@@ -8,12 +9,19 @@ import 'package:rbwa/src/rust/api.dart' as rust;
 import 'package:rbwa/src/rust/models/book.dart';
 import 'package:rbwa/src/rust/ocr.dart' show OcrLine, OcrResult;
 
-/// Fake repository: the text-layer check and the scan engine are canned
-/// (the real engine is a stub until the models are installed).
+import 'helpers/fake_ai_repo.dart';
+
+/// Fake repository: the text-layer check and the scan engine are canned.
 class _FakeScanRepo extends ReaderRepository {
   bool hasText = false;
   bool scanFails = true;
   bool scanEmpty = false;
+  rust.OcrMode? lastMode;
+
+  /// Lines a successful scan returns (default: one confident line).
+  List<OcrLine> lines = const [
+    OcrLine(text: '你好世界', x: 0.1, y: 0.2, w: 0.5, h: 0.03, confidence: 0.98),
+  ];
 
   @override
   Future<bool> pageHasText(int bookId, int page) async => hasText;
@@ -21,6 +29,7 @@ class _FakeScanRepo extends ReaderRepository {
   @override
   Future<rust.ScanPageResult> scanPage(
           int bookId, int page, rust.OcrMode mode) async {
+    lastMode = mode;
     if (scanFails) {
       return rust.ScanPageResult(
         lines: const [],
@@ -32,9 +41,7 @@ class _FakeScanRepo extends ReaderRepository {
       return rust.ScanPageResult(lines: const [], mode: 'high_precision', error: null);
     }
     return rust.ScanPageResult(
-      lines: [
-        OcrLine(text: '你好世界', x: 0.1, y: 0.2, w: 0.5, h: 0.03, confidence: 0.98),
-      ],
+      lines: lines,
       mode: 'high_precision',
       error: null,
     );
@@ -59,9 +66,10 @@ Book _book() => Book(
       importedAt: 'now',
     );
 
-ProviderContainer _container(_FakeScanRepo repo) {
+ProviderContainer _container(_FakeScanRepo repo, {FakeAiRepo? aiRepo}) {
   final container = ProviderContainer(overrides: [
     readerRepositoryProvider.overrideWithValue(repo),
+    if (aiRepo != null) aiRepositoryProvider.overrideWithValue(aiRepo),
     viewerProvider.overrideWith((ref) {
       final n = ViewerNotifier(ref);
       n.state = ViewerState(
@@ -146,5 +154,49 @@ void main() {
     // Flipping the page re-runs the check (back to prompt).
     container.read(viewerProvider.notifier).setPage(2);
     await _settle(container, ScanPhase.prompt);
+  });
+
+  test('scan follows the configured OCR model set (7.1.9)', () async {
+    final repo = _FakeScanRepo()
+      ..hasText = false
+      ..scanFails = false;
+    final aiRepo = FakeAiRepo()..ocrMode = 'fast';
+    final container = _container(repo, aiRepo: aiRepo);
+    container.read(scanStateProvider);
+    await _settle(container, ScanPhase.prompt);
+
+    await container.read(scanStateProvider.notifier).scan();
+    expect(container.read(scanStateProvider).phase, ScanPhase.success);
+    expect(repo.lastMode, rust.OcrMode.fast);
+
+    // Default (no config override): high precision.
+    final repo2 = _FakeScanRepo()
+      ..hasText = false
+      ..scanFails = false;
+    final container2 = _container(repo2);
+    container2.read(scanStateProvider);
+    await _settle(container2, ScanPhase.prompt);
+    await container2.read(scanStateProvider.notifier).scan();
+    expect(repo2.lastMode, rust.OcrMode.highPrecision);
+  });
+
+  test('success counts low-confidence lines for review (7.1.6)', () async {
+    final repo = _FakeScanRepo()
+      ..hasText = false
+      ..scanFails = false
+      ..lines = const [
+        OcrLine(text: '清晰', x: 0.1, y: 0.1, w: 0.5, h: 0.03, confidence: 0.98),
+        OcrLine(text: '模糊', x: 0.1, y: 0.2, w: 0.5, h: 0.03, confidence: 0.62),
+        OcrLine(text: '边界', x: 0.1, y: 0.3, w: 0.5, h: 0.03, confidence: 0.8),
+      ];
+    final container = _container(repo);
+    container.read(scanStateProvider);
+    await _settle(container, ScanPhase.prompt);
+
+    await container.read(scanStateProvider.notifier).scan();
+    final state = container.read(scanStateProvider);
+    expect(state.phase, ScanPhase.success);
+    // 0.62 < 0.8 flagged; 0.8 is exactly at the threshold, not flagged.
+    expect(state.lowConfidence, 1);
   });
 }

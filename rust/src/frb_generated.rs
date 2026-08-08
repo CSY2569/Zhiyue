@@ -1826,6 +1826,7 @@ impl SseDecode for crate::models::ai::AiConfig {
         let mut var_searchApiKey = <Option<String>>::sse_decode(deserializer);
         let mut var_translateTargetLang = <String>::sse_decode(deserializer);
         let mut var_webSearchEnabled = <bool>::sse_decode(deserializer);
+        let mut var_ocrMode = <String>::sse_decode(deserializer);
         return crate::models::ai::AiConfig {
             base_url: var_baseUrl,
             api_key: var_apiKey,
@@ -1838,6 +1839,7 @@ impl SseDecode for crate::models::ai::AiConfig {
             search_api_key: var_searchApiKey,
             translate_target_lang: var_translateTargetLang,
             web_search_enabled: var_webSearchEnabled,
+            ocr_mode: var_ocrMode,
         };
     }
 }
@@ -2718,6 +2720,7 @@ impl flutter_rust_bridge::IntoDart for crate::models::ai::AiConfig {
             self.search_api_key.into_into_dart().into_dart(),
             self.translate_target_lang.into_into_dart().into_dart(),
             self.web_search_enabled.into_into_dart().into_dart(),
+            self.ocr_mode.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -3377,6 +3380,7 @@ impl SseEncode for crate::models::ai::AiConfig {
         <Option<String>>::sse_encode(self.search_api_key, serializer);
         <String>::sse_encode(self.translate_target_lang, serializer);
         <bool>::sse_encode(self.web_search_enabled, serializer);
+        <String>::sse_encode(self.ocr_mode, serializer);
     }
 }
 

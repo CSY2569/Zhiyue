@@ -1372,7 +1372,7 @@ pub async fn scan_page(book_id: i64, page: i64, mode: OcrMode) -> ScanPageResult
         height: bmp.height,
     };
 
-    match engine.scan(&page_img) {
+    match engine.scan(&page_img, &mode_str) {
         Ok(result) => {
             // Cache before returning so flips back are instant (7.1.4).
             let conn = db::db();

@@ -15,9 +15,8 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 # ---------------------------------------------------------------------------
 # Dependencies are declared only when actually exercised by the code
 # (flutter_rust_bridge, rusqlite, tokio, thiserror, tracing, serde, dirs).
-# Subsystem crates (pdfium-render, reqwest, image) are gated behind cargo
-# features per milestone (M2-M6). rapidocr-core is intentionally omitted
-# until M5 because its API is still young; we will pin a version then.
+# Subsystem crates (pdfium-render, reqwest, image, rapidocr-core) are gated
+# behind cargo features per milestone (M2-M6).
 # ---------------------------------------------------------------------------
 
 [dependencies]
@@ -73,12 +72,21 @@ dirs = "5"
 # Misc
 uuid = { version = "1", features = ["v4"] }
 
+# Local OCR engine (M5, FEATURES §7): full PP-OCRv4 det/cls/rec pipeline on
+# ONNX Runtime. `default-features = false` drops its built-in model downloader
+# (reqwest): models are provisioned by scripts/download_ocr_models.sh into
+# {data_dir}/models/ and the engine loads them with explicit paths.
+rapidocr-core = { version = "0.2.2", default-features = false, optional = true }
+
 [features]
-default = ["pdf", "ai"]
+default = ["pdf", "ai", "ocr"]
 # Opt-in subsystem crates, enabled per milestone to keep the build lean.
 pdf = ["dep:pdfium-render", "dep:image"]
 # M4: AI streaming client. `image` provides PNG encoding for vision screenshots.
 ai = ["dep:reqwest", "dep:image"]
+# M5: local full-page OCR engine (rapidocr-core + onnxruntime). Without it
+# the OCR api layer falls back to an explicit "models not installed" error.
+ocr = ["dep:rapidocr-core", "dep:image"]
 
 [profile.release]
 opt-level = "z"
@@ -90,3 +98,9 @@ panic = "abort"
 [profile.dev]
 opt-level = 0
 debug = true
+
+[dev-dependencies]
+# Synthetic text-page rendering for the ignored e2e OCR test (the engine
+# itself pulls imageproc transitively; declare it explicitly for the test).
+imageproc = "0.25"
+ab_glyph = "0.2"

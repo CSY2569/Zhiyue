@@ -41,6 +41,10 @@ class AiConfig {
   /// Web search toggle (6.1.4).
   final bool webSearchEnabled;
 
+  /// Full-page OCR model set (7.1.9): "high_precision" (server models,
+  /// accuracy first) or "fast" (mobile models, speed / size).
+  final String ocrMode;
+
   const AiConfig({
     required this.baseUrl,
     required this.apiKey,
@@ -53,6 +57,7 @@ class AiConfig {
     this.searchApiKey,
     required this.translateTargetLang,
     required this.webSearchEnabled,
+    required this.ocrMode,
   });
 
   @override
@@ -67,7 +72,8 @@ class AiConfig {
       searchBaseUrl.hashCode ^
       searchApiKey.hashCode ^
       translateTargetLang.hashCode ^
-      webSearchEnabled.hashCode;
+      webSearchEnabled.hashCode ^
+      ocrMode.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -84,7 +90,8 @@ class AiConfig {
           searchBaseUrl == other.searchBaseUrl &&
           searchApiKey == other.searchApiKey &&
           translateTargetLang == other.translateTargetLang &&
-          webSearchEnabled == other.webSearchEnabled;
+          webSearchEnabled == other.webSearchEnabled &&
+          ocrMode == other.ocrMode;
 }
 
 /// A single message in a thread (table: ai_messages).
