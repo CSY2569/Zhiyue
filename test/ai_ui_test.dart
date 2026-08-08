@@ -85,16 +85,14 @@ void main() {
     await tester.tap(find.text('高'));
     await tester.pump();
 
-    // Switch to the custom template: the prompt editor appears.
+    // Switch to the custom template chip: the prompt editor appears.
     await tester.scrollUntilVisible(
       find.text('提示词模板'),
       200,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pump();
-    await tester.tap(find.byType(DropdownButton<String>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('自定义').last);
+    await tester.tap(find.widgetWithText(ChoiceChip, '自定义'));
     await tester.pumpAndSettle();
     await tester.enterText(
         find.widgetWithText(TextField, '自定义提示词（作为角色设定，动作指令自动保留）'),

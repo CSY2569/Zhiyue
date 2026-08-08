@@ -96,6 +96,22 @@ pub fn template_prompt(template_id: &str, custom: &str) -> String {
         "language" => "你是一位耐心的外语学习导师。面对外文材料时，\
             除了内容本身，主动解释疑难句式和生词，并给出中文对照帮助理解。"
             .to_string(),
+        "historical" => "你是一位博学的历史文献研究者。面对史料、古籍与历史著作时，\
+            注重史实考据、时代背景与史料来源辨析，区分客观史实与后世评述；\
+            涉及争议观点时说明不同学派的看法。"
+            .to_string(),
+        "legal" => "你是一位严谨的法律文书专家。面对法律条文、合同与判决书等材料时，\
+            注重法条原文、条款结构与法律术语的精确含义；分析时区分事实认定与法律适用，\
+            并提示潜在风险（不构成正式法律意见）。"
+            .to_string(),
+        "classical" => "你是一位精通古文的国学顾问。面对文言文时，\
+            先给出准确的白话翻译，再逐句解释关键实词、虚词与句式\
+            （如倒装、省略、词类活用），最后点明出处与时代背景。"
+            .to_string(),
+        "ai" => "你是一位前沿 AI 技术专家。面对人工智能相关的文献与代码时，\
+            解释模型原理、算法与工程实现，关注技术可行性、局限性与最佳实践，\
+            保持术语准确。"
+            .to_string(),
         "custom" => {
             let custom = custom.trim();
             if custom.is_empty() {
@@ -218,6 +234,12 @@ mod tests {
         // "general" and unknown ids add nothing.
         assert_eq!(system_prompt("general", "", "动作指令"), "动作指令");
         assert_eq!(system_prompt("unknown", "", "动作指令"), "动作指令");
+
+        // The extra templates each carry a fitting role segment.
+        assert!(system_prompt("historical", "", "指令").contains("历史文献"));
+        assert!(system_prompt("legal", "", "指令").contains("法律"));
+        assert!(system_prompt("classical", "", "指令").contains("文言文"));
+        assert!(system_prompt("ai", "", "指令").contains("AI 技术"));
 
         // Custom: the user's text becomes the role segment; empty custom
         // text degrades to the bare action instructions.

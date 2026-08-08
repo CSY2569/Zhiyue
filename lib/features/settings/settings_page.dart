@@ -270,20 +270,22 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('提示词模板'),
-            subtitle: Text(_templateName(_promptTemplate)),
-            trailing: DropdownButton<String>(
-              value: _promptTemplate,
-              underline: const SizedBox.shrink(),
-              items: const [
-                DropdownMenuItem(value: 'general', child: Text('通用')),
-                DropdownMenuItem(value: 'academic', child: Text('学术论文')),
-                DropdownMenuItem(value: 'novel', child: Text('小说文学')),
-                DropdownMenuItem(value: 'tech', child: Text('技术文档')),
-                DropdownMenuItem(value: 'language', child: Text('外语学习')),
-                DropdownMenuItem(value: 'custom', child: Text('自定义')),
-              ],
-              onChanged: (v) =>
-                  v == null ? null : setState(() => _promptTemplate = v),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  for (final t in _templateOptions)
+                    ChoiceChip(
+                      label: Text(t.label),
+                      selected: _promptTemplate == t.id,
+                      visualDensity: VisualDensity.compact,
+                      onSelected: (_) =>
+                          setState(() => _promptTemplate = t.id),
+                    ),
+                ],
+              ),
             ),
           ),
           if (_promptTemplate == 'custom')
@@ -338,25 +340,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       ),
     );
   }
-
-  /// Display name of the prompt template id (unknown ids -> 通用).
-  String _templateName(String id) {
-    switch (id) {
-      case 'academic':
-        return '学术论文';
-      case 'novel':
-        return '小说文学';
-      case 'tech':
-        return '技术文档';
-      case 'language':
-        return '外语学习';
-      case 'custom':
-        return '自定义（见下方输入框）';
-      default:
-        return '通用';
-    }
-  }
 }
+
+/// The selectable prompt templates (id -> label), shown as a chip row.
+const _templateOptions = [
+  (id: 'general', label: '通用'),
+  (id: 'academic', label: '学术论文'),
+  (id: 'novel', label: '小说文学'),
+  (id: 'tech', label: '技术文档'),
+  (id: 'language', label: '外语学习'),
+  (id: 'historical', label: '历史文献'),
+  (id: 'legal', label: '法律文书'),
+  (id: 'classical', label: '文言文'),
+  (id: 'ai', label: 'AI 技术'),
+  (id: 'custom', label: '自定义'),
+];
 
 class _SectionTitle extends StatelessWidget {
   const _SectionTitle(this.text, this.theme);
