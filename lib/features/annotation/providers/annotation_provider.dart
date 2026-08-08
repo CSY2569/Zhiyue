@@ -83,3 +83,24 @@ final annotationProvider =
     AsyncNotifierProvider<AnnotationNotifier, List<TextAnnotation>>(
   AnnotationNotifier.new,
 );
+
+/// Per-kind visibility for text annotations (mirrors the image-mark
+/// visibility filter; the unified sidebar shows only enabled kinds).
+class AnnotationTypeFilterNotifier extends Notifier<Set<TextAnnotationKind>> {
+  @override
+  Set<TextAnnotationKind> build() => TextAnnotationKind.values.toSet();
+
+  void toggle(TextAnnotationKind kind) {
+    final next = Set<TextAnnotationKind>.from(state);
+    if (!next.remove(kind)) next.add(kind);
+    state = next;
+  }
+
+  void showAll() => state = TextAnnotationKind.values.toSet();
+}
+
+/// Which text-annotation kinds are visible in the sidebar (default: all).
+final annotationTypeFilterProvider =
+    NotifierProvider<AnnotationTypeFilterNotifier, Set<TextAnnotationKind>>(
+  AnnotationTypeFilterNotifier.new,
+);

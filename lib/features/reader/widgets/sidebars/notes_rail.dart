@@ -23,7 +23,8 @@ class NotesRail extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final anns = ref.watch(annotationProvider).valueOrNull ?? const [];
     final marks = ref.watch(imageMarkProvider).valueOrNull ?? const [];
-    final visibility = ref.watch(markVisibilityProvider);
+    final annVisibility = ref.watch(annotationTypeFilterProvider);
+    final markVisibility = ref.watch(markVisibilityProvider);
     final hasMarks = marks.isNotEmpty;
     final empty = anns.isEmpty && marks.isEmpty;
 
@@ -33,13 +34,17 @@ class NotesRail extends ConsumerWidget {
         color: Theme.of(context).colorScheme.surfaceContainerLow,
         child: Column(
           children: [
-            if (hasMarks) _MarkFilterBar(visibility: visibility),
+            _FilterBar(
+              annVisibility: annVisibility,
+              markVisibility: markVisibility,
+            ),
             Expanded(
               child: empty
                   ? const _EmptyHint()
                   : ListView(
                       padding: const EdgeInsets.symmetric(vertical: 4),
-                      children: _groupedItems(anns, marks, visibility),
+                      children:
+                          _flatItems(anns, marks, annVisibility, markVisibility),
                     ),
             ),
             if (hasMarks) const _ClearMarksBar(),
@@ -50,82 +55,85 @@ class NotesRail extends ConsumerWidget {
     );
   }
 
-  /// Flat widget list: one page header followed by that page's text
-  /// annotations and visible image marks (both lists arrive sorted by page).
-  List<Widget> _groupedItems(
+  /// Flat list of every visible mark / annotation, in page order (no page
+  /// grouping): each entry carries its page and jumps there on tap.
+  List<Widget> _flatItems(
     List<TextAnnotation> anns,
     List<ImageMark> marks,
-    Set<ImageMarkKind> visible,
+    Set<TextAnnotationKind> annVisible,
+    Set<ImageMarkKind> markVisible,
   ) {
-    final pageItems = <int, List<Widget>>{};
+    final entries = <(int, Widget)>[];
     for (final ann in anns) {
-      (pageItems[ann.page] ??= []).add(_AnnotationTile(ann: ann, onJump: onJump));
+      if (!annVisible.contains(ann.kind)) continue;
+      entries.add((ann.page, _AnnotationTile(ann: ann, onJump: onJump)));
     }
     for (final m in marks) {
-      if (!visible.contains(m.kind)) continue;
-      (pageItems[m.page] ??= []).add(_MarkTile(mark: m, onJump: onJump));
+      if (!markVisible.contains(m.kind)) continue;
+      entries.add((m.page, _MarkTile(mark: m, onJump: onJump)));
     }
-    final pages = pageItems.keys.toList()..sort();
-    final items = <Widget>[];
-    for (final page in pages) {
-      items.add(_PageHeader(page: page));
-      items.addAll(pageItems[page]!);
-    }
-    return items;
+    entries.sort((a, b) => a.$1.compareTo(b.$1));
+    return [for (final e in entries) e.$2];
   }
 }
 
-/// Per-type visibility chips for image marks (FEATURES 5.5: filter show /
-/// hide by type).
-class _MarkFilterBar extends ConsumerWidget {
-  const _MarkFilterBar({required this.visibility});
+/// Per-kind visibility chips: text-annotation kinds (高亮 / 下划线 / 删除线 /
+/// 笔记) and image-mark kinds (画笔 / 形状 / 便签 / 图章). Only enabled kinds
+/// show in the flat list below.
+class _FilterBar extends ConsumerWidget {
+  const _FilterBar({
+    required this.annVisibility,
+    required this.markVisibility,
+  });
 
-  final Set<ImageMarkKind> visibility;
+  final Set<TextAnnotationKind> annVisibility;
+  final Set<ImageMarkKind> markVisibility;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    Widget chip(String label, bool selected, VoidCallback onTap) => FilterChip(
+          label: Text(label, style: theme.textTheme.labelSmall),
+          selected: selected,
+          visualDensity: VisualDensity.compact,
+          onSelected: (_) => onTap(),
+        );
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
       child: Wrap(
         spacing: 4,
         runSpacing: 4,
         children: [
+          // Text-annotation kinds.
+          chip('高亮', annVisibility.contains(TextAnnotationKind.highlight),
+              () => ref
+                  .read(annotationTypeFilterProvider.notifier)
+                  .toggle(TextAnnotationKind.highlight)),
+          chip('下划线', annVisibility.contains(TextAnnotationKind.underline),
+              () => ref
+                  .read(annotationTypeFilterProvider.notifier)
+                  .toggle(TextAnnotationKind.underline)),
+          chip('删除线', annVisibility.contains(TextAnnotationKind.strikethrough),
+              () => ref
+                  .read(annotationTypeFilterProvider.notifier)
+                  .toggle(TextAnnotationKind.strikethrough)),
+          chip('笔记', annVisibility.contains(TextAnnotationKind.note),
+              () => ref
+                  .read(annotationTypeFilterProvider.notifier)
+                  .toggle(TextAnnotationKind.note)),
+          // Image-mark kinds.
           for (final kind in ImageMarkKind.values)
-            FilterChip(
-              label: Text(
-                switch (kind) {
-                  ImageMarkKind.brush => '画笔',
-                  ImageMarkKind.shape => '形状',
-                  ImageMarkKind.sticky => '便签',
-                  ImageMarkKind.stamp => '图章',
-                },
-                style: Theme.of(context).textTheme.labelSmall,
-              ),
-              selected: visibility.contains(kind),
-              visualDensity: VisualDensity.compact,
-              onSelected: (_) =>
-                  ref.read(markVisibilityProvider.notifier).toggle(kind),
+            chip(
+              switch (kind) {
+                ImageMarkKind.brush => '画笔',
+                ImageMarkKind.shape => '形状',
+                ImageMarkKind.sticky => '便签',
+                ImageMarkKind.stamp => '图章',
+              },
+              markVisibility.contains(kind),
+              () => ref.read(markVisibilityProvider.notifier).toggle(kind),
             ),
         ],
-      ),
-    );
-  }
-}
-
-class _PageHeader extends StatelessWidget {
-  const _PageHeader({required this.page});
-
-  final int page; // 0-indexed
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-      child: Text(
-        '第 ${page + 1} 页',
-        style: theme.textTheme.labelMedium
-            ?.copyWith(color: theme.colorScheme.primary),
       ),
     );
   }
@@ -300,7 +308,29 @@ class _ClearMarksBar extends ConsumerWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 0, 8, 0),
       child: TextButton.icon(
-        onPressed: () => ref.read(imageMarkProvider.notifier).clearAll(),
+        onPressed: () async {
+          // 二次确认：清空不可撤销（FEATURES 5.5 整体清空）。
+          final ok = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('清空全部标记？'),
+              content: const Text('将删除本书所有的画笔、形状、便签与图章标记，此操作不可撤销。'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('清空'),
+                ),
+              ],
+            ),
+          );
+          if (ok == true) {
+            await ref.read(imageMarkProvider.notifier).clearAll();
+          }
+        },
         icon: const Icon(Icons.delete_sweep_outlined, size: 16),
         label: const Text('清空全部标记'),
       ),
@@ -327,7 +357,8 @@ class _ExportBar extends ConsumerWidget {
                   onPressed: () =>
                       exportAnnotations(context, ref, format: 'markdown'),
                   icon: const Icon(Icons.description_outlined, size: 16),
-                  label: const Text('Markdown'),
+                  label: const Text('Markdown',
+                      style: TextStyle(fontSize: 12)),
                 ),
               ),
               const SizedBox(width: 8),
@@ -336,7 +367,7 @@ class _ExportBar extends ConsumerWidget {
                   onPressed: () =>
                       exportAnnotations(context, ref, format: 'json'),
                   icon: const Icon(Icons.data_object, size: 16),
-                  label: const Text('JSON'),
+                  label: const Text('JSON', style: TextStyle(fontSize: 12)),
                 ),
               ),
             ],

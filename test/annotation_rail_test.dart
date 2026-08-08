@@ -79,7 +79,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('groups annotations by page with icons and text', (tester) async {
+  testWidgets('lists annotations flat with per-kind filter chips',
+      (tester) async {
     _FakeAnnotationNotifier.data = [
       ann(1, 0, TextAnnotationKind.highlight, text: 'first line'),
       ann(2, 0, TextAnnotationKind.note, text: 'second', content: 'note body'),
@@ -88,15 +89,17 @@ void main() {
     await tester.pumpWidget(harness());
     await tester.pump();
 
-    // Group headers only for pages that have annotations (page 2 is absent).
-    expect(find.text('第 1 页'), findsOneWidget);
-    expect(find.text('第 3 页'), findsOneWidget);
-    expect(find.text('第 2 页'), findsNothing);
-
-    // Entries show the selected text and note preview.
+    // Flat list (no page headers): every entry visible.
+    expect(find.text('第 1 页'), findsNothing);
     expect(find.text('first line'), findsOneWidget);
     expect(find.text('note body'), findsOneWidget);
     expect(find.text('third line'), findsOneWidget);
+
+    // Text-annotation filter chips are present (高亮/下划线/删除线/笔记).
+    expect(find.text('高亮'), findsOneWidget);
+    expect(find.text('下划线'), findsOneWidget);
+    expect(find.text('删除线'), findsOneWidget);
+    expect(find.text('笔记'), findsOneWidget);
 
     // Export bar is present.
     expect(find.text('Markdown'), findsOneWidget);
@@ -128,7 +131,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('lists image marks alongside text annotations by page',
+  testWidgets('lists image marks flat alongside text annotations',
       (tester) async {
     _FakeAnnotationNotifier.data = [
       ann(1, 0, TextAnnotationKind.highlight, text: 'first line'),
@@ -140,9 +143,8 @@ void main() {
     await tester.pumpWidget(harness());
     await tester.pump();
 
-    // Both kinds share the page groups; headers cover pages 1 and 2.
-    expect(find.text('第 1 页'), findsOneWidget);
-    expect(find.text('第 2 页'), findsOneWidget);
+    // All entries in one flat list (no page headers, no text/image split).
+    expect(find.text('第 1 页'), findsNothing);
     expect(find.text('first line'), findsOneWidget);
     expect(find.text('贴上的便签'), findsOneWidget);
     expect(find.textContaining('画笔（'), findsOneWidget);
