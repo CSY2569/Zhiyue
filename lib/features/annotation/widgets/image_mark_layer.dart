@@ -214,6 +214,8 @@ class _ImageMarkLayerState extends ConsumerState<ImageMarkLayer> {
   int? _selectedId;
   Offset? _moveStart; // gesture start (normalized)
   Offset? _markStartPos; // mark position before the gesture
+  double? _scaleStartW; // mark size before a resize gesture
+  double? _scaleStartH;
   ImageMark? _dragBefore; // mark snapshot before the drag (undo)
   _Corner? _scaleCorner;
 
@@ -363,9 +365,19 @@ class _ImageMarkLayerState extends ConsumerState<ImageMarkLayer> {
             break;
           }
         }
+        if (selected == null) {
+          setState(() {
+            _moveStart = null;
+            _markStartPos = null;
+          });
+          break;
+        }
+        final sel = selected;
         setState(() {
           _moveStart = p; // zero delta at the pan-start position
-          _markStartPos = selected == null ? null : Offset(selected.x, selected.y);
+          _markStartPos = Offset(sel.x, sel.y);
+          _scaleStartW = sel.w;
+          _scaleStartH = sel.h;
         });
       case MarkTool.sticky:
       case MarkTool.stamp:
@@ -382,40 +394,24 @@ class _ImageMarkLayerState extends ConsumerState<ImageMarkLayer> {
       case MarkTool.shape:
         setState(() => _shapeCurrent = p);
       case MarkTool.select:
+        // The target follows the pointer relative to the *baseline* recorded
+        // at pan start -- never relative to the already-updated list value,
+        // which would accumulate the delta on every move and make the mark
+        // run away from the cursor.
         final start = _moveStart;
         final startPos = _markStartPos;
         if (start == null || startPos == null) return;
         final delta = p - start;
         if (_scaleCorner != null) {
-          ImageMark? selected;
-          for (final m in _pageMarks) {
-            if (m.id == _selectedId) {
-              selected = m;
-              break;
-            }
-          }
-          if (selected == null) return;
-          final w = (selected.w ?? 0.2);
-          final h = (selected.h ?? 0.2);
-          // Scale around the center: corner drag changes w/h by 2x delta
-          // along the dragged axis.
-          final newW = (w + 2 * delta.dx).clamp(0.01, 2.0);
-          final newH = (h + 2 * delta.dy).clamp(0.01, 2.0);
-          final sel = selected;
-          setState(() => _applyDrag(_selectedId!, Offset(sel.x, sel.y),
-              w: newW, h: newH));
+          final sw = _scaleStartW;
+          final sh = _scaleStartH;
+          if (sw == null || sh == null) return;
+          final newW = (sw + 2 * delta.dx).clamp(0.01, 2.0);
+          final newH = (sh + 2 * delta.dy).clamp(0.01, 2.0);
+          setState(
+              () => _applyDrag(_selectedId!, startPos, w: newW, h: newH));
         } else {
-          ImageMark? selected;
-          for (final m in _pageMarks) {
-            if (m.id == _selectedId) {
-              selected = m;
-              break;
-            }
-          }
-          if (selected == null) return;
-          final sel = selected;
-          setState(() => _applyDrag(_selectedId!,
-              Offset(sel.x + delta.dx, sel.y + delta.dy)));
+          setState(() => _applyDrag(_selectedId!, startPos + delta));
         }
       case MarkTool.sticky:
       case MarkTool.stamp:
@@ -478,6 +474,8 @@ class _ImageMarkLayerState extends ConsumerState<ImageMarkLayer> {
         setState(() {
           _moveStart = null;
           _markStartPos = null;
+          _scaleStartW = null;
+          _scaleStartH = null;
           _dragBefore = null;
           _scaleCorner = null;
           _panDown = null;

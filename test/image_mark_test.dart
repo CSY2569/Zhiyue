@@ -414,5 +414,62 @@ void main() {
       expect(find.text('请先在工具栏选择图章图片'), findsOneWidget);
       expect(repo.marks, isEmpty);
     });
+
+    testWidgets('select drag moves the mark with the pointer (no runaway)',
+        (tester) async {
+      final repo = _FakeReaderRepo();
+      final container = _container(repo);
+      final notifier = container.read(imageMarkProvider.notifier);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(width: 400, height: 600, child: ImageMarkLayer(page: 0)),
+            ),
+          ),
+        ),
+      ));
+
+      // A sticky note at (0.3, 0.3), size 0.3 x 0.1.
+      await notifier.create(ImageMark(
+        page: 0,
+        kind: ImageMarkKind.sticky,
+        x: 0.3,
+        y: 0.3,
+        w: 0.3,
+        h: 0.1,
+        payload: stickyPayload('hi'),
+        style: const ImageMarkStyle().toJson(),
+      ));
+      await tester.pumpAndSettle();
+
+      // Arm the select tool and drag from the note's center.
+      container.read(markToolProvider.notifier).setTool(MarkTool.select);
+      await tester.pump();
+      // Note center on screen: layer origin (200, 0) + (0.3*400, 0.3*600).
+      final down = const Offset(320, 180);
+      final gesture = await tester.startGesture(down);
+      await gesture.moveTo(const Offset(330, 190));
+      await gesture.moveTo(const Offset(360, 205));
+      await gesture.moveTo(const Offset(400, 225));
+      await gesture.moveTo(const Offset(440, 245));
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      // The mark follows the pointer: its center ends near the final
+      // pointer position (trailing at most the touch-slop consumed before
+      // the drag started). The runaway bug made it overshoot far past the
+      // cursor because every move re-applied the whole delta.
+      final moved = container.read(imageMarkProvider).valueOrNull!.single;
+      final screenX = moved.x * 400 + 200; // layer origin at (200, 0)
+      final screenY = moved.y * 600;
+      expect(screenX, lessThan(440 + 1)); // never ahead of the pointer
+      expect(screenX, greaterThan(440 - 60)); // trails within slop distance
+      expect(screenY, lessThan(245 + 1));
+      expect(screenY, greaterThan(245 - 60));
+      expect(moved.kind, ImageMarkKind.sticky);
+      expect(moved.stickyText, 'hi');
+    });
   });
 }
