@@ -185,7 +185,7 @@ class _ShapeTool extends ConsumerWidget {
         color: active ? Theme.of(context).colorScheme.primary : null,
         visualDensity: VisualDensity.compact,
         onPressed: () =>
-            ref.read(markToolProvider.notifier).toggleTool(MarkTool.shape),
+            ref.read(markToolProvider.notifier).setTool(MarkTool.shape),
       ),
     );
   }

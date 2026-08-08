@@ -335,6 +335,16 @@ void main() {
       expect(container.read(markToolProvider).tool, isNull);
     });
 
+    test('shape tool icon does not exit when already armed', () {
+      final container = _container(_FakeReaderRepo());
+      final notifier = container.read(markToolProvider.notifier);
+
+      // The shape tool's icon button uses setTool like the others.
+      notifier.setTool(MarkTool.shape);
+      notifier.setTool(MarkTool.shape);
+      expect(container.read(markToolProvider).tool, MarkTool.shape);
+    });
+
     test('selecting the armed tool keeps it armed (no accidental exit)', () {
       final container = _container(_FakeReaderRepo());
       final notifier = container.read(markToolProvider.notifier);

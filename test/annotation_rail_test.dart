@@ -95,11 +95,13 @@ void main() {
     expect(find.text('note body'), findsOneWidget);
     expect(find.text('third line'), findsOneWidget);
 
-    // Text-annotation filter chips are present (高亮/下划线/删除线/笔记).
-    expect(find.text('高亮'), findsOneWidget);
-    expect(find.text('下划线'), findsOneWidget);
-    expect(find.text('删除线'), findsOneWidget);
-    expect(find.text('笔记'), findsOneWidget);
+    // Filter bar: icon toggles (tooltips carry the kind names).
+    expect(find.byTooltip('高亮'), findsOneWidget);
+    expect(find.byTooltip('下划线'), findsOneWidget);
+    expect(find.byTooltip('删除线'), findsOneWidget);
+    expect(find.byTooltip('笔记'), findsOneWidget);
+    expect(find.byTooltip('画笔'), findsOneWidget);
+    expect(find.byTooltip('图章'), findsOneWidget);
 
     // Export bar is present.
     expect(find.text('Markdown'), findsOneWidget);
@@ -149,9 +151,9 @@ void main() {
     expect(find.text('贴上的便签'), findsOneWidget);
     expect(find.textContaining('画笔（'), findsOneWidget);
 
-    // Image-mark controls: per-type filter chips + clear-all.
+    // Image-mark controls: per-type icon toggles + clear-all.
     expect(find.text('清空全部标记'), findsOneWidget);
-    expect(find.text('图章'), findsOneWidget);
+    expect(find.byTooltip('图章'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

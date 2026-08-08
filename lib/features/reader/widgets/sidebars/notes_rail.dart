@@ -77,9 +77,10 @@ class NotesRail extends ConsumerWidget {
   }
 }
 
-/// Per-kind visibility chips: text-annotation kinds (高亮 / 下划线 / 删除线 /
-/// 笔记) and image-mark kinds (画笔 / 形状 / 便签 / 图章). Only enabled kinds
-/// show in the flat list below.
+/// Per-kind visibility bar: one fixed row of icon toggles covering the
+/// text-annotation kinds (高亮 / 下划线 / 删除线 / 笔记) and image-mark kinds
+/// (画笔 / 形状 / 便签 / 图章). Toggling only changes the color -- the box
+/// size stays constant. Only enabled kinds show in the flat list below.
 class _FilterBar extends ConsumerWidget {
   const _FilterBar({
     required this.annVisibility,
@@ -92,46 +93,93 @@ class _FilterBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    Widget chip(String label, bool selected, VoidCallback onTap) => FilterChip(
-          label: Text(label, style: theme.textTheme.labelSmall),
-          selected: selected,
-          visualDensity: VisualDensity.compact,
-          onSelected: (_) => onTap(),
-        );
+    final primary = theme.colorScheme.primary;
+    final idle = theme.colorScheme.onSurfaceVariant;
+
+    Widget toggle({
+      required IconData icon,
+      required String tooltip,
+      required bool selected,
+      required VoidCallback onTap,
+    }) {
+      return Tooltip(
+        message: tooltip,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(6),
+          child: Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              // Constant size: selection is conveyed by color only.
+              color: selected ? primary.withValues(alpha: 0.15) : null,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: selected ? primary : theme.colorScheme.outlineVariant,
+              ),
+            ),
+            child: Icon(icon, size: 15, color: selected ? primary : idle),
+          ),
+        ),
+      );
+    }
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-      child: Wrap(
-        spacing: 4,
-        runSpacing: 4,
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           // Text-annotation kinds.
-          chip('高亮', annVisibility.contains(TextAnnotationKind.highlight),
-              () => ref
-                  .read(annotationTypeFilterProvider.notifier)
-                  .toggle(TextAnnotationKind.highlight)),
-          chip('下划线', annVisibility.contains(TextAnnotationKind.underline),
-              () => ref
-                  .read(annotationTypeFilterProvider.notifier)
-                  .toggle(TextAnnotationKind.underline)),
-          chip('删除线', annVisibility.contains(TextAnnotationKind.strikethrough),
-              () => ref
-                  .read(annotationTypeFilterProvider.notifier)
-                  .toggle(TextAnnotationKind.strikethrough)),
-          chip('笔记', annVisibility.contains(TextAnnotationKind.note),
-              () => ref
-                  .read(annotationTypeFilterProvider.notifier)
-                  .toggle(TextAnnotationKind.note)),
+          toggle(
+            icon: textAnnotationIcon(TextAnnotationKind.highlight),
+            tooltip: '高亮',
+            selected: annVisibility.contains(TextAnnotationKind.highlight),
+            onTap: () => ref
+                .read(annotationTypeFilterProvider.notifier)
+                .toggle(TextAnnotationKind.highlight),
+          ),
+          toggle(
+            icon: textAnnotationIcon(TextAnnotationKind.underline),
+            tooltip: '下划线',
+            selected: annVisibility.contains(TextAnnotationKind.underline),
+            onTap: () => ref
+                .read(annotationTypeFilterProvider.notifier)
+                .toggle(TextAnnotationKind.underline),
+          ),
+          toggle(
+            icon: textAnnotationIcon(TextAnnotationKind.strikethrough),
+            tooltip: '删除线',
+            selected: annVisibility.contains(TextAnnotationKind.strikethrough),
+            onTap: () => ref
+                .read(annotationTypeFilterProvider.notifier)
+                .toggle(TextAnnotationKind.strikethrough),
+          ),
+          toggle(
+            icon: textAnnotationIcon(TextAnnotationKind.note),
+            tooltip: '笔记',
+            selected: annVisibility.contains(TextAnnotationKind.note),
+            onTap: () => ref
+                .read(annotationTypeFilterProvider.notifier)
+                .toggle(TextAnnotationKind.note),
+          ),
           // Image-mark kinds.
           for (final kind in ImageMarkKind.values)
-            chip(
-              switch (kind) {
+            toggle(
+              icon: switch (kind) {
+                ImageMarkKind.brush => Icons.brush_outlined,
+                ImageMarkKind.shape => Icons.rectangle_outlined,
+                ImageMarkKind.sticky => Icons.sticky_note_2_outlined,
+                ImageMarkKind.stamp => Icons.image_outlined,
+              },
+              tooltip: switch (kind) {
                 ImageMarkKind.brush => '画笔',
                 ImageMarkKind.shape => '形状',
                 ImageMarkKind.sticky => '便签',
                 ImageMarkKind.stamp => '图章',
               },
-              markVisibility.contains(kind),
-              () => ref.read(markVisibilityProvider.notifier).toggle(kind),
+              selected: markVisibility.contains(kind),
+              onTap: () =>
+                  ref.read(markVisibilityProvider.notifier).toggle(kind),
             ),
         ],
       ),
