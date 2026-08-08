@@ -264,40 +264,45 @@ class _ImageMarkLayerState extends ConsumerState<ImageMarkLayer> {
 
     return LayoutBuilder(builder: (context, constraints) {
       final size = constraints.biggest;
-      return GestureDetector(
-        behavior: tool == null
-            ? HitTestBehavior.deferToChild
-            : HitTestBehavior.opaque,
-        onPanDown: tool == null
-            ? null
-            : (d) => _onPanDown(d.localPosition, size, toolState),
-        onPanStart: tool == null
-            ? null
-            : (d) => _onPanStart(d.localPosition, size, toolState),
-        onPanUpdate: tool == null
-            ? null
-            : (d) => _onPanUpdate(d.localPosition, size, toolState),
-        onPanEnd: tool == null ? null : (d) => _onPanEnd(size, toolState),
-        onTapUp: tool == null ? null : (d) => _onTap(d.localPosition, size, toolState),
-        onSecondaryTapDown: tool == MarkTool.select
-            ? (d) => _onSecondaryTap(d.localPosition, size)
-            : null,
-        child: CustomPaint(
-          size: size,
-          painter: _MarkPainter(
-            marks: pageMarks,
-            brush: List.of(_brush),
-            shapeStart: _shapeStart,
-            shapeCurrent: _shapeCurrent,
-            tool: tool,
-            shapeType: toolState.shapeType,
-            stampFile: toolState.stampFile,
-            selectedId: _selectedId,
-            stampImage: (path) => _stampCache[path],
-            previewColor:
-                parseHexColor(toolState.color) ?? const Color(0xFFE53935),
-            previewStrokeWidth: toolState.strokeWidth,
-            previewFill: toolState.fill,
+      // With no tool armed the layer must not participate in hit testing at
+      // all: its CustomPaint hit-tests itself (a painter is always attached)
+      // and sits on top of the selection layer, so it would swallow every
+      // pointer event and starve text selection below it in the page Stack.
+      return IgnorePointer(
+        ignoring: tool == null,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onPanDown: tool == null
+              ? null
+              : (d) => _onPanDown(d.localPosition, size, toolState),
+          onPanStart: tool == null
+              ? null
+              : (d) => _onPanStart(d.localPosition, size, toolState),
+          onPanUpdate: tool == null
+              ? null
+              : (d) => _onPanUpdate(d.localPosition, size, toolState),
+          onPanEnd: tool == null ? null : (d) => _onPanEnd(size, toolState),
+          onTapUp: tool == null ? null : (d) => _onTap(d.localPosition, size, toolState),
+          onSecondaryTapDown: tool == MarkTool.select
+              ? (d) => _onSecondaryTap(d.localPosition, size)
+              : null,
+          child: CustomPaint(
+            size: size,
+            painter: _MarkPainter(
+              marks: pageMarks,
+              brush: List.of(_brush),
+              shapeStart: _shapeStart,
+              shapeCurrent: _shapeCurrent,
+              tool: tool,
+              shapeType: toolState.shapeType,
+              stampFile: toolState.stampFile,
+              selectedId: _selectedId,
+              stampImage: (path) => _stampCache[path],
+              previewColor:
+                  parseHexColor(toolState.color) ?? const Color(0xFFE53935),
+              previewStrokeWidth: toolState.strokeWidth,
+              previewFill: toolState.fill,
+            ),
           ),
         ),
       );

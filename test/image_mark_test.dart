@@ -596,5 +596,62 @@ void main() {
       expect(screenY, lessThan(lastPointer.dy + 1));
       expect(screenY, greaterThan(lastPointer.dy - 60));
     });
+
+    testWidgets('no tool armed: the layer passes taps and drags through to '
+        'the layer below (text selection keeps working)', (tester) async {
+      final repo = _FakeReaderRepo();
+      final container = _container(repo);
+      var taps = 0;
+      var drags = 0;
+      // The real page stack order: the mark layer sits above the selection
+      // layer; its CustomPaint hit-tests itself even when idle, which used
+      // to swallow every pointer event and starve text selection.
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 400,
+                height: 600,
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTapDown: (_) => taps++,
+                        onPanStart: (_) => drags++,
+                        child: const ColoredBox(color: Colors.white),
+                      ),
+                    ),
+                    Positioned.fill(child: ImageMarkLayer(page: 0)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ));
+
+      // Idle layer: a tap and a drag both reach the surface below.
+      await tester.tapAt(const Offset(200, 300));
+      await tester.pump();
+      expect(taps, 1);
+      final gesture = await tester.startGesture(const Offset(200, 300));
+      await gesture.moveBy(const Offset(40, 20));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(drags, 1);
+
+      // Arming a tool re-captures the pointer (the layer is opaque again):
+      // the surface below stays untouched.
+      container.read(markToolProvider.notifier).setTool(MarkTool.brush);
+      await tester.pump();
+      await tester.tapAt(const Offset(200, 300));
+      await tester.pump();
+      expect(taps, 1); // unchanged: the layer ate the tap
+      expect(repo.marks, isEmpty); // a bare tap does not draw
+      container.read(markToolProvider.notifier).setTool(null);
+    });
   });
 }
