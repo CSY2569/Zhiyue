@@ -5,6 +5,7 @@ import 'package:rbwa/features/ai/providers/ai_config_provider.dart';
 import 'package:rbwa/features/annotation/providers/char_box_cache.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
 import 'package:rbwa/src/rust/api.dart' show OcrMode;
+import 'package:rbwa/src/rust/ocr.dart' show OcrResult;
 
 /// Scan state machine per page (FEATURES 7.1.2): pages without a text layer
 /// show the "扫描识别" prompt; scanning runs the engine and lands in success /
@@ -115,17 +116,48 @@ class ScanNotifier extends Notifier<ScanState> {
   }
 
   /// Detect one page (0-indexed). Pages with an established state are left
-  /// untouched: prompts survive page flips until acted on (7.1.2). The
-  /// state read happens after the await so it never runs mid-build.
+  /// untouched: prompts survive page flips until acted on (7.1.2). A page
+  /// with a cached OCR result (scanned in an earlier session, 7.1.4) is
+  /// marked success directly -- the prompt must not nag again after a
+  /// restart. The state read happens after the await so it never runs
+  /// mid-build.
   Future<void> _checkPage(int bookId, int page0) async {
     try {
       final hasText = await _repo.pageHasText(bookId, page0);
       if (state.of(page0) != null) return; // changed while awaiting
+      if (!hasText) {
+        final cached = await _cachedOcr(bookId, page0);
+        if (state.of(page0) != null) return;
+        if (cached != null) {
+          _set(page0, PageScanState(
+            phase: ScanPhase.success,
+            lowConfidence: cached.lines
+                .where((l) => l.confidence < _lowConfidenceThreshold)
+                .length,
+          ));
+          return;
+        }
+      }
       _set(page0, PageScanState(
         phase: hasText ? ScanPhase.hasText : ScanPhase.prompt,
       ));
     } catch (_) {
       // Check failure: stay quiet (hasText) rather than nag the reader.
+    }
+  }
+
+  /// The cached OCR result for [page0] in either mode (configured first,
+  /// then the other -- a mode switch must not hide existing results).
+  Future<OcrResult?> _cachedOcr(int bookId, int page0) async {
+    try {
+      final mode = await _ocrMode();
+      final fallback =
+          mode == OcrMode.fast ? OcrMode.highPrecision : OcrMode.fast;
+      final repo = ref.read(readerRepositoryProvider);
+      return await repo.getPageOcr(bookId, page0, mode) ??
+          await repo.getPageOcr(bookId, page0, fallback);
+    } catch (_) {
+      return null;
     }
   }
 

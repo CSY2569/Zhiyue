@@ -24,7 +24,8 @@ class _FakeScanRepo extends ReaderRepository {
     OcrLine(text: '你好世界', x: 0.1, y: 0.2, w: 0.5, h: 0.03, confidence: 0.98),
   ];
 
-  @override
+  /// Cached OCR results served by [getPageOcr] (simulates earlier scans).
+  final ocrCache = <int, OcrResult>{};  @override
   Future<bool> pageHasText(int bookId, int page) async => hasText;
 
   @override
@@ -51,7 +52,7 @@ class _FakeScanRepo extends ReaderRepository {
 
   @override
   Future<OcrResult?> getPageOcr(int bookId, int page, rust.OcrMode mode) async =>
-      null;
+      ocrCache[page];
 }
 
 Book _book() => Book(
@@ -204,6 +205,32 @@ void main() {
     await _settle(container2, 0, ScanPhase.prompt);
     await container2.read(scanStateProvider.notifier).scan(0);
     expect(repo2.lastMode, rust.OcrMode.highPrecision);
+  });
+
+  test('pages scanned in an earlier session do not nag again (7.1.4)',
+      () async {
+    // Page 0 has a cached OCR result (scanned before the restart); page 1
+    // has none. The prompt must not reappear for page 0.
+    final repo = _FakeScanRepo()
+      ..hasText = false
+      ..ocrCache[0] = OcrResult(
+          lines: const [
+            OcrLine(
+                text: '已有缓存',
+                x: 0.1,
+                y: 0.1,
+                w: 0.5,
+                h: 0.03,
+                confidence: 0.95),
+          ],
+          mode: 'high_precision',
+      );
+    final container = _container(repo);
+    container.read(scanStateProvider);
+    await _settle(container, 0, ScanPhase.success);
+    await _settle(container, 1, ScanPhase.prompt);
+    // The cached page carries its low-confidence count like a fresh scan.
+    expect(container.read(scanStateProvider).of(0)!.lowConfidence, 0);
   });
 
   test('success counts low-confidence lines for review (7.1.6)', () async {
