@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:rbwa/features/annotation/models/image_mark.dart';
 import 'package:rbwa/features/annotation/providers/annotation_provider.dart';
+import 'package:rbwa/features/annotation/providers/image_mark_provider.dart';
 import 'package:rbwa/features/reader/widgets/sidebars/notes_rail.dart';
 import 'package:rbwa/src/rust/models/annotation.dart';
 
@@ -13,6 +15,14 @@ class _FakeAnnotationNotifier extends AnnotationNotifier {
 
   @override
   Future<List<TextAnnotation>> build() async => data;
+}
+
+/// Fake image-mark source for the merged sidebar.
+class _FakeImageMarkNotifier extends ImageMarkNotifier {
+  static List<ImageMark> data = const [];
+
+  @override
+  Future<List<ImageMark>> build() async => data;
 }
 
 TextAnnotation ann(
@@ -35,8 +45,25 @@ TextAnnotation ann(
       updatedAt: '2026-08-06 10:00:00',
     );
 
+ImageMark mark(int id, int page, ImageMarkKind kind) => ImageMark(
+      id: id,
+      page: page,
+      kind: kind,
+      x: 0.5,
+      y: 0.5,
+      w: 0.2,
+      h: 0.2,
+      payload: kind == ImageMarkKind.sticky
+          ? stickyPayload('贴上的便签')
+          : brushPayload(const [Offset(0.4, 0.5), Offset(0.6, 0.5)]),
+      style: '{}',
+    );
+
 Widget harness() => ProviderScope(
-      overrides: [annotationProvider.overrideWith(_FakeAnnotationNotifier.new)],
+      overrides: [
+        annotationProvider.overrideWith(_FakeAnnotationNotifier.new),
+        imageMarkProvider.overrideWith(_FakeImageMarkNotifier.new),
+      ],
       child: const MaterialApp(
         home: Scaffold(body: Row(children: [NotesRail()])),
       ),
@@ -84,7 +111,10 @@ void main() {
     ];
     int? jumped;
     await tester.pumpWidget(ProviderScope(
-      overrides: [annotationProvider.overrideWith(_FakeAnnotationNotifier.new)],
+      overrides: [
+        annotationProvider.overrideWith(_FakeAnnotationNotifier.new),
+        imageMarkProvider.overrideWith(_FakeImageMarkNotifier.new),
+      ],
       child: MaterialApp(
         home: Scaffold(
           body: Row(children: [NotesRail(onJump: (p) => jumped = p)]),
@@ -95,6 +125,31 @@ void main() {
 
     await tester.tap(find.text('page five text'));
     expect(jumped, 4); // 0-indexed
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('lists image marks alongside text annotations by page',
+      (tester) async {
+    _FakeAnnotationNotifier.data = [
+      ann(1, 0, TextAnnotationKind.highlight, text: 'first line'),
+    ];
+    _FakeImageMarkNotifier.data = [
+      mark(10, 0, ImageMarkKind.sticky),
+      mark(11, 1, ImageMarkKind.brush),
+    ];
+    await tester.pumpWidget(harness());
+    await tester.pump();
+
+    // Both kinds share the page groups; headers cover pages 1 and 2.
+    expect(find.text('第 1 页'), findsOneWidget);
+    expect(find.text('第 2 页'), findsOneWidget);
+    expect(find.text('first line'), findsOneWidget);
+    expect(find.text('贴上的便签'), findsOneWidget);
+    expect(find.textContaining('画笔（'), findsOneWidget);
+
+    // Image-mark controls: per-type filter chips + clear-all.
+    expect(find.text('清空全部标记'), findsOneWidget);
+    expect(find.text('图章'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

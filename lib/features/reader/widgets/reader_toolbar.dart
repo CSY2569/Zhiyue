@@ -57,12 +57,6 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
             active: state.openSidebar == SidebarType.annotations,
             onTap: () => notifier.toggleSidebar(SidebarType.annotations),
           ),
-          _SidebarToggle(
-            icon: Icons.layers_outlined,
-            label: '标记',
-            active: state.openSidebar == SidebarType.imageMarks,
-            onTap: () => notifier.toggleSidebar(SidebarType.imageMarks),
-          ),
           const _Divider(),
           // View mode selector (3.1): one popup for the three modes.
           const _ModeSelector(),

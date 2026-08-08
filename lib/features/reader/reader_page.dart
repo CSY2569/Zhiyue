@@ -11,7 +11,6 @@ import 'package:rbwa/features/annotation/export_actions.dart';
 import 'package:rbwa/features/annotation/providers/image_mark_provider.dart';
 import 'package:rbwa/features/annotation/providers/selection_provider.dart';
 import 'package:rbwa/features/annotation/widgets/floating_toolbar.dart';
-import 'package:rbwa/features/annotation/widgets/mark_layer_panel.dart';
 import 'package:rbwa/features/annotation/widgets/mark_toolbar.dart';
 import 'package:rbwa/features/annotation/widgets/note_composer.dart';
 import 'package:rbwa/features/annotation/widgets/note_popup.dart';
@@ -253,10 +252,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         );
       case SidebarType.annotations:
         return NotesRail(
-          onJump: (page) => _jumpToPage(page + 1),
-        );
-      case SidebarType.imageMarks:
-        return MarkLayerPanel(
           onJump: (page) => _jumpToPage(page + 1),
         );
     }
