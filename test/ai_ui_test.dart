@@ -181,9 +181,18 @@ void main() {
         '你是一位诗人');
     await tester.tap(find.text('保存为模板'));
     await tester.pumpAndSettle();
-    // The saved list shows the named template (the input field holds the
-    // same text, so scope the finder to the list tile).
-    expect(find.widgetWithText(ListTile, '诗人'), findsOneWidget);
+    // The saved list shows the named template (its delete button), and
+    // the template picker gains a chip for it.
+    expect(find.byTooltip('删除模板'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, '诗人'), findsOneWidget);
+
+    // Tapping the saved chip activates it (custom section fills).
+    await tester.tap(find.widgetWithText(ChoiceChip, '诗人'));
+    await tester.pumpAndSettle();
+    expect(
+      find.widgetWithText(TextField, '自定义提示词（作为角色设定，动作指令自动保留）'),
+      findsOneWidget,
+    );
 
     // Persist: the named template travels with the config.
     await tester.scrollUntilVisible(
@@ -199,6 +208,18 @@ void main() {
     expect(repo.saved!.customPrompts.single.name, '诗人');
     expect(repo.saved!.customPrompts.single.text, '你是一位诗人');
     expect(repo.saved!.customPrompt, '你是一位诗人');
+
+    // Deleting the template removes its chip from the picker at once.
+    await tester.scrollUntilVisible(
+      find.byTooltip('删除模板'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+    await tester.tap(find.byTooltip('删除模板'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('删除模板'), findsNothing);
+    expect(find.widgetWithText(ChoiceChip, '诗人'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

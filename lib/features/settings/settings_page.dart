@@ -299,6 +299,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       visualDensity: VisualDensity.compact,
                       onSelected: (_) => _selectTemplate(t.id),
                     ),
+                  // Saved custom templates appear here too: tap to use,
+                  // deleting them (below) removes the chip at once.
+                  for (final t in _savedTemplates)
+                    ChoiceChip(
+                      label: Text(t.name),
+                      selected: _promptTemplate == 'custom' &&
+                          _customPrompt.text.trim() == t.text,
+                      visualDensity: VisualDensity.compact,
+                      onSelected: (_) => _useSavedTemplate(t),
+                    ),
                 ],
               ),
             ),
@@ -431,6 +441,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ],
       ),
     );
+  }
+
+  /// Use a saved custom template: its text becomes the active custom
+  /// prompt (and the custom section shows it).
+  void _useSavedTemplate(CustomPrompt t) {
+    _customPrompt.text = t.text;
+    setState(() => _promptTemplate = 'custom');
   }
 
   /// Pick a template chip: the built-in ones show their (editable) text;
