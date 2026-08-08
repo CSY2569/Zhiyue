@@ -81,20 +81,20 @@ class ViewerNotifier extends StateNotifier<ViewerState> {
         return;
       }
 
-      // For PDFs, open via pdfium; for images, page count is 1.
-      int pageCount = book.pageCount;
-      if (book.fileType == BookType.pdf) {
-        final result = await _readerRepo.openBook(book.storedPath);
-        if (result.error != null) {
-          state = ViewerState(
-            book: book,
-            loading: false,
-            error: result.error,
-          );
-          return;
-        }
-        pageCount = result.pageCount;
+      // Both PDFs and image books go through Rust open_book: it routes by
+      // the stored book's type (pdfium vs image crate) and switches the
+      // render pipeline. Skipping it for images left the previous PDF open,
+      // so an image book rendered that PDF's first page (regression).
+      final result = await _readerRepo.openBook(book.storedPath);
+      if (result.error != null) {
+        state = ViewerState(
+          book: book,
+          loading: false,
+          error: result.error,
+        );
+        return;
       }
+      final pageCount = result.pageCount;
 
       // Restore saved progress.
       final progress = await _readerRepo.getProgress(bookId);

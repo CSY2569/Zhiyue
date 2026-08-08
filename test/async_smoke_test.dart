@@ -1,3 +1,4 @@
+import 'dart:convert' show base64Decode;
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -112,5 +113,38 @@ void main() {
     expect(del, 1, reason: 'delete_book should succeed');
     // ignore: avoid_print
     print('ANNOTATIONS_OK');
+  }, timeout: const Timeout(Duration(seconds: 30)));
+
+  test('image book renders the image, not the previous PDF (regression)',
+      () async {
+    // Simulate "last opened PDF": open the sample PDF and render it.
+    final pdfOpen = await rust.openBook(storedPath: '/tmp/test.pdf');
+    expect(pdfOpen.error, isNull);
+    final pdfRender = await rust.renderPage(
+        bookId: 1, page: 0, zoom: 1.0, dpiScale: 1.0);
+    expect(pdfRender.width, greaterThan(0));
+
+    // Now open an 8x8 red PNG: the render must show the IMAGE (8x8), not
+    // the PDF's first page (regression: the image pipeline used to keep
+    // the previous PDF document open and rendered its page 1).
+    final pngPath = '/tmp/test_image.png';
+    File(pngPath).writeAsBytesSync(base64Decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAEklEQVR4nGP4z8DwHx9mGBkKAMLXf4EvceABAAAAAElFTkSuQmCC'));
+    final imported = await rust.importBook(path: pngPath);
+    expect(imported.error, isNull, reason: 'import: ${imported.error}');
+    final opened = await rust.openBook(storedPath: imported.book!.storedPath);
+    expect(opened.error, isNull, reason: 'open image: ${opened.error}');
+    expect(opened.pageCount, 1);
+
+    final r = await rust.renderPage(
+        bookId: imported.book!.id, page: 0, zoom: 1.0, dpiScale: 1.0);
+    expect(r.error, isNull, reason: 'render image: ${r.error}');
+    expect(r.width, 8, reason: 'must render the image, not the PDF');
+    expect(r.height, 8);
+
+    await rust.closeBook();
+    expect(await rust.deleteBook(id: imported.book!.id), 1);
+    // ignore: avoid_print
+    print('IMAGE_BOOK_OK: ${r.width}x${r.height}');
   }, timeout: const Timeout(Duration(seconds: 30)));
 }
