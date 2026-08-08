@@ -1,7 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
-    show Int64List;
-
 import 'package:rbwa/src/rust/api.dart' as rust;
 
 /// Full-text search over the library's indexed pages (FEATURES 3.5, M6).
@@ -24,8 +21,6 @@ class SearchRepository {
   Future<String> indexStatus(int bookId) =>
       rust.searchIndexStatus(bookId: bookId);
 
-  /// PDF books with no index yet (image books never index).
-  Future<Int64List> listUnindexedBooks() => rust.listUnindexedBooks();
 }
 
 final searchRepositoryProvider =

@@ -227,9 +227,7 @@ class ImageMarkNotifier extends AsyncNotifier<List<ImageMark>> {
   /// Delete one mark (FEATURES 5.5).
   Future<bool> delete(int id) async {
     final before = _snapshot;
-    final mark = before.cast<ImageMark?>().firstWhere(
-        (m) => m?.id == id,
-        orElse: () => null);
+    final mark = before.where((m) => m.id == id).firstOrNull;
     final ok = await _repo.deleteImageAnnotation(id) > 0;
     if (!ok) return false;
     if (mark != null) {

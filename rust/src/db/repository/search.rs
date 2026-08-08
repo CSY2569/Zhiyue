@@ -142,16 +142,14 @@ fn find_subseq(haystack: &[char], needle: &[char]) -> Option<usize> {
         .position(|w| w == needle)
 }
 
-/// Mark the book's index as fully built (settings KV, survives restarts).
+/// Mark the book's index as fully built (settings KV, survives restarts;
+/// the value is the page count -- informational only).
 pub fn mark_ready(conn: &Connection, book_id: i64, pages: i64) -> AppResult<()> {
     conn.execute(
         "INSERT INTO settings (key, value) VALUES (?1, ?2) \
          ON CONFLICT (key) DO UPDATE SET value = excluded.value, \
              updated_at = datetime('now')",
-        rusqlite::params![
-            format!("{READY_KEY}{book_id}"),
-            format!("{{\"pages\":{pages}}}")
-        ],
+        rusqlite::params![format!("{READY_KEY}{book_id}"), pages.to_string()],
     )?;
     Ok(())
 }

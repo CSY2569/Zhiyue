@@ -1536,25 +1536,3 @@ pub fn search_index_status(book_id: i64) -> String {
     }
     "missing".to_string()
 }
-
-/// Books whose pages are not indexed yet (PDFs only -- image books never
-/// index; failed builds are excluded until re-imported). The library page
-/// triggers [ensure_book_index] for these on app start, so legacy imports
-/// heal in the background.
-pub fn list_unindexed_books() -> Vec<i64> {
-    let conn = db::db();
-    match book_repo::list(&conn) {
-        Ok(books) => books
-            .into_iter()
-            .filter(|b| {
-                b.file_type == BookType::Pdf
-                    && !crate::search::is_building(b.id)
-                    && !search_repo::is_ready(&conn, b.id)
-                    && !search_repo::has_rows(&conn, b.id)
-                    && !search_repo::is_failed(&conn, b.id)
-            })
-            .map(|b| b.id)
-            .collect(),
-        Err(_) => Vec::new(),
-    }
-}

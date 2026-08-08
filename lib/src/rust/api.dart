@@ -444,13 +444,6 @@ Future<void> ensureBookIndex({required PlatformInt64 bookId}) =>
 Future<String> searchIndexStatus({required PlatformInt64 bookId}) =>
     RustLib.instance.api.crateApiSearchIndexStatus(bookId: bookId);
 
-/// Books whose pages are not indexed yet (PDFs only -- image books never
-/// index; failed builds are excluded until re-imported). The library page
-/// triggers [ensure_book_index] for these on app start, so legacy imports
-/// heal in the background.
-Future<Int64List> listUnindexedBooks() =>
-    RustLib.instance.api.crateApiListUnindexedBooks();
-
 /// Result of creating a persisted thread (FEATURES 6.5.4). `id` is -1 and
 /// `error` set on failure (sentinel convention: no `Result` across FRB).
 class AiThreadCreateResult {

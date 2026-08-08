@@ -323,9 +323,7 @@ class _ImageMarkLayerState extends ConsumerState<ImageMarkLayer> {
 
     final marks = _pageMarks;
     final selected =
-        marks.cast<ImageMark?>().firstWhere(
-            (m) => m?.id == _selectedId,
-            orElse: () => null);
+        marks.where((m) => m.id == _selectedId).firstOrNull;
     if (selected != null) {
       final corner = _hitCorner(_normRect(selected, size), local, 12);
       if (corner != null) {
@@ -365,9 +363,7 @@ class _ImageMarkLayerState extends ConsumerState<ImageMarkLayer> {
       case MarkTool.select:
         final marks = _pageMarks;
         final selected =
-            marks.cast<ImageMark?>().firstWhere(
-            (m) => m?.id == _selectedId,
-            orElse: () => null);
+            marks.where((m) => m.id == _selectedId).firstOrNull;
         if (selected == null) {
           setState(() {
             _moveStart = null;
@@ -462,9 +458,8 @@ class _ImageMarkLayerState extends ConsumerState<ImageMarkLayer> {
         ));
       case MarkTool.select:
         // Persist the drag (moves were applied in-memory via _applyDrag).
-        final moved = _pageMarks.cast<ImageMark?>().firstWhere(
-            (m) => m?.id == _selectedId,
-            orElse: () => null);
+        final moved =
+            _pageMarks.where((m) => m.id == _selectedId).firstOrNull;
         if (moved != null) {
           await ref
               .read(imageMarkProvider.notifier)
