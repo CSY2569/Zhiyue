@@ -6,7 +6,6 @@ import 'package:rbwa/features/reader/providers/scan_provider.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
 import 'package:rbwa/src/rust/api.dart' as rust;
 import 'package:rbwa/src/rust/models/book.dart';
-import 'package:rbwa/src/rust/models/progress.dart';
 import 'package:rbwa/src/rust/ocr.dart' show OcrLine, OcrResult;
 
 /// Fake repository: the text-layer check and the scan engine are canned

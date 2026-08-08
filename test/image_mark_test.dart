@@ -333,9 +333,6 @@ void main() {
       // Arm the brush tool.
       container.read(markToolProvider.notifier).setTool(MarkTool.brush);
       await tester.pump();
-      debugPrint('DBG layer found: ${find.byType(ImageMarkLayer).evaluate().length}');
-      debugPrint('DBG tool now: ${container.read(markToolProvider).tool}');
-      debugPrint('DBG layerRect: ${tester.getRect(find.byType(ImageMarkLayer))}');
 
       // Drag a stroke across the page (center of the layer); several moves
       // so the brush accumulates >2 points (the layer drops tiny strokes).
@@ -352,6 +349,46 @@ void main() {
       expect(repo.marks.single.kind, ImageAnnotationKind.brush);
       final mark = container.read(imageMarkProvider).valueOrNull!.single;
       expect(mark.brushPoints, hasLength(3));
+
+      // The stroke starts exactly at the pointer-down point (the layer
+      // anchors on the down position, not the slop-shifted pan start).
+      // Layer sits at (200, 0) inside the 800x600 test window.
+      final first = mark.brushPoints.first;
+      expect(first.dx, closeTo(50 / 400, 0.02)); // 250 - 200
+      expect(first.dy, closeTo(300 / 600, 0.02));
+    });
+
+    testWidgets('stamp tap places the mark exactly at the pointer',
+        (tester) async {
+      final repo = _FakeReaderRepo();
+      final container = _container(repo);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(width: 400, height: 600, child: ImageMarkLayer(page: 0)),
+            ),
+          ),
+        ),
+      ));
+
+      // Pick a stamp image and arm the stamp tool.
+      container
+          .read(markToolProvider.notifier)
+          .setStampFile('/tmp/stamp.png');
+      container.read(markToolProvider.notifier).setTool(MarkTool.stamp);
+      await tester.pump();
+
+      // Tap at a known spot: the mark center must be exactly there.
+      await tester.tapAt(const Offset(300, 200));
+      await tester.pumpAndSettle();
+
+      expect(repo.marks, hasLength(1));
+      expect(repo.marks.single.kind, ImageAnnotationKind.stamp);
+      final mark = container.read(imageMarkProvider).valueOrNull!.single;
+      expect(mark.x, closeTo(100 / 400, 0.001)); // 300 - 200 (layer origin)
+      expect(mark.y, closeTo(200 / 600, 0.001));
     });
 
     testWidgets('stamp tool without a picked image shows a hint',

@@ -86,15 +86,18 @@ void paintMark(
     case ImageMarkKind.stamp:
       final rect = _normRect(mark, size);
       if (stampImage != null) {
+        // Rotate around the rect center; the image is drawn in the local
+        // (post-transform) space so it lands exactly on [rect] -- using the
+        // absolute rect here would double-offset the stamp.
         canvas.save();
         canvas.translate(rect.center.dx, rect.center.dy);
         canvas.rotate(mark.rotation);
-        canvas.translate(-rect.width / 2, -rect.height / 2);
         canvas.drawImageRect(
           stampImage,
           Rect.fromLTWH(
               0, 0, stampImage.width.toDouble(), stampImage.height.toDouble()),
-          rect,
+          Rect.fromLTWH(
+              -rect.width / 2, -rect.height / 2, rect.width, rect.height),
           Paint(),
         );
         canvas.restore();
@@ -202,6 +205,11 @@ class _ImageMarkLayerState extends ConsumerState<ImageMarkLayer> {
   Offset? _shapeStart;
   Offset? _shapeCurrent;
 
+  /// Precise pointer-down point (normalized). `onPanStart` fires only after
+  /// the touch slop is crossed, so drawing / dragging must anchor on this
+  /// down point instead of the slop-shifted start position.
+  Offset? _panDown;
+
   // Selection / manipulation.
   int? _selectedId;
   Offset? _moveStart; // gesture start (normalized)
@@ -258,6 +266,9 @@ class _ImageMarkLayerState extends ConsumerState<ImageMarkLayer> {
         behavior: tool == null
             ? HitTestBehavior.deferToChild
             : HitTestBehavior.opaque,
+        onPanDown: tool == null
+            ? null
+            : (d) => _onPanDown(d.localPosition, size, toolState),
         onPanStart: tool == null
             ? null
             : (d) => _onPanStart(d.localPosition, size, toolState),
@@ -290,23 +301,61 @@ class _ImageMarkLayerState extends ConsumerState<ImageMarkLayer> {
   Offset _toNorm(Offset local, Size size) =>
       Offset(local.dx / size.width, local.dy / size.height);
 
+  /// Pointer down: record the precise anchor. The select tool also resolves
+  /// the hit here (handle -> resize, mark -> move, blank -> deselect), so the
+  /// selection follows the exact press point rather than the slop-shifted
+  /// pan-start position.
+  void _onPanDown(Offset local, Size size, MarkToolState toolState) {
+    final p = _toNorm(local, size);
+    _panDown = p;
+    if (toolState.tool != MarkTool.select) return;
+
+    final marks = _pageMarks;
+    ImageMark? selected;
+    for (final m in marks) {
+      if (m.id == _selectedId) {
+        selected = m;
+        break;
+      }
+    }
+    if (selected != null) {
+      final corner = _hitCorner(_normRect(selected, size), local, 12);
+      if (corner != null) {
+        setState(() {
+          _scaleCorner = corner;
+          _dragBefore = selected;
+        });
+        return;
+      }
+    }
+    final hit = _hitMark(marks, p);
+    setState(() {
+      _selectedId = hit?.id;
+      _dragBefore = hit;
+      _scaleCorner = null;
+    });
+  }
+
+  /// Pan started: anchor the stroke / drag baseline. [local] sits past the
+  /// touch slop, so drawing starts at the down point and moving starts with
+  /// a zero delta from the mark's current position.
   void _onPanStart(Offset local, Size size, MarkToolState toolState) {
     final p = _toNorm(local, size);
+    final down = _panDown;
     switch (toolState.tool) {
       case MarkTool.brush:
         setState(() {
           _brush
             ..clear()
-            ..add(p);
+            ..add(down ?? p);
         });
       case MarkTool.shape:
         setState(() {
-          _shapeStart = p;
+          _shapeStart = down ?? p;
           _shapeCurrent = p;
         });
       case MarkTool.select:
         final marks = _pageMarks;
-        // Corner handle first (resize), then the mark body (move).
         ImageMark? selected;
         for (final m in marks) {
           if (m.id == _selectedId) {
@@ -314,26 +363,9 @@ class _ImageMarkLayerState extends ConsumerState<ImageMarkLayer> {
             break;
           }
         }
-        if (selected != null) {
-          final rect = _normRect(selected, size);
-          final corner = _hitCorner(rect, local, 12);
-          if (corner != null) {
-            final sel = selected;
-            setState(() {
-              _scaleCorner = corner;
-              _moveStart = p;
-              _markStartPos = Offset(sel.x, sel.y);
-            });
-            return;
-          }
-        }
-        final hit = _hitMark(marks, p);
         setState(() {
-          _selectedId = hit?.id ?? (hit == null ? null : _selectedId);
-          _moveStart = p;
-          _markStartPos = hit == null ? null : Offset(hit.x, hit.y);
-          _dragBefore = hit;
-          _scaleCorner = null;
+          _moveStart = p; // zero delta at the pan-start position
+          _markStartPos = selected == null ? null : Offset(selected.x, selected.y);
         });
       case MarkTool.sticky:
       case MarkTool.stamp:
@@ -448,6 +480,7 @@ class _ImageMarkLayerState extends ConsumerState<ImageMarkLayer> {
           _markStartPos = null;
           _dragBefore = null;
           _scaleCorner = null;
+          _panDown = null;
         });
       case MarkTool.sticky:
       case MarkTool.stamp:
@@ -458,6 +491,7 @@ class _ImageMarkLayerState extends ConsumerState<ImageMarkLayer> {
 
   Future<void> _onTap(Offset local, Size size, MarkToolState toolState) async {
     final p = _toNorm(local, size);
+    _panDown = null; // a plain tap never fires onPanEnd; drop the anchor
     switch (toolState.tool) {
       case MarkTool.select:
         final hit = _hitMark(_pageMarks, p);
