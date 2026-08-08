@@ -87,7 +87,9 @@ pub fn chat_system() -> String {
 /// customize it. "general" and unknown ids have no text.
 pub fn template_default_text(template_id: &str) -> String {
     match template_id {
-        "general" => "你是一位专注的阅读助手。请帮助用户理解当前阅读的内容：            结合上下文解释术语、概念与难点，引用原文时忠实于原文，            并区分原文观点与你的解读。请使用 Markdown 格式回答，保持简洁明了。"
+        "general" => "你是一位专注的阅读助手。请帮助用户理解当前阅读的内容：\
+            结合上下文解释术语、概念与难点，引用原文时忠实于原文，\
+            并区分原文观点与你的解读。请使用 Markdown 格式回答，保持简洁明了。"
             .to_string(),
         "academic" => "你是一位严谨的学术阅读助手。面对论文、专著与学术材料时，\
             侧重论证逻辑、研究方法和术语准确性；引用时区分原文观点与你的解读。"
@@ -297,5 +299,27 @@ mod tests {
         assert!(template_default_text("novel").contains("文学"));
         assert!(template_default_text("general").contains("阅读助手"));
         assert_eq!(template_default_text("unknown"), "");
+    }
+
+    #[test]
+    fn builtin_templates_have_no_embedded_whitespace_runs() {
+        // Regression: a scripted edit once inlined the line-continuation
+        // indentation into the general template (visible as stray spaces
+        // in the settings UI).
+        for id in [
+            "general",
+            "academic",
+            "novel",
+            "tech",
+            "language",
+            "historical",
+            "legal",
+            "classical",
+            "ai",
+        ] {
+            let t = template_default_text(id);
+            assert!(!t.contains("  "), "[{id}] embedded spaces: {t:?}");
+            assert!(!t.contains('\n'), "[{id}] newline in text: {t:?}");
+        }
     }
 }
