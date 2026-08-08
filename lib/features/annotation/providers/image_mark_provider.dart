@@ -62,9 +62,11 @@ class MarkToolNotifier extends Notifier<MarkToolState> {
   @override
   MarkToolState build() => const MarkToolState();
 
-  void setTool(MarkTool? tool) => state = state.copyWith(tool: tool);
-  void toggleTool(MarkTool tool) =>
-      state = state.copyWith(tool: state.tool == tool ? null : tool);
+  void setTool(MarkTool? tool) =>
+      state = state.copyWith(tool: tool, clearTool: tool == null);
+  void toggleTool(MarkTool tool) => state = state.tool == tool
+      ? state.copyWith(clearTool: true)
+      : state.copyWith(tool: tool);
   void setColor(String color) => state = state.copyWith(color: color);
   void setStrokeWidth(double w) => state = state.copyWith(strokeWidth: w);
   void toggleFill() => state = state.copyWith(fill: !state.fill);

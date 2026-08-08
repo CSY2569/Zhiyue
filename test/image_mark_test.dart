@@ -314,6 +314,28 @@ void main() {
     });
   });
 
+  group('工具状态', () {
+    test('setTool(null) exits the mark mode (退出批注)', () {
+      final container = _container(_FakeReaderRepo());
+      final notifier = container.read(markToolProvider.notifier);
+
+      notifier.setTool(MarkTool.select);
+      expect(container.read(markToolProvider).tool, MarkTool.select);
+      notifier.setTool(null);
+      expect(container.read(markToolProvider).tool, isNull);
+    });
+
+    test('toggleTool turns the armed tool off again', () {
+      final container = _container(_FakeReaderRepo());
+      final notifier = container.read(markToolProvider.notifier);
+
+      notifier.toggleTool(MarkTool.brush);
+      expect(container.read(markToolProvider).tool, MarkTool.brush);
+      notifier.toggleTool(MarkTool.brush);
+      expect(container.read(markToolProvider).tool, isNull);
+    });
+  });
+
   group('ImageMarkLayer 交互', () {
     testWidgets('brush tool drag creates a brush mark on pan end',
         (tester) async {
@@ -470,6 +492,84 @@ void main() {
       expect(screenY, greaterThan(245 - 60));
       expect(moved.kind, ImageMarkKind.sticky);
       expect(moved.stickyText, 'hi');
+    });
+
+    testWidgets('placement + drag work inside a scrollable page stack',
+        (tester) async {
+      final repo = _FakeReaderRepo();
+      final container = _container(repo);
+      final notifier = container.read(imageMarkProvider.notifier);
+      // Realistic page structure: a scroll viewport hosting a zoom-sized
+      // page box (280x396) whose Stack carries the mark layer.
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: Center(
+                child: SizedBox(
+                  width: 280,
+                  height: 396,
+                  child: Stack(
+                    clipBehavior: Clip.hardEdge,
+                    children: [
+                      Positioned.fill(
+                        child: ColoredBox(color: Colors.white),
+                      ),
+                      Positioned.fill(
+                        child: ImageMarkLayer(page: 0),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ));
+
+      // The page box sits at (260, 0) in the 800x600 test window (the
+      // scroll viewport top-aligns its content; Center only centers
+      // horizontally).
+      const origin = Offset(260, 0);
+      const pageSize = Size(280, 396);
+
+      // A stamp placed by tapping at the page center lands exactly there.
+      container
+          .read(markToolProvider.notifier)
+          .setStampFile('/tmp/stamp.png');
+      container.read(markToolProvider.notifier).setTool(MarkTool.stamp);
+      await tester.pump();
+      final tapPos = origin + Offset(pageSize.width / 2, pageSize.height / 2);
+      await tester.tapAt(tapPos);
+      await tester.pumpAndSettle();
+      final stamp =
+          container.read(imageMarkProvider).valueOrNull!.single;
+      expect(stamp.kind, ImageMarkKind.stamp);
+      expect(stamp.x, closeTo(0.5, 0.001));
+      expect(stamp.y, closeTo(0.5, 0.001));
+
+      // Select-drag the stamp: it tracks the pointer, never running ahead.
+      container.read(markToolProvider.notifier).setTool(MarkTool.select);
+      await tester.pump();
+      final down = origin + Offset(stamp.x * pageSize.width, stamp.y * pageSize.height);
+      final gesture = await tester.startGesture(down);
+      await gesture.moveTo(down + const Offset(10, 8));
+      await gesture.moveTo(down + const Offset(40, 30));
+      await gesture.moveTo(down + const Offset(80, 60));
+      await gesture.moveTo(down + const Offset(120, 90));
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      final moved =
+          container.read(imageMarkProvider).valueOrNull!.single;
+      final screenX = moved.x * pageSize.width + origin.dx;
+      final screenY = moved.y * pageSize.height + origin.dy;
+      final lastPointer = down + const Offset(120, 90);
+      expect(screenX, lessThan(lastPointer.dx + 1)); // never ahead
+      expect(screenX, greaterThan(lastPointer.dx - 60)); // trails ≤ slop
+      expect(screenY, lessThan(lastPointer.dy + 1));
+      expect(screenY, greaterThan(lastPointer.dy - 60));
     });
   });
 }
