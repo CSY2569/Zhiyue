@@ -74,6 +74,11 @@ class AiConfig {
   /// [custom_prompt] at save time.
   final List<CustomPrompt> customPrompts;
 
+  /// User edits of the built-in role templates: template id -> the
+  /// user's text. A present entry replaces the built-in prompt (设置 →
+  /// AI 回复: selecting a template shows its text, editable).
+  final Map<String, String> templateOverrides;
+
   const AiConfig({
     required this.baseUrl,
     required this.apiKey,
@@ -94,6 +99,7 @@ class AiConfig {
     required this.promptTemplate,
     required this.customPrompt,
     required this.customPrompts,
+    required this.templateOverrides,
   });
 
   @override
@@ -116,7 +122,8 @@ class AiConfig {
       temperature.hashCode ^
       promptTemplate.hashCode ^
       customPrompt.hashCode ^
-      customPrompts.hashCode;
+      customPrompts.hashCode ^
+      templateOverrides.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -141,7 +148,8 @@ class AiConfig {
           temperature == other.temperature &&
           promptTemplate == other.promptTemplate &&
           customPrompt == other.customPrompt &&
-          customPrompts == other.customPrompts;
+          customPrompts == other.customPrompts &&
+          templateOverrides == other.templateOverrides;
 }
 
 /// A single message in a thread (table: ai_messages).

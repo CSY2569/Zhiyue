@@ -134,6 +134,7 @@ void main() {
       promptTemplate: 'general',
       customPrompt: '',
       customPrompts: const [],
+      templateOverrides: const {},
     ));
 
     final done = Completer<void>();
@@ -193,6 +194,7 @@ void main() {
       promptTemplate: 'academic',
       customPrompt: '',
       customPrompts: const [],
+      templateOverrides: const {},
     ));
 
     final done = Completer<void>();
@@ -243,6 +245,7 @@ void main() {
 
       customPrompt: '',
       customPrompts: const [],
+      templateOverrides: const {},
       searchUseBuiltin: false,
     ));
 
@@ -301,6 +304,7 @@ void main() {
 
       customPrompt: '',
       customPrompts: const [],
+      templateOverrides: const {},
       searchUseBuiltin: false,
     ));
 
@@ -451,6 +455,7 @@ void main() {
 
       customPrompt: '',
       customPrompts: const [],
+      templateOverrides: const {},
       searchUseBuiltin: false,
     ));
 
@@ -499,6 +504,7 @@ void main() {
 
       customPrompt: '',
       customPrompts: const [],
+      templateOverrides: const {},
     ));
 
     final chunks = <String>[];
@@ -561,6 +567,7 @@ void main() {
 
       customPrompt: '',
       customPrompts: const [],
+      templateOverrides: const {},
     ));
 
     final chunks = <String>[];
@@ -619,6 +626,7 @@ void main() {
 
       customPrompt: '',
       customPrompts: const [],
+      templateOverrides: const {},
       searchUseBuiltin: false,
     ));
 

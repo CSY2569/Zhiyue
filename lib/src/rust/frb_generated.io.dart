@@ -28,6 +28,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnyhowException dco_decode_AnyhowException(dynamic raw);
 
   @protected
+  Map<String, String> dco_decode_Map_String_String_None(dynamic raw);
+
+  @protected
   RustStreamSink<String> dco_decode_StreamSink_String_Sse(dynamic raw);
 
   @protected
@@ -166,6 +169,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<(String, String)> dco_decode_list_record_string_string(dynamic raw);
+
+  @protected
   List<TextAnnotation> dco_decode_list_text_annotation(dynamic raw);
 
   @protected
@@ -223,6 +229,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ReadingProgress dco_decode_reading_progress(dynamic raw);
 
   @protected
+  (String, String) dco_decode_record_string_string(dynamic raw);
+
+  @protected
   ScanPageResult dco_decode_scan_page_result(dynamic raw);
 
   @protected
@@ -245,6 +254,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
+
+  @protected
+  Map<String, String> sse_decode_Map_String_String_None(
+    SseDeserializer deserializer,
+  );
 
   @protected
   RustStreamSink<String> sse_decode_StreamSink_String_Sse(
@@ -405,6 +419,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<(String, String)> sse_decode_list_record_string_string(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<TextAnnotation> sse_decode_list_text_annotation(
     SseDeserializer deserializer,
   );
@@ -470,6 +489,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ReadingProgress sse_decode_reading_progress(SseDeserializer deserializer);
 
   @protected
+  (String, String) sse_decode_record_string_string(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ScanPageResult sse_decode_scan_page_result(SseDeserializer deserializer);
 
   @protected
@@ -495,6 +519,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_AnyhowException(
     AnyhowException self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_Map_String_String_None(
+    Map<String, String> self,
     SseSerializer serializer,
   );
 
@@ -685,6 +715,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_record_string_string(
+    List<(String, String)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_text_annotation(
     List<TextAnnotation> self,
     SseSerializer serializer,
@@ -768,6 +804,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_reading_progress(
     ReadingProgress self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_record_string_string(
+    (String, String) self,
     SseSerializer serializer,
   );
 

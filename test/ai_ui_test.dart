@@ -66,6 +66,48 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+
+  testWidgets('built-in template text is editable and persists',
+      (tester) async {
+    final repo = FakeAiRepo();
+    await tester.pumpWidget(_scope(const SettingsPage(), repo));
+    await tester.pumpAndSettle();
+
+    // Select a built-in template: its text shows (loaded from Rust).
+    await tester.scrollUntilVisible(
+      find.text('提示词模板'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+    await tester.tap(find.widgetWithText(ChoiceChip, '学术论文'));
+    await tester.pumpAndSettle();
+    expect(find.text('默认学术文本'), findsOneWidget);
+
+    // Edit the text and save: the override persists with the config.
+    await tester.scrollUntilVisible(
+      find.widgetWithText(TextField, '模板提示词（可修改，保存后生效）'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+    await tester.enterText(
+        find.widgetWithText(TextField, '模板提示词（可修改，保存后生效）'),
+        '我修改过的学术提示词');
+    await tester.scrollUntilVisible(
+      find.text('保存 AI 配置'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, '保存 AI 配置'));
+    await tester.pumpAndSettle();
+
+    expect(repo.saved!.templateOverrides['academic'], '我修改过的学术提示词');
+    expect(repo.saved!.promptTemplate, 'academic');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('AI reply settings: thinking level and custom prompt persist',
       (tester) async {
     final repo = FakeAiRepo();

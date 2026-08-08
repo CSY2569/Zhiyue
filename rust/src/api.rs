@@ -905,6 +905,12 @@ use crate::models::ai::{AiActionType, AiConfig, AiMessage, AiRole, AiThread};
 
 
 /// Load the BYOK AI configuration (FEATURES 6.1), or defaults on first run.
+/// The built-in text of a role template (设置 → AI 回复): the settings UI
+/// shows it when a template is selected so users can read and edit it.
+pub fn template_default_text(template_id: String) -> String {
+    ai::prompts::template_default_text(&template_id)
+}
+
 pub fn get_ai_config() -> AiConfig {
     let conn = db::db();
     conn.query_row(
@@ -1080,7 +1086,12 @@ async fn system_prompt_for(action: AiActionType, config: &AiConfig, text: &str) 
         // kept for thread compatibility.
         AiActionType::Vision => ai::prompts::chat_system(),
     };
-    ai::prompts::system_prompt(&config.prompt_template, &config.custom_prompt, &base)
+    ai::prompts::system_prompt(
+            &config.prompt_template,
+            &config.custom_prompt,
+            &config.template_overrides,
+            &base,
+        )
 }
 
 /// Search system prompt with real results (FEATURES 6.2.3): enabled + key ->
@@ -1237,6 +1248,7 @@ async fn builtin_search_stream(
         content: ai::prompts::system_prompt(
             &config.prompt_template,
             &config.custom_prompt,
+            &config.template_overrides,
             &ai::prompts::search_system(true),
         ),
         image_path: None,
@@ -1261,6 +1273,7 @@ async fn builtin_search_stream(
             messages[0].content = ai::prompts::system_prompt(
                 &config.prompt_template,
                 &config.custom_prompt,
+                &config.template_overrides,
                 &ai::prompts::search_failed_system(&e.to_string()),
             );
             let client = ai_client();

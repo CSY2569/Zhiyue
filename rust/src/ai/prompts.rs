@@ -82,7 +82,10 @@ pub fn chat_system() -> String {
 /// segment* prepended to the per-action system prompt, so translation /
 /// explanation / search keep their action instructions (settings 设置 →
 /// AI 回复). "general" adds nothing.
-pub fn template_prompt(template_id: &str, custom: &str) -> String {
+/// The built-in text of a role template (设置 → AI 回复): shown in the
+/// settings UI when a template is selected, so users can read and
+/// customize it. "general" and unknown ids have no text.
+pub fn template_default_text(template_id: &str) -> String {
     match template_id {
         "academic" => "你是一位严谨的学术阅读助手。面对论文、专著与学术材料时，\
             侧重论证逻辑、研究方法和术语准确性；引用时区分原文观点与你的解读。"
@@ -112,6 +115,19 @@ pub fn template_prompt(template_id: &str, custom: &str) -> String {
             解释模型原理、算法与工程实现，关注技术可行性、局限性与最佳实践，\
             保持术语准确。"
             .to_string(),
+        _ => String::new(),
+    }
+}
+
+/// The role segment of a template: the user's override wins when present
+/// (设置 → AI 回复 编辑模板), otherwise the built-in text; "custom" uses
+/// the user's custom prompt.
+pub fn template_prompt(
+    template_id: &str,
+    custom: &str,
+    overrides: &std::collections::HashMap<String, String>,
+) -> String {
+    match template_id {
         "custom" => {
             let custom = custom.trim();
             if custom.is_empty() {
@@ -120,14 +136,23 @@ pub fn template_prompt(template_id: &str, custom: &str) -> String {
                 custom.to_string()
             }
         }
-        _ => String::new(), // "general" and unknown ids
+        id => overrides
+            .get(id)
+            .map(|t| t.trim().to_string())
+            .filter(|t| !t.is_empty())
+            .unwrap_or_else(|| template_default_text(id)),
     }
 }
 
 /// Compose the full system prompt: role template (if any) + the action
 /// instructions, joined by a blank line.
-pub fn system_prompt(template_id: &str, custom: &str, action_prompt: &str) -> String {
-    let role = template_prompt(template_id, custom);
+pub fn system_prompt(
+    template_id: &str,
+    custom: &str,
+    overrides: &std::collections::HashMap<String, String>,
+    action_prompt: &str,
+) -> String {
+    let role = template_prompt(template_id, custom, overrides);
     if role.is_empty() {
         action_prompt.to_string()
     } else {
@@ -225,27 +250,46 @@ mod tests {
 
     #[test]
     fn system_prompt_prepends_role_template_to_action_instructions() {
+        use std::collections::HashMap;
+        let no_override = HashMap::new();
         // Built-in template: role segment first, action instructions after.
-        let p = system_prompt("academic", "", "动作指令");
+        let p = system_prompt("academic", "", &no_override, "动作指令");
         assert!(p.contains("学术阅读助手"), "{p}");
         assert!(p.contains("动作指令"));
         assert!(p.find("学术").unwrap() < p.find("动作指令").unwrap());
 
         // "general" and unknown ids add nothing.
-        assert_eq!(system_prompt("general", "", "动作指令"), "动作指令");
-        assert_eq!(system_prompt("unknown", "", "动作指令"), "动作指令");
-
-        // The extra templates each carry a fitting role segment.
-        assert!(system_prompt("historical", "", "指令").contains("历史文献"));
-        assert!(system_prompt("legal", "", "指令").contains("法律"));
-        assert!(system_prompt("classical", "", "指令").contains("文言文"));
-        assert!(system_prompt("ai", "", "指令").contains("AI 技术"));
+        assert_eq!(system_prompt("general", "", &no_override, "动作指令"), "动作指令");
+        assert_eq!(system_prompt("unknown", "", &no_override, "动作指令"), "动作指令");
 
         // Custom: the user's text becomes the role segment; empty custom
         // text degrades to the bare action instructions.
-        let c = system_prompt("custom", "你是一位诗人", "动作指令");
+        let c = system_prompt("custom", "你是一位诗人", &no_override, "动作指令");
         assert!(c.starts_with("你是一位诗人"), "{c}");
         assert!(c.contains("动作指令"));
-        assert_eq!(system_prompt("custom", "   ", "动作指令"), "动作指令");
+        assert_eq!(system_prompt("custom", "   ", &no_override, "动作指令"), "动作指令");
+
+        // The extra templates each carry a fitting role segment.
+        assert!(system_prompt("historical", "", &no_override, "指令").contains("历史文献"));
+        assert!(system_prompt("legal", "", &no_override, "指令").contains("法律"));
+        assert!(system_prompt("classical", "", &no_override, "指令").contains("文言文"));
+        assert!(system_prompt("ai", "", &no_override, "指令").contains("AI 技术"));
+    }
+
+    #[test]
+    fn template_overrides_replace_builtin_text() {
+        use std::collections::HashMap;
+        let mut overrides = HashMap::new();
+        overrides.insert("academic".to_string(), "你是一位物理学家。".to_string());
+        // The user's text replaces the built-in role segment.
+        let p = system_prompt("academic", "", &overrides, "动作指令");
+        assert!(p.starts_with("你是一位物理学家。"), "{p}");
+        assert!(!p.contains("学术阅读助手"));
+        assert!(p.contains("动作指令"));
+
+        // template_default_text exposes the built-in texts for the UI.
+        assert!(template_default_text("novel").contains("文学"));
+        assert_eq!(template_default_text("general"), "");
+        assert_eq!(template_default_text("unknown"), "");
     }
 }

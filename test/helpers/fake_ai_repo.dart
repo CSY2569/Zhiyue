@@ -46,6 +46,7 @@ class FakeAiRepo extends AiRepository {
         promptTemplate: 'general',
         customPrompt: '',
         customPrompts: const [],
+        templateOverrides: const {},
       );
 
   @override
@@ -53,6 +54,10 @@ class FakeAiRepo extends AiRepository {
     saved = config;
     return 1;
   }
+
+  @override
+  Future<String> templateDefaultText(String templateId) async =>
+      templateId == 'academic' ? '默认学术文本' : '';
 
   @override
   Future<List<AiThread>> listAiThreads() async => [

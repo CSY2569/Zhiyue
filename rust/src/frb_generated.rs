@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1977872376;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -510898820;
 
 // Section: executor
 
@@ -1618,6 +1618,40 @@ fn wire__crate__api__stream_vision_png_impl(
         },
     )
 }
+fn wire__crate__api__template_default_text_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "template_default_text",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_template_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::template_default_text(api_template_id))?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__toggle_favorite_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1781,6 +1815,14 @@ impl SseDecode for flutter_rust_bridge::for_generated::anyhow::Error {
     }
 }
 
+impl SseDecode for std::collections::HashMap<String, String> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <Vec<(String, String)>>::sse_decode(deserializer);
+        return inner.into_iter().collect();
+    }
+}
+
 impl SseDecode for StreamSink<String, flutter_rust_bridge::for_generated::SseCodec> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1835,6 +1877,8 @@ impl SseDecode for crate::models::ai::AiConfig {
         let mut var_customPrompt = <String>::sse_decode(deserializer);
         let mut var_customPrompts =
             <Vec<crate::models::ai::CustomPrompt>>::sse_decode(deserializer);
+        let mut var_templateOverrides =
+            <std::collections::HashMap<String, String>>::sse_decode(deserializer);
         return crate::models::ai::AiConfig {
             base_url: var_baseUrl,
             api_key: var_apiKey,
@@ -1855,6 +1899,7 @@ impl SseDecode for crate::models::ai::AiConfig {
             prompt_template: var_promptTemplate,
             custom_prompt: var_customPrompt,
             custom_prompts: var_customPrompts,
+            template_overrides: var_templateOverrides,
         };
     }
 }
@@ -2308,6 +2353,18 @@ impl SseDecode for Vec<u8> {
     }
 }
 
+impl SseDecode for Vec<(String, String)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<(String, String)>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::models::annotation::TextAnnotation> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2557,6 +2614,15 @@ impl SseDecode for crate::models::progress::ReadingProgress {
     }
 }
 
+impl SseDecode for (String, String) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_field0 = <String>::sse_decode(deserializer);
+        let mut var_field1 = <String>::sse_decode(deserializer);
+        return (var_field0, var_field1);
+    }
+}
+
 impl SseDecode for crate::api::ScanPageResult {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2698,10 +2764,11 @@ fn pde_ffi_dispatcher_primary_impl(
         41 => wire__crate__api__set_setting_impl(port, ptr, rust_vec_len, data_len),
         42 => wire__crate__api__stream_chat_impl(port, ptr, rust_vec_len, data_len),
         43 => wire__crate__api__stream_vision_png_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__toggle_favorite_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__touch_last_opened_impl(port, ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__update_annotation_content_impl(port, ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__update_image_annotation_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__template_default_text_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__toggle_favorite_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__touch_last_opened_impl(port, ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__update_annotation_content_impl(port, ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__update_image_annotation_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -2767,6 +2834,7 @@ impl flutter_rust_bridge::IntoDart for crate::models::ai::AiConfig {
             self.prompt_template.into_into_dart().into_dart(),
             self.custom_prompt.into_into_dart().into_dart(),
             self.custom_prompts.into_into_dart().into_dart(),
+            self.template_overrides.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -3400,6 +3468,13 @@ impl SseEncode for flutter_rust_bridge::for_generated::anyhow::Error {
     }
 }
 
+impl SseEncode for std::collections::HashMap<String, String> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<(String, String)>>::sse_encode(self.into_iter().collect(), serializer);
+    }
+}
+
 impl SseEncode for StreamSink<String, flutter_rust_bridge::for_generated::SseCodec> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -3455,6 +3530,10 @@ impl SseEncode for crate::models::ai::AiConfig {
         <String>::sse_encode(self.prompt_template, serializer);
         <String>::sse_encode(self.custom_prompt, serializer);
         <Vec<crate::models::ai::CustomPrompt>>::sse_encode(self.custom_prompts, serializer);
+        <std::collections::HashMap<String, String>>::sse_encode(
+            self.template_overrides,
+            serializer,
+        );
     }
 }
 
@@ -3801,6 +3880,16 @@ impl SseEncode for Vec<u8> {
     }
 }
 
+impl SseEncode for Vec<(String, String)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <(String, String)>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::models::annotation::TextAnnotation> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -3991,6 +4080,14 @@ impl SseEncode for crate::models::progress::ReadingProgress {
         <f64>::sse_encode(self.zoom, serializer);
         <crate::models::progress::ViewMode>::sse_encode(self.view_mode, serializer);
         <String>::sse_encode(self.updated_at, serializer);
+    }
+}
+
+impl SseEncode for (String, String) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.0, serializer);
+        <String>::sse_encode(self.1, serializer);
     }
 }
 

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:rbwa/core/theme/theme_controller.dart';
+import 'package:rbwa/data/repositories/ai_repository.dart';
 import 'package:rbwa/features/ai/providers/ai_config_provider.dart';
 import 'package:rbwa/src/rust/models/ai.dart';
 
@@ -38,7 +39,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   String _promptTemplate = 'general';
   final _customPrompt = TextEditingController();
   final _customPromptName = TextEditingController();
+  final _templateEdit = TextEditingController();
   List<CustomPrompt> _savedTemplates = [];
+  /// User edits of the built-in templates (template id -> text); persisted
+  /// as template_overrides. The async-loaded defaults live in the other map.
+  final Map<String, String> _templateEdits = {};
+  final Map<String, String> _templateDefaults = {};
   bool _loaded = false;
   bool _saving = false;
 
@@ -55,6 +61,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _searchApiKey.dispose();
     _customPrompt.dispose();
     _customPromptName.dispose();
+    _templateEdit.dispose();
     super.dispose();
   }
 
@@ -83,6 +90,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _promptTemplate = config.promptTemplate;
     _customPrompt.text = config.customPrompt;
     _savedTemplates = [...config.customPrompts];
+    _templateEdits
+      ..clear()
+      ..addAll(config.templateOverrides);
   }
 
   Future<void> _save() async {
@@ -116,6 +126,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       promptTemplate: _promptTemplate,
       customPrompt: _customPrompt.text.trim(),
       customPrompts: _savedTemplates,
+      templateOverrides: _templateEdits,
     );
     final ok = await ref.read(aiConfigProvider.notifier).save(config);
     if (!mounted) return;
@@ -286,13 +297,38 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       label: Text(t.label),
                       selected: _promptTemplate == t.id,
                       visualDensity: VisualDensity.compact,
-                      onSelected: (_) =>
-                          setState(() => _promptTemplate = t.id),
+                      onSelected: (_) => _selectTemplate(t.id),
                     ),
                 ],
               ),
             ),
           ),
+          if (_promptTemplate != 'general' && _promptTemplate != 'custom') ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: TextField(
+                controller: _templateEdit,
+                minLines: 3,
+                maxLines: 6,
+                decoration: const InputDecoration(
+                  labelText: '模板提示词（可修改，保存后生效）',
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (v) => _templateEdits[_promptTemplate] = v,
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _restoreTemplate,
+                icon: const Icon(Icons.restore, size: 16),
+                label: const Text('恢复默认'),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ),
+          ],
           if (_promptTemplate == 'custom') ...[
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -395,6 +431,36 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ],
       ),
     );
+  }
+
+  /// Pick a template chip: the built-in ones show their (editable) text;
+  /// the default text loads from Rust on first selection.
+  void _selectTemplate(String id) {
+    setState(() {
+      _promptTemplate = id;
+      _templateEdit.text =
+          _templateEdits[id] ?? _templateDefaults[id] ?? '';
+    });
+    if (id == 'general' || id == 'custom') return;
+    if (_templateEdits.containsKey(id) || _templateDefaults.containsKey(id)) {
+      return;
+    }
+    ref.read(aiRepositoryProvider).templateDefaultText(id).then((t) {
+      if (!mounted || _promptTemplate != id) return;
+      setState(() {
+        _templateDefaults[id] = t;
+        _templateEdit.text = t;
+      });
+    });
+  }
+
+  /// Drop the user edit of the current template (back to the built-in).
+  void _restoreTemplate() {
+    final id = _promptTemplate;
+    setState(() {
+      _templateEdits.remove(id);
+      _templateEdit.text = _templateDefaults[id] ?? '';
+    });
   }
 
   /// Save the current custom prompt as a named template (同名覆盖).

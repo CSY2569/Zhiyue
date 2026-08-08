@@ -18,6 +18,11 @@ class AiRepository {
   /// Persist the BYOK config.
   Future<int> setAiConfig(AiConfig config) => rust.setAiConfig(config: config);
 
+  /// The built-in text of a role template (设置 → AI 回复): the settings UI
+  /// shows it when a template is selected so users can read and edit it.
+  Future<String> templateDefaultText(String templateId) =>
+      rust.templateDefaultText(templateId: templateId);
+
   /// Streaming text action (translate / explain / search / chat, 6.2).
   /// [history] carries the thread's prior turns (6.5.2). Cancelling the
   /// returned subscription aborts the request (6.3.2).

@@ -70,7 +70,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => 1977872376;
+  int get rustContentHash => -510898820;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -246,6 +246,8 @@ abstract class RustLibApi extends BaseApi {
   });
 
   Stream<String> crateApiStreamVisionPng({required List<int> png});
+
+  Future<String> crateApiTemplateDefaultText({required String templateId});
 
   Future<Book?> crateApiToggleFavorite({required PlatformInt64 id});
 
@@ -1667,6 +1669,37 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
+  Future<String> crateApiTemplateDefaultText({required String templateId}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(templateId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 44,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiTemplateDefaultTextConstMeta,
+        argValues: [templateId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTemplateDefaultTextConstMeta =>
+      const TaskConstMeta(
+        debugName: "template_default_text",
+        argNames: ["templateId"],
+      );
+
+  @override
   Future<Book?> crateApiToggleFavorite({required PlatformInt64 id}) {
     return handler.executeNormal(
       NormalTask(
@@ -1676,7 +1709,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 44,
+            funcId: 45,
             port: port_,
           );
         },
@@ -1704,7 +1737,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 45,
+            funcId: 46,
             port: port_,
           );
         },
@@ -1736,7 +1769,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 46,
+            funcId: 47,
             port: port_,
           );
         },
@@ -1783,7 +1816,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 47,
+            funcId: 48,
             port: port_,
           );
         },
@@ -1820,6 +1853,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  Map<String, String> dco_decode_Map_String_String_None(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return Map.fromEntries(
+      dco_decode_list_record_string_string(
+        raw,
+      ).map((e) => MapEntry(e.$1, e.$2)),
+    );
+  }
+
+  @protected
   RustStreamSink<String> dco_decode_StreamSink_String_Sse(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     throw UnimplementedError();
@@ -1841,8 +1884,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   AiConfig dco_decode_ai_config(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 19)
-      throw Exception('unexpected arr length: expect 19 but see ${arr.length}');
+    if (arr.length != 20)
+      throw Exception('unexpected arr length: expect 20 but see ${arr.length}');
     return AiConfig(
       baseUrl: dco_decode_String(arr[0]),
       apiKey: dco_decode_String(arr[1]),
@@ -1863,6 +1906,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       promptTemplate: dco_decode_String(arr[16]),
       customPrompt: dco_decode_String(arr[17]),
       customPrompts: dco_decode_list_custom_prompt(arr[18]),
+      templateOverrides: dco_decode_Map_String_String_None(arr[19]),
     );
   }
 
@@ -2238,6 +2282,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<(String, String)> dco_decode_list_record_string_string(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_record_string_string).toList();
+  }
+
+  @protected
   List<TextAnnotation> dco_decode_list_text_annotation(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_text_annotation).toList();
@@ -2413,6 +2463,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  (String, String) dco_decode_record_string_string(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2) {
+      throw Exception('Expected 2 elements, got ${arr.length}');
+    }
+    return (dco_decode_String(arr[0]), dco_decode_String(arr[1]));
+  }
+
+  @protected
   ScanPageResult dco_decode_scan_page_result(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -2483,6 +2543,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  Map<String, String> sse_decode_Map_String_String_None(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_list_record_string_string(deserializer);
+    return Map.fromEntries(inner.map((e) => MapEntry(e.$1, e.$2)));
+  }
+
+  @protected
   RustStreamSink<String> sse_decode_StreamSink_String_Sse(
     SseDeserializer deserializer,
   ) {
@@ -2526,6 +2595,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_promptTemplate = sse_decode_String(deserializer);
     var var_customPrompt = sse_decode_String(deserializer);
     var var_customPrompts = sse_decode_list_custom_prompt(deserializer);
+    var var_templateOverrides = sse_decode_Map_String_String_None(deserializer);
     return AiConfig(
       baseUrl: var_baseUrl,
       apiKey: var_apiKey,
@@ -2546,6 +2616,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       promptTemplate: var_promptTemplate,
       customPrompt: var_customPrompt,
       customPrompts: var_customPrompts,
+      templateOverrides: var_templateOverrides,
     );
   }
 
@@ -3001,6 +3072,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<(String, String)> sse_decode_list_record_string_string(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <(String, String)>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_record_string_string(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<TextAnnotation> sse_decode_list_text_annotation(
     SseDeserializer deserializer,
   ) {
@@ -3230,6 +3315,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  (String, String) sse_decode_record_string_string(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_field0 = sse_decode_String(deserializer);
+    var var_field1 = sse_decode_String(deserializer);
+    return (var_field0, var_field1);
+  }
+
+  @protected
   ScanPageResult sse_decode_scan_page_result(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_lines = sse_decode_list_ocr_line(deserializer);
@@ -3308,6 +3403,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_Map_String_String_None(
+    Map<String, String> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_record_string_string(
+      self.entries.map((e) => (e.key, e.value)).toList(),
+      serializer,
+    );
+  }
+
+  @protected
   void sse_encode_StreamSink_String_Sse(
     RustStreamSink<String> self,
     SseSerializer serializer,
@@ -3358,6 +3465,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.promptTemplate, serializer);
     sse_encode_String(self.customPrompt, serializer);
     sse_encode_list_custom_prompt(self.customPrompts, serializer);
+    sse_encode_Map_String_String_None(self.templateOverrides, serializer);
   }
 
   @protected
@@ -3756,6 +3864,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_record_string_string(
+    List<(String, String)> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_record_string_string(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_text_annotation(
     List<TextAnnotation> self,
     SseSerializer serializer,
@@ -3957,6 +4077,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.zoom, serializer);
     sse_encode_view_mode(self.viewMode, serializer);
     sse_encode_String(self.updatedAt, serializer);
+  }
+
+  @protected
+  void sse_encode_record_string_string(
+    (String, String) self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.$1, serializer);
+    sse_encode_String(self.$2, serializer);
   }
 
   @protected

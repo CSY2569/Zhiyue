@@ -160,6 +160,11 @@ pub struct AiConfig {
     /// [custom_prompt] at save time.
     #[serde(default)]
     pub custom_prompts: Vec<CustomPrompt>,
+    /// User edits of the built-in role templates: template id -> the
+    /// user's text. A present entry replaces the built-in prompt (设置 →
+    /// AI 回复: selecting a template shows its text, editable).
+    #[serde(default)]
+    pub template_overrides: std::collections::HashMap<String, String>,
 }
 
 /// One user-saved custom prompt template (name + text).
@@ -211,6 +216,7 @@ impl Default for AiConfig {
             prompt_template: "general".to_string(),
             custom_prompt: String::new(),
             custom_prompts: Vec::new(),
+            template_overrides: std::collections::HashMap::new(),
         }
     }
 }
@@ -279,6 +285,9 @@ mod tests {
                     text: "你是一位诗人".into(),
                 },
             ],
+            template_overrides: std::collections::HashMap::from([
+                ("academic".to_string(), "你是一位物理学家。".to_string()),
+            ]),
         };
         let back: AiConfig = serde_json::from_str(&serde_json::to_string(&cfg).unwrap()).unwrap();
         assert_eq!(back.base_url, cfg.base_url);
@@ -302,6 +311,10 @@ mod tests {
         assert_eq!(back.custom_prompts.len(), 1);
         assert_eq!(back.custom_prompts[0].name, "诗人");
         assert_eq!(back.custom_prompts[0].text, "你是一位诗人");
+        assert_eq!(
+            back.template_overrides.get("academic").map(String::as_str),
+            Some("你是一位物理学家。")
+        );
 
         // A config saved by an older build (no ocr_mode) still loads: the
         // serde default kicks in.

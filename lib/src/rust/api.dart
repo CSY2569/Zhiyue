@@ -304,6 +304,11 @@ Future<int> deleteImageAnnotation({required PlatformInt64 annotationId}) =>
     );
 
 /// Load the BYOK AI configuration (FEATURES 6.1), or defaults on first run.
+/// The built-in text of a role template (设置 → AI 回复): the settings UI
+/// shows it when a template is selected so users can read and edit it.
+Future<String> templateDefaultText({required String templateId}) =>
+    RustLib.instance.api.crateApiTemplateDefaultText(templateId: templateId);
+
 Future<AiConfig> getAiConfig() => RustLib.instance.api.crateApiGetAiConfig();
 
 /// Persist the AI configuration (FEATURES 6.1.1-6.1.5). Returns 1 on success.

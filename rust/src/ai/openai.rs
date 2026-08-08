@@ -599,8 +599,6 @@ mod tests {
     }
 
     #[test]
-
-    #[test]
     fn build_request_carries_temperature_and_reasoning_when_configured() {
         // Both configured: temperature + reasoning_effort (o-series field).
         let body = build_request(
