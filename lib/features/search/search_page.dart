@@ -88,36 +88,43 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: TextField(
-            controller: _controller,
-            focusNode: _focus,
-            autofocus: true,
-            onChanged: _onChanged,
-            decoration: InputDecoration(
-              hintText: '搜索全文…（文字版 PDF 与已扫描页面）',
-              prefixIcon: const Icon(Icons.search, size: 20),
-              isDense: true,
-              border: const OutlineInputBorder(),
-              suffixIcon: _controller.text.isEmpty
-                  ? null
-                  : IconButton(
-                      icon: const Icon(Icons.clear, size: 18),
-                      tooltip: '清空',
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () {
-                        _controller.clear();
-                        _onChanged('');
-                      },
-                    ),
+    // Own Scaffold: the shell route only wraps pages in the title bar, so
+    // the page itself must provide the Material context (like the library
+    // and settings pages do).
+    return Scaffold(
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: TextField(
+                controller: _controller,
+                focusNode: _focus,
+                autofocus: true,
+                onChanged: _onChanged,
+                decoration: InputDecoration(
+                  hintText: '搜索全文…（文字版 PDF 与已扫描页面）',
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  isDense: true,
+                  border: const OutlineInputBorder(),
+                  suffixIcon: _controller.text.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          tooltip: '清空',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () {
+                            _controller.clear();
+                            _onChanged('');
+                          },
+                        ),
+                ),
+              ),
             ),
-          ),
+            Expanded(child: _buildBody()),
+          ],
         ),
-        Expanded(child: _buildBody()),
-      ],
+      ),
     );
   }
 

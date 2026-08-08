@@ -68,7 +68,7 @@ void main() {
       routes: [
         GoRoute(
           path: '/search',
-          builder: (_, _) => const Scaffold(body: SearchPage()),
+          builder: (_, _) => const SearchPage(),
         ),
         GoRoute(
           path: '/reader/:bookId',
@@ -121,7 +121,7 @@ void main() {
         searchRepositoryProvider.overrideWithValue(repo),
         libraryBooksProvider.overrideWith(_FakeBooksNotifier.new),
       ],
-      child: const MaterialApp(home: Scaffold(body: SearchPage())),
+      child: const MaterialApp(home: SearchPage()),
     ));
 
     // Initial: guide (no search performed).
