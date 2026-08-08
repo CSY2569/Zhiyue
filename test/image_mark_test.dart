@@ -498,7 +498,6 @@ void main() {
         (tester) async {
       final repo = _FakeReaderRepo();
       final container = _container(repo);
-      final notifier = container.read(imageMarkProvider.notifier);
       // Realistic page structure: a scroll viewport hosting a zoom-sized
       // page box (280x396) whose Stack carries the mark layer.
       await tester.pumpWidget(UncontrolledProviderScope(
