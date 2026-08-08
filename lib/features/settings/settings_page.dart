@@ -288,34 +288,42 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             title: const Text('提示词模板'),
             subtitle: Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 4,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final t in _templateOptions)
-                    ChoiceChip(
-                      label: Text(t.label),
-                      selected: _promptTemplate == t.id,
-                      visualDensity: VisualDensity.compact,
-                      onSelected: (_) => _selectTemplate(t.id),
+                  // Templates wrap freely; the "+" entry stays pinned to
+                  // the far right of the row.
+                  Expanded(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        for (final t in _templateOptions)
+                          _templateChip(
+                            t.label,
+                            _promptTemplate == t.id,
+                            () => _selectTemplate(t.id),
+                          ),
+                        // Saved custom templates appear here too: tap to
+                        // use; deleting them removes the chip at once.
+                        for (final t in _savedTemplates)
+                          _templateChip(
+                            t.name,
+                            _promptTemplate == 'custom' &&
+                                _customPrompt.text.trim() == t.text,
+                            () => _useSavedTemplate(t),
+                          ),
+                      ],
                     ),
-                  // Saved custom templates appear here too: tap to use,
-                  // deleting them (below) removes the chip at once.
-                  for (final t in _savedTemplates)
-                    ChoiceChip(
-                      label: Text(t.name),
-                      selected: _promptTemplate == 'custom' &&
-                          _customPrompt.text.trim() == t.text,
-                      visualDensity: VisualDensity.compact,
-                      onSelected: (_) => _useSavedTemplate(t),
+                  ),
+                  const SizedBox(width: 8),
+                  Tooltip(
+                    message: '自定义提示词',
+                    child: _templateChip(
+                      '+',
+                      _promptTemplate == 'custom',
+                      () => _selectTemplate('custom'),
                     ),
-                  // The custom-prompt entry: a "+" (not a named template).
-                  ChoiceChip(
-                    label: const Text('+'),
-                    tooltip: '自定义提示词',
-                    selected: _promptTemplate == 'custom',
-                    visualDensity: VisualDensity.compact,
-                    onSelected: (_) => _selectTemplate('custom'),
                   ),
                 ],
               ),
@@ -447,6 +455,30 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             label: Text(_saving ? '保存中…' : '保存 AI 配置'),
           ),
         ],
+      ),
+    );
+  }
+
+  /// One selectable template chip: a plain GestureDetector + Container --
+  /// no material selection animation, the selection just flips color.
+  Widget _templateChip(String label, bool selected, VoidCallback onTap) {
+    final theme = Theme.of(context);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: selected
+              ? theme.colorScheme.primaryContainer
+              : theme.colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: selected
+                ? theme.colorScheme.primary
+                : theme.colorScheme.outlineVariant,
+          ),
+        ),
+        child: Text(label, style: theme.textTheme.labelMedium),
       ),
     );
   }
