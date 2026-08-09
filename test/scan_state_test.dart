@@ -227,4 +227,19 @@ void main() {
     // 0.62 < 0.8 flagged; 0.8 is exactly at the threshold, not flagged.
     expect(state.lowConfidence, 1);
   });
+
+  test('book opened at a middle page checks the pages in view (regression)',
+      () async {
+    // Opening restores / jumps straight to page 5: pages 4 and 5 (the left
+    // and right half of the spread) must still get their scan prompts.
+    final repo = _FakeScanRepo()..hasText = false;
+    final container = ProviderContainer(overrides: [
+      readerRepositoryProvider.overrideWithValue(repo),
+      defaultViewer(book: testBook(pageCount: 10), currentPage: 5),
+    ]);
+    addTearDown(container.dispose);
+    container.read(scanStateProvider);
+    await _settle(container, 4, ScanPhase.prompt);
+    await _settle(container, 5, ScanPhase.prompt);
+  });
 }

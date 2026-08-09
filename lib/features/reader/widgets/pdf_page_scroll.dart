@@ -47,8 +47,20 @@ class _PdfPageScrollState extends ConsumerState<PdfPageScroll> {
   // True while we are programmatically scrolling (from a jump request), so
   // the offset listener does not re-report the page and fight the caller.
   bool _fromScroll = false;
+  // Whether the scroll offset has been aligned to the current page height.
+  // The SliverList keeps the measured geometry of laid-out items, so a
+  // second alignment with a different height (pages are not all the same
+  // physical size -- e.g. a cover page) would misplace the offset by many
+  // pages. Align once per book/zoom; page flips align naturally via scroll.
+  bool _aligned = false;
+  // The item stride (page height + gap) locked at alignment time. The
+  // placeholder height of not-yet-loaded pages stays at this value so the
+  // SliverList geometry always matches the scroll math; only already-loaded
+  // pages deviate by their real height (a few px, <1 page).
+  double? _alignedStride;
   late final ProviderSubscription _pageSub;
   late final ProviderSubscription _pageHeightSub;
+  late final ProviderSubscription _realignSub;
 
   @override
   void initState() {
@@ -63,8 +75,7 @@ class _PdfPageScrollState extends ConsumerState<PdfPageScroll> {
         if (_fromScroll || !_scrollController.hasClients) return;
         if (ref.read(viewerProvider).mode == ViewMode.doublePage) return;
         _fromScroll = true;
-        final pageHeight = ref.read(pageHeightProvider);
-        final target = _offsetForPage(next, pageHeight)
+        final target = _offsetForPage(next, _currentStride())
             .clamp(0.0, _scrollController.position.maxScrollExtent);
         _scrollController
             .animateTo(
@@ -82,14 +93,44 @@ class _PdfPageScrollState extends ConsumerState<PdfPageScroll> {
       if (prev == next) return;
       if (!_scrollController.hasClients) return;
       if (ref.read(viewerProvider).mode == ViewMode.doublePage) return;
+      // Align exactly once per book/zoom, locking the stride: the SliverList
+      // never re-measures already-laid-out items, so a second jump with a
+      // different height (PDFs with unequal page sizes, e.g. a shorter
+      // cover) would land many pages off -- and the restored page would
+      // never get its scan prompt (regression). Page flips align via the
+      // scroll listener.
+      if (_aligned) return;
+      _aligned = true;
+      _alignedStride = next + kPageGap;
+      // Rebuild so the placeholder height switches to the locked stride
+      // (the SliverList geometry must match the scroll math below).
+      if (mounted) setState(() {});
       _fromScroll = true;
-      final target = _offsetForPage(
-        ref.read(viewerProvider).currentPage,
-        next,
-      ).clamp(0.0, _scrollController.position.maxScrollExtent);
+      final target = _offsetForPage(ref.read(viewerProvider).currentPage, next)
+          .clamp(0.0, _scrollController.position.maxScrollExtent);
       _scrollController.jumpTo(target);
       _fromScroll = false;
     });
+    // A new book or a zoom change invalidates the alignment: the next height
+    // report re-aligns (zoom re-renders pages, so a report is guaranteed).
+    _realignSub = ref.listenManual(
+      viewerProvider.select((s) => (s.book?.id, s.zoom)),
+      (prev, next) {
+        if (prev != next) {
+          _aligned = false;
+          _alignedStride = null;
+          if (mounted) setState(() {});
+        }
+      },
+    );
+  }
+
+  /// The item stride (page height + gap) used by the scroll math: the locked
+  /// alignment stride once known, else the last reported page height.
+  double _currentStride() {
+    final aligned = _alignedStride;
+    if (aligned != null) return aligned;
+    return _pageStride(ref.read(pageHeightProvider));
   }
 
   /// Scroll offset (in the vertical list) at which page [page] (1-indexed)
@@ -106,6 +147,7 @@ class _PdfPageScrollState extends ConsumerState<PdfPageScroll> {
 
   @override
   void dispose() {
+    _realignSub.close();
     _pageHeightSub.close();
     _pageSub.close();
     _scrollController.removeListener(_onScroll);
@@ -125,9 +167,8 @@ class _PdfPageScrollState extends ConsumerState<PdfPageScroll> {
     final viewport = _scrollController.position.viewportDimension;
     if (viewport == 0) return;
     final offset = _scrollController.offset;
-    final pageH = ref.read(pageHeightProvider);
-    if (pageH <= 0) return;
-    final stride = _pageStride(pageH);
+    final stride = _currentStride();
+    if (stride <= 0) return;
 
     int page;
     if (state.mode == ViewMode.doubleScroll) {
@@ -154,6 +195,11 @@ class _PdfPageScrollState extends ConsumerState<PdfPageScroll> {
       return const Center(child: Text('无页面'));
     }
 
+    // The placeholder height of not-yet-loaded pages: the locked alignment
+    // stride once known (so the SliverList geometry matches the scroll
+    // math), else the last reported page height.
+    final placeholderPageH = _currentStride() - kPageGap;
+
     switch (state.mode) {
       case ViewMode.single:
         return _SingleScroll(
@@ -162,6 +208,7 @@ class _PdfPageScrollState extends ConsumerState<PdfPageScroll> {
           bookId: state.book?.id ?? 0,
           zoom: state.zoom,
           dpiScale: devicePixelRatio,
+          placeholderHeight: placeholderPageH,
         );
       case ViewMode.doubleScroll:
         return _DoubleScroll(
@@ -170,6 +217,7 @@ class _PdfPageScrollState extends ConsumerState<PdfPageScroll> {
           bookId: state.book?.id ?? 0,
           zoom: state.zoom,
           dpiScale: devicePixelRatio,
+          placeholderHeight: placeholderPageH,
         );
       case ViewMode.doublePage:
         return _DoublePageFlip(
@@ -211,6 +259,7 @@ class _SingleScroll extends ConsumerWidget {
     required this.bookId,
     required this.zoom,
     required this.dpiScale,
+    required this.placeholderHeight,
   });
 
   final ScrollController scrollController;
@@ -218,6 +267,7 @@ class _SingleScroll extends ConsumerWidget {
   final int bookId;
   final double zoom;
   final double dpiScale;
+  final double placeholderHeight;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -225,7 +275,7 @@ class _SingleScroll extends ConsumerWidget {
     // Use the measured page height as the placeholder height so items don't
     // jump in height before/after loading (which would desync the scroll
     // offset from the page number).
-    final pageH = ref.watch(pageHeightProvider);
+    final pageH = placeholderHeight;
 
     return ListView.builder(
       controller: scrollController,
@@ -277,6 +327,7 @@ class _DoubleScroll extends ConsumerWidget {
     required this.bookId,
     required this.zoom,
     required this.dpiScale,
+    required this.placeholderHeight,
   });
 
   final ScrollController scrollController;
@@ -284,13 +335,14 @@ class _DoubleScroll extends ConsumerWidget {
   final int bookId;
   final double zoom;
   final double dpiScale;
+  final double placeholderHeight;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cache = ref.read(bitmapCacheProvider);
     final rowCount = (pageCount / 2).ceil();
     // Measured page height -> placeholder height (stable item layout).
-    final pageH = ref.watch(pageHeightProvider);
+    final pageH = placeholderHeight;
 
     return ListView.builder(
       controller: scrollController,
