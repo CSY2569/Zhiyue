@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rbwa/data/repositories/ai_repository.dart';
 import 'package:rbwa/data/repositories/reader_repository.dart';
 import 'package:rbwa/features/reader/providers/scan_provider.dart';
+import 'package:rbwa/src/rust/models/progress.dart' show ViewMode;
 import 'helpers/widget_harness.dart';
 import 'package:rbwa/src/rust/api.dart' as rust;
 import 'package:rbwa/src/rust/ocr.dart' show OcrLine, OcrResult;
@@ -241,5 +242,71 @@ void main() {
     container.read(scanStateProvider);
     await _settle(container, 4, ScanPhase.prompt);
     await _settle(container, 5, ScanPhase.prompt);
+  });
+
+  test('double-page mode on an even (right-half) page checks the visible '
+      'spread, not the next page (regression: Bug A)', () async {
+    // currentPage = 6 (1-indexed, right half of pair 5-6). The visible
+    // spread is 0-indexed {4, 5}; the buggy code checked {5, 6} (the right
+    // half + the off-screen next page) and missed the left half.
+    final book = testBook(pageCount: 10);
+    final repo = _FakeScanRepo()..hasText = false;
+    final container = ProviderContainer(overrides: [
+      readerRepositoryProvider.overrideWithValue(repo),
+      seededViewer(ViewerState(
+        book: book,
+        pageCount: book.pageCount,
+        currentPage: 6,
+        mode: ViewMode.doublePage,
+        zoom: 1.2,
+        loading: false,
+      )),
+    ]);
+    addTearDown(container.dispose);
+    container.read(scanStateProvider);
+    await _settle(container, 4, ScanPhase.prompt);
+    await _settle(container, 5, ScanPhase.prompt);
+    // The off-screen next page (0-indexed 6) must NOT have been seeded.
+    expect(container.read(scanStateProvider).of(6), isNull);
+  });
+
+  test('scan state survives a page flip (regression: Bug B)', () async {
+    // Bug B: ref.watch(currentPage) in build() wiped the whole per-page map
+    // on every flip. After the fix a flip re-checks the new spread without
+    // discarding the established state of pages already seen.
+    final repo = _FakeScanRepo()..hasText = false;
+    final container = ProviderContainer(overrides: [
+      readerRepositoryProvider.overrideWithValue(repo),
+      defaultViewer(book: testBook(pageCount: 10), currentPage: 1),
+    ]);
+    addTearDown(container.dispose);
+    container.read(scanStateProvider);
+    await _settle(container, 0, ScanPhase.prompt);
+    await _settle(container, 1, ScanPhase.prompt);
+
+    // Dismiss page 0, then flip away to page 5 and back to page 1.
+    container.read(scanStateProvider.notifier).dismiss(0);
+    expect(container.read(scanStateProvider).of(0)!.phase, ScanPhase.dismissed);
+    container.read(viewerProvider.notifier).setPage(5);
+    await _settle(container, 4, ScanPhase.prompt);
+    container.read(viewerProvider.notifier).setPage(1);
+    // The dismissed state of page 0 must still be there (not wiped).
+    expect(container.read(scanStateProvider).of(0)?.phase, ScanPhase.dismissed,
+        reason: 'dismissed state must survive a page flip');
+  });
+
+  test('last page does not seed a phantom page beyond pageCount', () async {
+    // currentPage = pageCount (10, 1-indexed): _check must bounds-check so
+    // it doesn't query a non-existent page 10 (0-indexed) / page 11.
+    final repo = _FakeScanRepo()..hasText = false;
+    final container = ProviderContainer(overrides: [
+      readerRepositoryProvider.overrideWithValue(repo),
+      defaultViewer(book: testBook(pageCount: 10), currentPage: 10),
+    ]);
+    addTearDown(container.dispose);
+    container.read(scanStateProvider);
+    await _settle(container, 9, ScanPhase.prompt);
+    // No state for the non-existent page 10 (0-indexed).
+    expect(container.read(scanStateProvider).of(10), isNull);
   });
 }

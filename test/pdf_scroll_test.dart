@@ -177,6 +177,37 @@ void main() {
     });
   });
 
+  testWidgets('within-tier zoom nudge keeps the current page aligned',
+      (tester) async {
+    // Regression (design fix): a zoom change inside the same 0.5 render tier
+    // (1.0 -> 1.1, both quantize to 1.0) doesn't re-render pages, so no new
+    // height report arrives. The stride must still track the new display
+    // height (physical × new zoom) so the scroll offset stays aligned to the
+    // current page -- otherwise the viewport drifts and currentPage desyncs.
+    await tester.runAsync(() async {
+      await tester.pumpWidget(_app(ViewMode.single, zoom: 1.0));
+      await tester.pump();
+      await Future.delayed(const Duration(milliseconds: 300));
+      await tester.pump();
+      final container = ProviderScope.containerOf(
+          tester.element(find.byType(PdfPageScroll)));
+      // Land on page 1 after the first render + alignment.
+      expect(container.read(viewerProvider).currentPage, 1);
+
+      // Nudge the zoom within the same tier (1.0 -> 1.1, both quantize 1.0).
+      container.read(viewerProvider.notifier).setZoom(1.1);
+      for (var i = 0; i < 10; i++) {
+        await tester.pump();
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
+      // The current page must still be 1: the re-align on zoom change jumped
+      // back to page 1 using the known physical height × new zoom.
+      expect(container.read(viewerProvider).currentPage, 1,
+          reason: 'within-tier zoom nudge must keep the page aligned');
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   testWidgets('double-scroll mode: the right page supports selection',
       (tester) async {
     await tester.runAsync(() async {
@@ -212,4 +243,63 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  // Regression: switching view mode used to reset the scroll position to
+  // page 1 because the new ListView/PageView starts at offset 0 and nothing
+  // re-aligned it to the current page.
+  for (final from in ViewMode.values) {
+    for (final to in ViewMode.values) {
+      if (from == to) continue;
+      testWidgets('switching $from -> $to keeps the current page',
+          (tester) async {
+        await tester.runAsync(() async {
+          await tester.pumpWidget(_appMid(from));
+          await tester.pump();
+          await Future.delayed(const Duration(milliseconds: 300));
+          await tester.pump();
+          final container = ProviderScope.containerOf(
+              tester.element(find.byType(PdfPageScroll)));
+          // After the first render + alignment we are on page 10.
+          expect(container.read(viewerProvider).currentPage, 10,
+              reason: '$from: must land on page 10 after open');
+
+          container.read(viewerProvider.notifier).setMode(to);
+          // Let the new scroll view mount + the post-frame re-align fire.
+          for (var i = 0; i < 15; i++) {
+            await tester.pump();
+            await Future.delayed(const Duration(milliseconds: 100));
+          }
+          expect(container.read(viewerProvider).currentPage, 10,
+              reason: '$from -> $to: current page must be preserved');
+          expect(tester.takeException(), isNull);
+        });
+      });
+    }
+  }
 }
+
+/// A 20-page book opened on page 10 in [mode], for the mode-switch tests.
+Widget _appMid(ViewMode mode) => ProviderScope(
+      overrides: [
+        seededViewer(ViewerState(
+          book: testBook(pageCount: 20),
+          pageCount: 20,
+          currentPage: 10,
+          zoom: 1.0,
+          loading: false,
+          mode: mode,
+        )),
+        readerRepositoryProvider.overrideWithValue(_FakeRepo()),
+      ],
+      child: MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 800,
+              height: 600,
+              child: PdfPageScroll(),
+            ),
+          ),
+        ),
+      ),
+    );

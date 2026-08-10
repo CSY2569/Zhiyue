@@ -116,10 +116,10 @@ void main() {
   });
 
   testWidgets(
-      'double-page mode opened on an even (right-half) page keeps the scan '
-      'prompt on it', (tester) async {
+      'double-page mode opened on an even (right-half) page checks the '
+      'visible spread (not the next page)', (tester) async {
     final repo = _FakeOpenRepo()
-      ..restoredPage = 6 // even page = the right half of pair (5, 6)
+      ..restoredPage = 6 // 1-indexed even page = right half of pair (5, 6)
       ..restoredMode = ViewMode.doublePage;
     await tester.runAsync(() async {
       await tester.pumpWidget(ProviderScope(
@@ -153,11 +153,18 @@ void main() {
       // re-checks the wrong spread and the prompt never lands here.
       expect(container.read(viewerProvider).currentPage, 6,
           reason: 'opening on an even page must not snap to the left page');
-      for (final page0 in [5, 6]) {
+      // Visible spread is the pair (5, 6) 1-indexed = (4, 5) 0-indexed. The
+      // old code checked {5, 6} 0-indexed (pages 6, 7) -- the right half
+      // plus the OFF-SCREEN next page -- and missed the left half. Both
+      // halves of the visible pair must carry a prompt; the off-screen page
+      // (0-indexed 6) must NOT have been checked.
+      for (final page0 in [4, 5]) {
         final phase = container.read(scanStateProvider).of(page0)?.phase;
         expect(phase, ScanPhase.prompt,
-            reason: 'page $page0 must offer 扫描识别');
+            reason: 'visible page $page0 (0-indexed) must offer 扫描识别');
       }
+      expect(container.read(scanStateProvider).of(6), isNull,
+          reason: 'off-screen page 6 (0-indexed) must not be checked');
     });
   });
 }

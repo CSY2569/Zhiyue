@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rbwa/features/annotation/providers/annotation_provider.dart';
 import 'package:rbwa/features/annotation/widgets/highlight_layer.dart';
 import 'package:rbwa/features/annotation/widgets/image_mark_layer.dart';
+import 'package:rbwa/features/annotation/widgets/low_confidence_layer.dart';
 import 'package:rbwa/features/annotation/widgets/selection_layer.dart';
 import 'package:rbwa/features/reader/providers/bitmap_cache.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
@@ -53,11 +54,11 @@ class _PdfPageScrollState extends ConsumerState<PdfPageScroll> {
   // physical size -- e.g. a cover page) would misplace the offset by many
   // pages. Align once per book/zoom; page flips align naturally via scroll.
   bool _aligned = false;
-  // The item stride (page height + gap) locked at alignment time. The
-  // placeholder height of not-yet-loaded pages stays at this value so the
-  // SliverList geometry always matches the scroll math; only already-loaded
-  // pages deviate by their real height (a few px, <1 page).
-  double? _alignedStride;
+  // The page's physical height (pt) locked at alignment time. The item
+  // stride is `physicalH × zoom + gap`, computed with the *current* zoom so
+  // within-tier nudges stay exact (the SliverList re-lays out items at the
+  // new display height, and the scroll math tracks it).
+  double? _alignedPhysicalH;
   late final ProviderSubscription _pageSub;
   late final ProviderSubscription _pageHeightSub;
   late final ProviderSubscription _realignSub;
@@ -87,50 +88,114 @@ class _PdfPageScrollState extends ConsumerState<PdfPageScroll> {
       },
     );
     // When the page height becomes known (first page rendered) or changes
-    // (zoom change), re-align the scroll position to the current page so the
-    // reported page matches what is on screen.
+    // (zoom crossing a render tier), re-align the scroll position to the
+    // current page so the reported page matches what is on screen.
     _pageHeightSub = ref.listenManual(pageHeightProvider, (prev, next) {
       if (prev == next) return;
       if (!_scrollController.hasClients) return;
       if (ref.read(viewerProvider).mode == ViewMode.doublePage) return;
-      // Align exactly once per book/zoom, locking the stride: the SliverList
-      // never re-measures already-laid-out items, so a second jump with a
-      // different height (PDFs with unequal page sizes, e.g. a shorter
-      // cover) would land many pages off -- and the restored page would
-      // never get its scan prompt (regression). Page flips align via the
-      // scroll listener.
+      // Align exactly once per book/zoom-tier, locking the physical height:
+      // the SliverList never re-measures already-laid-out items, so a second
+      // jump with a different height (PDFs with unequal page sizes, e.g. a
+      // shorter cover) would land many pages off -- and the restored page
+      // would never get its scan prompt (regression). Page flips align via
+      // the scroll listener. Within-tier zoom nudges don't trigger this (the
+      // physical height is constant), so the stride stays valid and the
+      // scroll math tracks the new display height via `_currentStride`.
       if (_aligned) return;
       _aligned = true;
-      _alignedStride = next + kPageGap;
+      _alignedPhysicalH = next;
       // Rebuild so the placeholder height switches to the locked stride
       // (the SliverList geometry must match the scroll math below).
       if (mounted) setState(() {});
       _fromScroll = true;
-      final target = _offsetForPage(ref.read(viewerProvider).currentPage, next)
+      final zoom = ref.read(viewerProvider).zoom;
+      final target = _offsetForPage(
+              ref.read(viewerProvider).currentPage, next * zoom)
           .clamp(0.0, _scrollController.position.maxScrollExtent);
       _scrollController.jumpTo(target);
       _fromScroll = false;
     });
-    // A new book or a zoom change invalidates the alignment: the next height
-    // report re-aligns (zoom re-renders pages, so a report is guaranteed).
+    // A new book, zoom change, or view-mode switch requires re-aligning the
+    // scroll offset.
+    // - Book switch: clear the locked height; the first page of the new book
+    //   reports its height and the `_pageHeightSub` realigns.
+    // - Zoom change: the display height (physical × zoom) changes even when
+    //   the physical height is constant (within-tier nudge), so re-jump to
+    //   the current page using the already-known physical height. If no
+    //   height is known yet (first render pending), clear and wait for the
+    //   report. Keeping `_alignedPhysicalH` lets `_currentStride` track the
+    //   new zoom immediately instead of going stale.
+    // - Mode switch: the old ListView/PageView is unmounted and a fresh one
+    //   starts at offset 0, so re-jump to the current page on the next frame
+    //   (the new scroll position isn't attached yet at callback time).
+    //   doublePage is handled by `_DoublePageFlip.initState` (it seeds its
+    //   PageController from currentPage), so only single/doubleScroll need
+    //   the re-jump.
     _realignSub = ref.listenManual(
-      viewerProvider.select((s) => (s.book?.id, s.zoom)),
+      viewerProvider.select((s) => (s.book?.id, s.zoom, s.mode)),
       (prev, next) {
-        if (prev != next) {
+        if (prev == next) return;
+        final bookChanged = prev?.$1 != next.$1;
+        final modeChanged = prev?.$3 != next.$3;
+        if (bookChanged) {
           _aligned = false;
-          _alignedStride = null;
+          _alignedPhysicalH = null;
           if (mounted) setState(() {});
+          return;
         }
+        if (modeChanged) {
+          // doublePage seeds its own PageController in initState; nothing to
+          // do here. single/doubleScroll need a re-jump once the new
+          // ListView attaches its scroll position (next frame).
+          if (next.$3 == ViewMode.doublePage) return;
+          if (!mounted) return;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || !_scrollController.hasClients) return;
+            final viewer = ref.read(viewerProvider);
+            if (viewer.mode == ViewMode.doublePage) return;
+            final double physicalH =
+                _alignedPhysicalH ?? ref.read(pageHeightProvider);
+            if (physicalH <= 0) return;
+            _fromScroll = true;
+            final target = _offsetForPage(
+                    viewer.currentPage, physicalH * viewer.zoom)
+                .clamp(0.0, _scrollController.position.maxScrollExtent);
+            _scrollController.jumpTo(target);
+            _fromScroll = false;
+          });
+          return;
+        }
+        // Zoom changed. Re-jump using the known physical height so the page
+        // shown matches the reported page after the display height changes.
+        final physicalH = _alignedPhysicalH;
+        if (physicalH == null || !_scrollController.hasClients) {
+          _aligned = false;
+          if (mounted) setState(() {});
+          return;
+        }
+        if (ref.read(viewerProvider).mode == ViewMode.doublePage) return;
+        if (mounted) setState(() {}); // placeholder height tracks new zoom
+        _fromScroll = true;
+        final target = _offsetForPage(
+                ref.read(viewerProvider).currentPage, physicalH * next.$2)
+            .clamp(0.0, _scrollController.position.maxScrollExtent);
+        _scrollController.jumpTo(target);
+        _fromScroll = false;
       },
     );
   }
 
-  /// The item stride (page height + gap) used by the scroll math: the locked
-  /// alignment stride once known, else the last reported page height.
+  /// The item stride (page display height + gap) used by the scroll math:
+  /// the locked physical height × current zoom + gap, else the last reported
+  /// physical height × current zoom + gap. Using the current zoom keeps the
+  /// stride in sync with within-tier zoom nudges (the SliverList re-lays out
+  /// items at the new display height).
   double _currentStride() {
-    final aligned = _alignedStride;
-    if (aligned != null) return aligned;
-    return _pageStride(ref.read(pageHeightProvider));
+    final zoom = ref.read(viewerProvider).zoom;
+    final double physicalH =
+        _alignedPhysicalH ?? ref.read(pageHeightProvider);
+    return _pageStride(physicalH * zoom);
   }
 
   /// Scroll offset (in the vertical list) at which page [page] (1-indexed)
@@ -241,11 +306,11 @@ const double kPageGap = 16;
 /// despite the gaps.
 double _pageStride(double pageH) => pageH + kPageGap;
 
-/// Display height (logical px) of one page at the current zoom, reported by
-/// the first rendered page (via an async callback -- never during build).
-/// All pages of a PDF share the same height, so the scroll listener's
-/// division is exact.
-final pageHeightProvider = StateProvider<double>((ref) => 800.0);
+/// Physical height (pt, zoom-independent) of one page, reported by the first
+/// rendered page (via an async callback -- never during build). The display
+/// height is `physical × zoom`, computed where needed so within-tier zoom
+/// nudges don't make the alignment stride stale.
+final pageHeightProvider = StateProvider<double>((ref) => 800.0 / 1.2);
 
 /// Single-page continuous scroll (FEATURES 3.1.1).
 ///
@@ -718,16 +783,17 @@ class _PageItemState extends ConsumerState<_PageItem> {
       _image = img;
       _imageRenderZoom = renderZoom;
     });
-    // Report the page's display height for exact scroll-based page tracking.
-    // Runs asynchronously (never during build). The height is
-    // physical_height × zoom -- independent of the render tier, so it is
-    // constant across sharpen re-renders.
+    // Report the page's physical height (pt, zoom-independent) for exact
+    // scroll-based page tracking. Storing the physical height (not the
+    // display height) keeps it constant across within-tier zoom nudges, so
+    // the alignment stride never goes stale when the zoom changes inside a
+    // 0.5 tier (the display height = physical × zoom is computed at use).
+    // Runs asynchronously (never during build).
     if (widget.onPageHeightKnown != null && img != null) {
-      final displayH =
-          img.height / (renderZoom * widget.dpiScale) * widget.zoom;
-      if (displayH != _lastReportedHeight) {
-        _lastReportedHeight = displayH;
-        widget.onPageHeightKnown!(displayH);
+      final physicalH = img.height / (renderZoom * widget.dpiScale);
+      if (physicalH != _lastReportedHeight) {
+        _lastReportedHeight = physicalH;
+        widget.onPageHeightKnown!(physicalH);
       }
     }
   }
@@ -825,6 +891,13 @@ class _PageItemState extends ConsumerState<_PageItem> {
               ),
               Positioned.fill(
                 child: HighlightLayer(annotations: pageAnns),
+              ),
+              // Low-confidence OCR lines marked for review (7.1.6).
+              Positioned.fill(
+                child: LowConfidenceLayer(
+                  bookId: widget.bookId,
+                  page: widget.page,
+                ),
               ),
               // Search hit highlight (M6, 3.5.3): below the selection layer
               // so selection previews stay visible on top of it.

@@ -22,6 +22,11 @@ class BitmapCache {
 
   final ReaderRepository _repo;
   final LinkedHashMap<_CacheKey, ui.Image> _cache = LinkedHashMap();
+  // In-flight renders keyed by the same cache key. Two callers requesting the
+  // same page/tier before the first finishes share one Rust render (the
+  // ListView re-layout from the scroll-alignment fix can otherwise fan out
+  // many `_PageItem` loads for the same page at once).
+  final Map<_CacheKey, Future<ui.Image?>> _pending = {};
 
   static const int _maxEntries = 20;
   static const double _minZoom = 0.5;
@@ -36,7 +41,8 @@ class BitmapCache {
 
   /// Returns the cached image for the page, or renders + caches it.
   /// `zoom` is the user zoom; the tier is quantized internally. `dpiScale`
-  /// is the device pixel ratio for high-DPI output.
+  /// is the device pixel ratio for high-DPI output. Concurrent calls for the
+  /// same key share a single in-flight render.
   Future<ui.Image?> getOrFetch({
     required int bookId,
     required int page,
@@ -53,6 +59,28 @@ class BitmapCache {
       return cached;
     }
 
+    // Miss: deduplicate concurrent renders of the same key. A second caller
+    // awaiting the same future sees the same result (and the cache populated
+    // by the first), so it never fires its own renderPage.
+    final pending = _pending[key];
+    if (pending != null) return pending;
+
+    final future = _render(key, bookId, page, renderZoom, dpiScale);
+    _pending[key] = future;
+    try {
+      return await future;
+    } finally {
+      _pending.remove(key);
+    }
+  }
+
+  Future<ui.Image?> _render(
+    _CacheKey key,
+    int bookId,
+    int page,
+    double renderZoom,
+    double dpiScale,
+  ) async {
     // Miss: render in Rust and decode.
     try {
       final result =
