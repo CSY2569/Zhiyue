@@ -209,7 +209,9 @@ class ScreenshotNotifier extends Notifier<ScreenshotState> {
   }
 
   Directory _defaultDir() {
-    final home = Platform.environment['HOME'];
+    // Windows has no HOME env var: use USERPROFILE (or OneDrive Pictures).
+    final home = Platform.environment['HOME'] ??
+        Platform.environment['USERPROFILE'];
     if (home != null && home.isNotEmpty) {
       return Directory('$home/Pictures/RBWA');
     }
