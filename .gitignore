@@ -62,8 +62,6 @@ app.*.map.json
 *.dylib
 *.dll
 /assets/models/
-# OCR models staged for Windows packaging (download_ocr_models.ps1 -Dir)
-/rust/models/
 
 # ---------------------------------------------------------------------------
 # Runtime data (never commit user data / DBs / logs)

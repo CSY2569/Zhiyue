@@ -7,7 +7,6 @@
 ## 目标平台
 
 - **基准平台**：Linux（CachyOS / Arch 系）
-- 保持 Windows / macOS 可移植性（`docs/TECH_ROADMAP.md` §10.6）
 
 ---
 

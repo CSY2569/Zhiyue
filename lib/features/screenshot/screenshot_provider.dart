@@ -209,7 +209,8 @@ class ScreenshotNotifier extends Notifier<ScreenshotState> {
   }
 
   Directory _defaultDir() {
-    // Windows has no HOME env var: use USERPROFILE (or OneDrive Pictures).
+    // Fallback for environments without HOME (e.g. USERPROFILE on some
+    // systems); Linux desktops always set HOME.
     final home = Platform.environment['HOME'] ??
         Platform.environment['USERPROFILE'];
     if (home != null && home.isNotEmpty) {
