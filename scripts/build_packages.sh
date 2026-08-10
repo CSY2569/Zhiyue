@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# Build all Linux distribution packages for RBWA:
+#   - dist/rbwa_<ver>_amd64.deb      (Debian / Ubuntu)
+#   - dist/rbwa-<ver>-1.x86_64.rpm   (Fedora / RHEL / OpenSUSE)
+#   - dist/rbwa-x86_64.AppImage      (any distro, no install needed)
+#
+# Requirements:
+#   - flutter build linux --release works on this machine
+#   - ar (binutils) for the .deb
+#   - rpmbuild for the .rpm
+#   - appimagetool + type2-runtime for the AppImage (downloaded on demand)
+#
+# Usage: bash scripts/build_packages.sh [version]
+
+set -euo pipefail
+
+VERSION="${1:-0.1.0}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+BUNDLE="$PROJECT_ROOT/build/linux/x64/release/bundle"
+DIST="$PROJECT_ROOT/dist"
+TOOLS="$PROJECT_ROOT/.packaging-tools"
+
+mkdir -p "$DIST" "$TOOLS"
+
+echo "==> Building Flutter Linux release bundle"
+(cd "$PROJECT_ROOT" && flutter build linux --release)
+
+if [ ! -x "$BUNDLE/rbwa" ]; then
+  echo "bundle missing: $BUNDLE/rbwa" >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+echo "==> .deb (ar-based, no dpkg toolchain needed)"
+bash "$SCRIPT_DIR/build_deb.sh" "$VERSION"
+
+# ---------------------------------------------------------------------------
+echo "==> .rpm (rpmbuild)"
+RPMBUILD_DIR="${RPMBUILD_DIR:-$HOME/rpmbuild}"
+mkdir -p "$RPMBUILD_DIR"/{SOURCES,BUILD,RPMS}
+cp -r "$BUNDLE" "$RPMBUILD_DIR/SOURCES/bundle"
+cp -r "$PROJECT_ROOT/packaging" "$RPMBUILD_DIR/SOURCES/"
+rpmbuild -bb "$RPMBUILD_DIR/SOURCES/packaging/rbwa.spec" >/dev/null
+cp "$RPMBUILD_DIR"/RPMS/x86_64/rbwa-*.x86_64.rpm "$DIST/"
+
+# ---------------------------------------------------------------------------
+echo "==> AppImage (appimagetool)"
+APPIMAGETOOL="$TOOLS/appimagetool"
+RUNTIME="$TOOLS/runtime-x86_64"
+if [ ! -x "$APPIMAGETOOL" ]; then
+  echo "    downloading appimagetool ..."
+  curl -sSL --retry 3 -o "$APPIMAGETOOL" \
+    "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage" \
+    || { echo "ERROR: failed to download appimagetool" >&2; exit 1; }
+  chmod +x "$APPIMAGETOOL"
+fi
+# appimagetool's embedded downloader cannot follow GitHub's redirect
+# ("server returned status code 0"), so the type2 runtime must be fetched
+# separately with curl and passed via --runtime-file.
+if [ ! -f "$RUNTIME" ]; then
+  echo "    downloading type2-runtime ..."
+  curl -sSL --retry 3 -o "$RUNTIME" \
+    "https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64" \
+    || { echo "ERROR: failed to download type2-runtime (needed by appimagetool)" >&2; exit 1; }
+fi
+
+APPDIR="$PROJECT_ROOT/.packaging/AppDir"
+rm -rf "$APPDIR"
+mkdir -p "$APPDIR"
+cp -r "$BUNDLE/rbwa" "$BUNDLE/lib" "$BUNDLE/data" "$APPDIR/"
+cp "$PROJECT_ROOT/packaging/rbwa.desktop" "$APPDIR/"
+cp "$PROJECT_ROOT/packaging/icon/rbwa.png" "$APPDIR/"
+cat > "$APPDIR/AppRun" <<'EOF'
+#!/bin/sh
+HERE="$(dirname "$(readlink -f "$0")")"
+export LD_LIBRARY_PATH="$HERE/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec "$HERE/rbwa" "$@"
+EOF
+chmod +x "$APPDIR/AppRun"
+
+"$APPIMAGETOOL" --runtime-file "$RUNTIME" "$APPDIR" "$DIST/rbwa-x86_64.AppImage" >/dev/null
+
+echo
+echo "==> Done. Artifacts in $DIST:"
+for f in "$DIST"/*; do
+  [ -f "$f" ] && echo "  $(du -h "$f" | cut -f1)  $(basename "$f")"
+done

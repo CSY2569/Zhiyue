@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=RBWA
+Name[zh_CN]=RBWA 阅读器
+Comment=Read Book With AI - AI-powered local PDF/image reader
+Comment[zh_CN]=带 AI 的本地 PDF/图片阅读器
+Exec=rbwa
+Icon=rbwa
+Terminal=false
+Categories=Office;Viewer;Education;
+Keywords=pdf;reader;ocr;ai;book;
+StartupNotify=true
