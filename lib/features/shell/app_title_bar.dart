@@ -20,7 +20,7 @@ import 'package:rbwa/router/app_router.dart';
 class AppTitleBar extends StatelessWidget {
   const AppTitleBar({
     super.key,
-    this.title = 'RBWA',
+    this.title = '智阅',
     this.showBack = false,
   });
 

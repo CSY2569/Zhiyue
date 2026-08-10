@@ -40,7 +40,7 @@ final appRouter = GoRouter(
                             ? 'AI 对话'
                             : isSearch
                                 ? '全文搜索'
-                                : 'RBWA');
+                                : '智阅');
                 return AppTitleBar(
                   title: title,
                   showBack: isReader || isAiChat || isSearch,
