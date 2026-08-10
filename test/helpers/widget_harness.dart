@@ -6,7 +6,6 @@ import 'package:rbwa/src/rust/models/book.dart';
 
 export 'package:rbwa/features/reader/providers/viewer_provider.dart'
     show ViewerNotifier, ViewerState, viewerProvider;
-
 /// A minimal [Book] row for widget tests (the generated model has no
 /// copyWith, so every test file used to rebuild this 11-field literal).
 Book testBook({

@@ -30,13 +30,16 @@ class AiThreadState {
   final List<AiChatMessage> messages = [];
 }
 
-/// A single chat message (role + markdown content).
+/// A single chat message (role + markdown content). Carries the originating
+/// [actionType] and [createdAt] so the bubble can show "指令：翻译 · 时间".
 class AiChatMessage {
-  const AiChatMessage({
+  AiChatMessage({
     required this.role,
     required this.content,
     this.imagePng,
     this.imagePath,
+    this.actionType,
+    this.createdAt,
   });
 
   final AiRole role;
@@ -50,6 +53,15 @@ class AiChatMessage {
 
   /// Absolute path of the persisted screenshot (history reloads only).
   final String? imagePath;
+
+  /// The action that originated this turn (翻译/解释/搜索/聊天/识图).
+  /// Null on legacy rows or for the assistant's reply (it inherits the
+  /// user turn's action, applied at the caller).
+  final AiActionType? actionType;
+
+  /// ISO-8601 timestamp from the DB (datetime('now')); null for in-memory
+  /// messages not yet persisted.
+  final String? createdAt;
 }
 
 /// UI state for the AI subsystem (FEATURES 6.4 / 6.5).

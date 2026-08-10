@@ -95,6 +95,9 @@ pub struct AiMessage {
     /// Vision screenshot file (relative to the app data dir), when this
     /// message carried a 区域识图 capture (v4, FEATURES 6.6.2).
     pub image_path: Option<String>,
+    /// The action that originated this turn (v6): translate / explain / search
+    /// / chat / vision. Null for legacy rows (pre-v6) or system messages.
+    pub action_type: Option<AiActionType>,
     pub created_at: String,
 }
 

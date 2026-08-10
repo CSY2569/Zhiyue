@@ -164,6 +164,10 @@ class AiMessage {
   /// Vision screenshot file (relative to the app data dir), when this
   /// message carried a 区域识图 capture (v4, FEATURES 6.6.2).
   final String? imagePath;
+
+  /// The action that originated this turn (v6): translate / explain / search
+  /// / chat / vision. Null for legacy rows (pre-v6) or system messages.
+  final AiActionType? actionType;
   final String createdAt;
 
   const AiMessage({
@@ -172,6 +176,7 @@ class AiMessage {
     required this.role,
     required this.content,
     this.imagePath,
+    this.actionType,
     required this.createdAt,
   });
 
@@ -182,6 +187,7 @@ class AiMessage {
       role.hashCode ^
       content.hashCode ^
       imagePath.hashCode ^
+      actionType.hashCode ^
       createdAt.hashCode;
 
   @override
@@ -194,6 +200,7 @@ class AiMessage {
           role == other.role &&
           content == other.content &&
           imagePath == other.imagePath &&
+          actionType == other.actionType &&
           createdAt == other.createdAt;
 }
 

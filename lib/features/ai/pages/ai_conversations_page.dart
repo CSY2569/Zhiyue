@@ -117,6 +117,8 @@ class _AiConversationsPageState extends ConsumerState<AiConversationsPage> {
                           content: m.content,
                           imagePng: m.imagePng,
                           imagePath: m.imagePath,
+                          actionType: m.actionType,
+                          createdAt: m.createdAt,
                           maxWidth: 520,
                         ),
                     ],

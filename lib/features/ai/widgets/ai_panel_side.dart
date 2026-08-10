@@ -253,6 +253,8 @@ class _ChatView extends StatelessWidget {
               content: m.content,
               imagePng: m.imagePng,
               imagePath: m.imagePath,
+              actionType: m.actionType,
+              createdAt: m.createdAt,
             ),
           if (streamingText != null)
             AiMessageBubble(

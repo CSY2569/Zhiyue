@@ -198,19 +198,38 @@ void main() {
     await mock.start();
     await rust.setAiConfig(config: _cfg(baseUrl: mock.baseUrl, promptTemplate: 'academic'));
 
+    // Explain keeps the role template (interpretive action).
+    await collect(rust.streamChat(
+      action: AiActionType.explain,
+      text: 'hi',
+      history: const [],
+    ));
+
+    var messages =
+        (mock.requests.single['messages'] as List).cast<Map<String, dynamic>>();
+    var system = messages.first['content'] as String;
+    // Role segment first, action instructions kept after it.
+    expect(system, startsWith('你是一位严谨的学术阅读助手'));
+    expect(system, contains('讲解者'));
+    await mock.stop();
+
+    // Translation skips the role template (strict output task: the role
+    // segment biases the model toward explaining instead of translating).
+    final mock2 = MockOpenAi(chunks: ['译文']);
+    await mock2.start();
+    await rust.setAiConfig(config: _cfg(baseUrl: mock2.baseUrl, promptTemplate: 'academic'));
     await collect(rust.streamChat(
       action: AiActionType.translate,
       text: 'hi',
       history: const [],
     ));
-
-    final messages =
-        (mock.requests.single['messages'] as List).cast<Map<String, dynamic>>();
-    final system = messages.first['content'] as String;
-    // Role segment first, action instructions kept after it.
-    expect(system, startsWith('你是一位严谨的学术阅读助手'));
+    messages =
+        (mock2.requests.single['messages'] as List).cast<Map<String, dynamic>>();
+    system = messages.first['content'] as String;
     expect(system, contains('专业翻译'));
-    await mock.stop();
+    expect(system, isNot(contains('学术阅读助手')),
+        reason: 'translate must skip the role template');
+    await mock2.stop();
   }, timeout: const Timeout(Duration(seconds: 30)));
 
   test('stream_chat streams chunks and builds the right request', () async {

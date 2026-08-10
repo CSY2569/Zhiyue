@@ -13,7 +13,8 @@ use crate::models::ai::{AiActionType, AiMessage, AiRole, AiThread};
 const THREAD_COLS: &str = "id, title, action_type, book_id, created_at, updated_at";
 
 /// Columns selected from `ai_messages`, in the order `row_to_message` expects.
-const MESSAGE_COLS: &str = "id, thread_id, role, content, image_path, created_at";
+/// `action_type` was added in schema v6 (NULL on legacy rows).
+const MESSAGE_COLS: &str = "id, thread_id, role, content, image_path, action_type, created_at";
 
 fn row_to_thread(row: &Row) -> rusqlite::Result<AiThread> {
     let action: String = row.get(2)?;
@@ -29,13 +30,15 @@ fn row_to_thread(row: &Row) -> rusqlite::Result<AiThread> {
 
 fn row_to_message(row: &Row) -> rusqlite::Result<AiMessage> {
     let role: String = row.get(2)?;
+    let action: Option<String> = row.get(5)?;
     Ok(AiMessage {
         id: row.get(0)?,
         thread_id: row.get(1)?,
         role: AiRole::from_db_str(&role).unwrap_or(AiRole::User),
         content: row.get(3)?,
         image_path: row.get(4)?,
-        created_at: row.get(5)?,
+        action_type: action.as_deref().and_then(AiActionType::from_db_str),
+        created_at: row.get(6)?,
     })
 }
 
@@ -85,7 +88,8 @@ pub fn create_thread(
 
 /// Append a message, bump the window's `updated_at`, and refresh its
 /// `action_type` (the history-list icon shows the latest action) in one
-/// transaction.
+/// transaction. The per-message `action_type` (v6) is also written so the
+/// history view can label each turn with its originating instruction.
 pub fn append_message(
     conn: &Connection,
     thread_id: i64,
@@ -96,9 +100,15 @@ pub fn append_message(
 ) -> AppResult<()> {
     let tx = conn.unchecked_transaction()?;
     tx.execute(
-        "INSERT INTO ai_messages (thread_id, role, content, image_path) \
-         VALUES (?1, ?2, ?3, ?4)",
-        params![thread_id, role.as_str(), content, image_path],
+        "INSERT INTO ai_messages (thread_id, role, content, image_path, action_type) \
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![
+            thread_id,
+            role.as_str(),
+            content,
+            image_path,
+            action_type.map(|a| a.as_str()),
+        ],
     )?;
     tx.execute(
         "UPDATE ai_threads SET updated_at = datetime('now'), \

@@ -6,7 +6,7 @@ import 'package:rbwa/features/ai/providers/ai_provider.dart';
 import 'package:rbwa/features/ai/widgets/ai_utils.dart';
 import 'package:rbwa/features/ai/widgets/message_bubble.dart'
     show AiMessageBubble;
-import 'package:rbwa/src/rust/models/ai.dart' show AiRole;
+import 'package:rbwa/src/rust/models/ai.dart' show AiActionType, AiRole;
 
 /// Floating AI result card (FEATURES 6.4): shows the active thread's full
 /// conversation -- every prior turn stays visible across follow-ups (6.5.2),
@@ -66,7 +66,7 @@ class ResultCard extends ConsumerWidget {
               GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onPanUpdate: (d) =>
-                    ref.read(aiProvider.notifier).moveCard(pos + d.delta),
+                    ref.read(aiProvider.notifier).moveCard(d.delta),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 4, 4, 0),
                   child: Row(
@@ -129,6 +129,8 @@ class ResultCard extends ConsumerWidget {
                         content: m.content,
                         imagePng: m.imagePng,
                         imagePath: m.imagePath,
+                        actionType: m.actionType,
+                        createdAt: m.createdAt,
                         maxWidth: 380,
                         aiColor: theme.colorScheme.surfaceContainerHighest,
                       ),
@@ -158,13 +160,37 @@ class ResultCard extends ConsumerWidget {
   }) {
     final sb = StringBuffer();
     for (final m in messages) {
-      sb.writeln('${m.role == AiRole.user ? '用户' : 'AI'}：${m.content}');
+      final label = m.role == AiRole.user ? '用户' : 'AI';
+      final parts = <String>[];
+      if (m.actionType != null) {
+        parts.add('指令：${_actionLabel(m.actionType!)}');
+      }
+      if (m.createdAt != null && m.createdAt!.isNotEmpty) {
+        parts.add('时间：${m.createdAt}');
+      }
+      if (parts.isNotEmpty) sb.writeln(parts.join('  '));
+      sb.writeln('$label：${m.content}');
       sb.writeln();
     }
     if (streamingTail != null && streamingTail.isNotEmpty) {
       sb.writeln('AI：$streamingTail');
     }
     return sb.toString().trim();
+  }
+
+  static String _actionLabel(AiActionType action) {
+    switch (action) {
+      case AiActionType.translate:
+        return '翻译';
+      case AiActionType.explain:
+        return '解释';
+      case AiActionType.search:
+        return '搜索';
+      case AiActionType.chat:
+        return '聊天';
+      case AiActionType.vision:
+        return '识图';
+    }
   }
 }
 

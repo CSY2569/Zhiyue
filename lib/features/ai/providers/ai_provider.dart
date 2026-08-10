@@ -67,6 +67,8 @@ class AiNotifier extends Notifier<AiState> {
               role: m.role,
               content: m.content,
               imagePath: m.imagePath,
+              actionType: m.actionType,
+              createdAt: m.createdAt,
             ),
           ),
         );
@@ -138,7 +140,7 @@ class AiNotifier extends Notifier<AiState> {
   /// back-fills [AiThreadState.dbId]. [imagePng] is the vision screenshot
   /// of a 识图 turn, stored to disk so history can show it again.
   void _persistWindow(AiThreadState window, String firstText,
-      {Uint8List? imagePng}) {
+      {Uint8List? imagePng, AiActionType? action}) {
     _enqueue(() async {
       final res = await _repo.createAiThread(
         title: window.title,
@@ -152,15 +154,17 @@ class AiNotifier extends Notifier<AiState> {
         role: AiRole.user,
         content: firstText,
         imagePng: imagePng,
-        actionType: window.action,
+        actionType: action ?? window.action,
       );
     });
   }
 
   /// Persist one message once the window has a database id; also refreshes
-  /// the window's latest action in the shadow row.
+  /// the window's latest action in the shadow row. [action] overrides the
+  /// window's action for this message (e.g. a follow-up in a translate
+  /// thread runs as chat).
   void _persistMessage(AiThreadState window, AiRole role, String content,
-      {Uint8List? imagePng}) {
+      {Uint8List? imagePng, AiActionType? action}) {
     if (content.trim().isEmpty) return;
     _enqueue(() async {
       final dbId = window.dbId;
@@ -170,7 +174,7 @@ class AiNotifier extends Notifier<AiState> {
         role: role,
         content: content,
         imagePng: imagePng,
-        actionType: window.action,
+        actionType: action ?? window.action,
       );
     });
   }
@@ -201,18 +205,32 @@ class AiNotifier extends Notifier<AiState> {
   /// along. The answer streams into the result card when it is visible (the
   /// card is the conversation surface and stays open until the user closes
   /// it), and into the panel bubble otherwise.
+  ///
+  /// Follow-ups keep the thread's originating action (so an explain-thread
+  /// follow-up still uses the explain system prompt). Translation threads are
+  /// an exception: a follow-up there runs as chat (the user typed a question
+  /// they understand, not foreign text to translate -- translate's isolated
+  /// request path and `<text>` wrapping would be wrong for it).
   Future<void> sendMessage(int threadId, String text) async {
-    await _historyReady.future;
+    try {
+      await _historyReady.future.timeout(const Duration(seconds: 2));
+    } catch (_) {}
     final thread = state.threadOf(threadId);
     if (thread == null) return;
-    thread.messages.add(AiChatMessage(role: AiRole.user, content: text));
+    final action =
+        thread.action == AiActionType.translate ? AiActionType.chat : thread.action;
+    thread.messages.add(AiChatMessage(
+      role: AiRole.user,
+      content: text,
+      actionType: action,
+    ));
     state = state.copyWith(
       activeThreadId: threadId,
       panelCleared: false,
       showingThreadList: false,
     );
-    _persistMessage(thread, AiRole.user, text);
-    _stream(thread, thread.action, text);
+    _persistMessage(thread, AiRole.user, text, action: action);
+    _stream(thread, action, text);
   }
 
   /// Send a typed question from any input surface (panel / card): routes to
@@ -275,17 +293,28 @@ class AiNotifier extends Notifier<AiState> {
     required String? bookTitle,
     required void Function(AiThreadState window) startStream,
   }) async {
-    await _historyReady.future;
+    // Wait for persisted history to load (so local ids don't clash with DB
+    // ids), but never block the user's action indefinitely: if history load
+    // is slow or stuck, proceed after a short timeout (the worst case is a
+    // transient id collision, which is cosmetic -- the DB row is corrected
+    // on the next reload).
+    try {
+      await _historyReady.future.timeout(const Duration(seconds: 2));
+    } catch (_) {
+      // Timeout: proceed without the loaded history.
+    }
     final (window, isNew) = _resolveWindow(action, bookId, bookTitle);
     window.messages.add(AiChatMessage(
       role: AiRole.user,
       content: text,
       imagePng: imagePng,
+      actionType: action,
     ));
     if (isNew) {
-      _persistWindow(window, text, imagePng: imagePng);
+      _persistWindow(window, text, imagePng: imagePng, action: action);
     } else {
-      _persistMessage(window, AiRole.user, text, imagePng: imagePng);
+      _persistMessage(window, AiRole.user, text,
+          imagePng: imagePng, action: action);
     }
     state = state.copyWith(
       activeThreadId: window.id,
@@ -301,17 +330,27 @@ class AiNotifier extends Notifier<AiState> {
   /// (card + panel bubble), then appends the finished answer to the thread.
   /// The card stays visible after completion (6.4.1) and shows the thread's
   /// full history while streaming (tail = streamingText).
+  ///
+  /// Translation is an independent request: it sends an empty history so the
+  /// thread's prior explain / search / chat turns never mix into the
+  /// translation context (they bias the model toward explaining). The
+  /// translation result is still persisted to this thread by [_finishStream],
+  /// so it shows up in the conversation list like any other turn.
   void _stream(AiThreadState thread, AiActionType action, String text) {
-    final history = thread.messages
-        .take(thread.messages.length - 1) // exclude the message being sent
-        .map((m) => AiMessage(
-              id: -1,
-              threadId: thread.id,
-              role: m.role,
-              content: m.content,
-              createdAt: '',
-            ))
-        .toList();
+    final history = action == AiActionType.translate
+        ? <AiMessage>[] // translate: independent, no mixed context
+        : thread.messages
+            .take(thread.messages.length - 1) // exclude the message being sent
+            .map((m) => AiMessage(
+                  id: -1,
+                  threadId: thread.id,
+                  role: m.role,
+                  content: m.content,
+                  imagePath: m.imagePath,
+                  actionType: m.actionType,
+                  createdAt: m.createdAt ?? '',
+                ))
+            .toList();
     _startStream(
       thread,
       _repo.streamChat(action: action, text: text, history: history),
@@ -345,8 +384,15 @@ class AiNotifier extends Notifier<AiState> {
     // otherwise append the answer twice.
     if (state.streamingThreadId != thread.id) return;
     if (answer.trim().isNotEmpty) {
-      thread.messages.add(AiChatMessage(role: AiRole.assistant, content: answer));
-      _persistMessage(thread, AiRole.assistant, answer);
+      // The assistant reply inherits the action of the user turn that
+      // triggered it (so the bubble labels both halves of the exchange).
+      final action = _lastUserAction(thread);
+      thread.messages.add(AiChatMessage(
+        role: AiRole.assistant,
+        content: answer,
+        actionType: action,
+      ));
+      _persistMessage(thread, AiRole.assistant, answer, action: action);
     }
     state = state.copyWith(
       clearStreaming: true, // panel bubble -> message list
@@ -354,13 +400,24 @@ class AiNotifier extends Notifier<AiState> {
     );
   }
 
+  /// The action type of the most recent user message in [thread] (the action
+  /// that originated the current exchange), or null when none exists.
+  AiActionType? _lastUserAction(AiThreadState thread) {
+    for (final m in thread.messages.reversed) {
+      if (m.role == AiRole.user) return m.actionType;
+    }
+    return null;
+  }
+
   /// Keep the in-flight partial answer in the thread (and its shadow row).
   void _keepPartialAnswer(AiThreadState? thread, String partial) {
     if (thread != null && partial.trim().isNotEmpty) {
+      final action = _lastUserAction(thread);
       thread.messages.add(
-        AiChatMessage(role: AiRole.assistant, content: partial),
+        AiChatMessage(
+            role: AiRole.assistant, content: partial, actionType: action),
       );
-      _persistMessage(thread, AiRole.assistant, partial);
+      _persistMessage(thread, AiRole.assistant, partial, action: action);
     }
   }
 
@@ -395,7 +452,11 @@ class AiNotifier extends Notifier<AiState> {
   /// streaming, its partial text is kept in the thread.
   void closeCard() => _endStream(hideCard: true);
 
-  void moveCard(Offset pos) => state = state.copyWith(cardPos: pos);
+  /// Move the card by [delta] (accumulated against the live state, not a
+  /// stale build-time snapshot -- multiple pan events within one frame each
+  /// read the current position, so the card tracks the pointer exactly).
+  void moveCard(Offset delta) =>
+      state = state.copyWith(cardPos: state.cardPos + delta);
 
   // ---------------------------------------------------------------------------
   // Side panel (FEATURES 6.5)
@@ -413,7 +474,9 @@ class AiNotifier extends Notifier<AiState> {
   /// the persisted messages are untouched. Deletion is a deliberate act on
   /// the 「AI 对话」 page (deleteWindow) or in the database, never here.
   Future<void> clearThreads() async {
-    await _historyReady.future;
+    try {
+      await _historyReady.future.timeout(const Duration(seconds: 2));
+    } catch (_) {}
     _session.cancel();
     state = state.copyWith(
       clearActiveThread: true,
@@ -428,7 +491,9 @@ class AiNotifier extends Notifier<AiState> {
   /// persisted rows cascade; deleting the active window clears it (and the
   /// card showing it).
   Future<void> deleteWindow(int threadId) async {
-    await _historyReady.future;
+    try {
+      await _historyReady.future.timeout(const Duration(seconds: 2));
+    } catch (_) {}
     final remaining = state.threads.where((w) => w.id != threadId).toList();
     if (remaining.length == state.threads.length) return;
     _session.cancel();

@@ -111,6 +111,7 @@ class FakeAiRepo extends AiRepository {
       role: role,
       content: content,
       imagePng: imagePng,
+      actionType: actionType,
       // A real persistence layer writes the PNG to disk and returns the
       // absolute path on reload; the fake mirrors that with a stable id.
       imagePath:
