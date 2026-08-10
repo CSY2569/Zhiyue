@@ -4,9 +4,11 @@
 
 | 包 | 大小 | 适用发行版 |
 |----|------|-----------|
-| `rbwa_<ver>_amd64.deb` | ~29M | Debian / Ubuntu / Linux Mint 等 |
-| `rbwa-<ver>-1.x86_64.rpm` | ~23M | Fedora / RHEL / Rocky / OpenSUSE 等 |
-| `rbwa-x86_64.AppImage` | ~27M | 任意发行版（免安装） |
+| `rbwa_<ver>_amd64.deb` | ~250M | Debian / Ubuntu / Linux Mint 等 |
+| `rbwa-<ver>-1.x86_64.rpm` | ~250M | Fedora / RHEL / Rocky / OpenSUSE 等 |
+| `rbwa-x86_64.AppImage` | ~250M | 任意发行版（免安装） |
+
+体积含内置 OCR 模型（高精度 + 快速两套，~210MB）。
 
 ## 安装
 
@@ -53,23 +55,17 @@ deb / rpm 包已声明完整运行依赖，包管理器自动安装：
 
 AppImage 不声明依赖——它使用宿主系统的 GTK 等库（主流桌面发行版均已预装）。
 
-## 首次使用（OCR 模型）
+## OCR 模型（已内置）
 
-OCR 模型（PP-OCRv4，~200MB 高精度 或 ~16MB 快速）不包含在包里，首次扫描前下载：
+PP-OCRv4 两套模型（高精度 server ~200MB + 快速 mobile ~16MB）**已随包内置**，安装后直接可用，无需任何下载。安装位置：`/usr/lib/rbwa/models/`（AppImage 在应用目录内 `models/`）。
 
-```bash
-scripts/download_ocr_models.sh --fast      # 快速模式（推荐先试）
-scripts/download_ocr_models.sh --precision # 高精度
-```
-
-模型安装到 `~/.local/share/RBWA/models/`，下载后无需重启。
+> 仅开发环境（未打包运行时）需要 `scripts/download_ocr_models.sh` 手动下载到 `~/.local/share/RBWA/models/`。
 
 ## 数据位置
 
 | 数据 | 路径 |
 |------|------|
 | 数据库（书库/标注/AI 历史） | `~/.local/share/RBWA/rbwa.db` |
-| OCR 模型 | `~/.local/share/RBWA/models/` |
 | 截图保存 | `~/Pictures/RBWA/` |
 | 导入的文档副本 | `~/.local/share/RBWA/documents/` |
 

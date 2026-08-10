@@ -6,10 +6,13 @@
 #   scripts/download_ocr_models.sh            # 高精度（默认，server 模型）
 #   scripts/download_ocr_models.sh --fast     # 快速模式（mobile 模型）
 #   scripts/download_ocr_models.sh --all      # 两种都下载
+#   scripts/download_ocr_models.sh --all --dir <path>   # 下载到指定目录
+#                                                     （打包脚本用）
 #
-# Models land in $XDG_DATA_HOME/RBWA/models (Linux default:
-# ~/.local/share/RBWA/models) -- the same directory the Rust core resolves
-# via `app_data_dir`:
+# Packaged builds (deb/rpm/AppImage) ship the models next to the executable
+# (build_packages.sh calls this with --dir); dev builds land in
+# $XDG_DATA_HOME/RBWA/models (Linux default: ~/.local/share/RBWA/models) --
+# the fallback directory the Rust core resolves via `app_data_dir`:
 #
 #   models/
 #     cls.onnx               # 方向分类（两模式共用）
@@ -27,6 +30,11 @@ set -euo pipefail
 MODE="${1:---precision}"
 BASE_URL="https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.0"
 MODELS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/RBWA/models"
+
+# Optional --dir <path> overrides the destination (packaging use).
+if [ "${2:-}" = "--dir" ]; then
+  MODELS_DIR="${3:?--dir 需要一个目录参数}"
+fi
 
 # 源文件 → 本地路径 + sha256（det/rec 按模式子目录存放）。
 PRECISION_DET="onnx/PP-OCRv4/det/ch_PP-OCRv4_det_server.onnx  cfa39a3f298f6d3fc71789834d15da36d11a6c59b489fc16ea4733728012f786"

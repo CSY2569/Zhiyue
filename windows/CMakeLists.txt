@@ -136,6 +136,17 @@ else()
   message(WARNING "pdfium.dll not found at ${RBWA_PDFIUM_LIB} -- run scripts/fetch_pdfium_windows.ps1 before building")
 endif()
 
+# OCR models (PP-OCRv4, bundled). Fetched by
+# scripts/download_ocr_models.ps1 -All -Dir rust/models. Placed next to the
+# exe so the Rust core's <exe dir>/models lookup finds them at runtime.
+set(RBWA_MODELS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../rust/models")
+if(EXISTS "${RBWA_MODELS_DIR}")
+  install(DIRECTORY "${RBWA_MODELS_DIR}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+    COMPONENT Runtime)
+else()
+  message(WARNING "OCR models not found at ${RBWA_MODELS_DIR} -- run scripts/download_ocr_models.ps1 -All -Dir rust/models before building")
+endif()
+
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   COMPONENT Runtime)
 

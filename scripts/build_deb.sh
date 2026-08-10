@@ -40,6 +40,8 @@ mkdir -p "$DATA/usr/bin" \
 cp "$BUNDLE/rbwa" "$DATA/usr/lib/rbwa/rbwa"
 cp "$BUNDLE"/lib/*.so "$DATA/usr/lib/rbwa/lib/"
 cp -r "$BUNDLE/data" "$DATA/usr/lib/rbwa/data"
+# OCR models ship next to the executable (Rust resolves <exe dir>/models).
+cp -r "$BUNDLE/models" "$DATA/usr/lib/rbwa/models"
 ln -s ../lib/rbwa/rbwa "$DATA/usr/bin/rbwa"
 cp "$PROJECT_ROOT/packaging/rbwa.desktop" "$DATA/usr/share/applications/"
 cp "$PROJECT_ROOT/packaging/icon/rbwa.png" \
@@ -67,13 +69,12 @@ Priority: optional
 Architecture: amd64
 Depends: libgtk-3-0 (>= 3.22), libglib2.0-0 (>= 2.50), libc6 (>= 2.31), libstdc++6 (>= 9), libfontconfig1 (>= 2.12), libx11-6, libpango-1.0-0 (>= 1.40), libcairo2 (>= 1.14), libxkbcommon0 (>= 0.8), libharfbuzz0b (>= 2.0), libfreetype6 (>= 2.8), libpng16-16, libicu70 | libicu72 | libicu74 | libicu76, libsqlite3-0 (>= 3.30), libxml2 (>= 2.9), libdbus-1-3 (>= 1.12), fonts-noto-cjk
 Maintainer: RBWA <rbwa@localhost>
-Description: Read Book With AI - AI-powered local PDF/image reader
+Description: 智阅 - AI-powered local PDF/image reader
   Local PDF/image reader with AI integration: text selection, annotations,
   full-page OCR (PP-OCRv4, fully offline), full-text search and AI chat /
   translate / explain (BYOK, OpenAI-compatible).
   .
-  Requires OCR models: run download_ocr_models.sh (or .ps1 on Windows) to
-  fetch the PP-OCRv4 models before first scan.
+  OCR models (both modes) are bundled with the package.
 Installed-Size: $SIZE
 EOF
 tar -C "$CTRL" -czf "$WORK/control.tar.gz" control

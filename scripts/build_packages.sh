@@ -32,6 +32,15 @@ if [ ! -x "$BUNDLE/rbwa" ]; then
 fi
 
 # ---------------------------------------------------------------------------
+echo "==> OCR models (shipped inside the packages, both modes)"
+if [ -f "$BUNDLE/models/fast/det.onnx" ] && [ -f "$BUNDLE/models/high_precision/det.onnx" ]; then
+  echo "    models already present in bundle (fast + high_precision)"
+else
+  bash "$SCRIPT_DIR/download_ocr_models.sh" --all --dir "$BUNDLE/models"
+fi
+du -sh "$BUNDLE/models"
+
+# ---------------------------------------------------------------------------
 echo "==> .deb (ar-based, no dpkg toolchain needed)"
 bash "$SCRIPT_DIR/build_deb.sh" "$VERSION"
 
@@ -68,7 +77,7 @@ fi
 APPDIR="$PROJECT_ROOT/.packaging/AppDir"
 rm -rf "$APPDIR"
 mkdir -p "$APPDIR"
-cp -r "$BUNDLE/rbwa" "$BUNDLE/lib" "$BUNDLE/data" "$APPDIR/"
+cp -r "$BUNDLE/rbwa" "$BUNDLE/lib" "$BUNDLE/data" "$BUNDLE/models" "$APPDIR/"
 cp "$PROJECT_ROOT/packaging/rbwa.desktop" "$APPDIR/"
 cp "$PROJECT_ROOT/packaging/icon/rbwa.png" "$APPDIR/"
 cat > "$APPDIR/AppRun" <<'EOF'

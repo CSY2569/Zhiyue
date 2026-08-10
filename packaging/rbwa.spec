@@ -14,7 +14,7 @@
 Name:           rbwa
 Version:        0.1.0
 Release:        1%{?dist}
-Summary:        Read Book With AI - AI-powered local PDF/image reader
+Summary:        智阅 - AI-powered local PDF/image reader
 License:        MIT OR Apache-2.0
 URL:            https://localhost/rbwa
 BuildArch:      x86_64
@@ -39,12 +39,11 @@ Requires:       dbus >= 1.12
 Requires:       google-noto-sans-cjk-fonts
 
 %description
-Local PDF/image reader with AI integration: text selection, annotations,
-full-page OCR (PP-OCRv4, fully offline), full-text search and AI chat /
-translate / explain (BYOK, OpenAI-compatible).
+智阅（ZhiYue）- Local PDF/image reader with AI integration: text selection,
+annotations, full-page OCR (PP-OCRv4, fully offline), full-text search and
+AI chat / translate / explain (BYOK, OpenAI-compatible).
 
-Requires OCR models: run scripts/download_ocr_models.sh to fetch the
-PP-OCRv4 models before the first scan.
+OCR models (both modes) are bundled with the package.
 
 %install
 rm -rf %{buildroot}
@@ -56,6 +55,7 @@ install -d %{buildroot}%{_datadir}/icons/hicolor/512x512/apps
 install -m 755 %{_sourcedir}/bundle/rbwa %{buildroot}%{_libdir}/rbwa/rbwa
 cp -a %{_sourcedir}/bundle/lib/*.so %{buildroot}%{_libdir}/rbwa/lib/
 cp -a %{_sourcedir}/bundle/data %{buildroot}%{_libdir}/rbwa/data
+cp -a %{_sourcedir}/bundle/models %{buildroot}%{_libdir}/rbwa/models
 ln -s ../lib/rbwa/rbwa %{buildroot}%{_bindir}/rbwa
 install -m 644 %{_sourcedir}/packaging/rbwa.desktop \
   %{buildroot}%{_datadir}/applications/rbwa.desktop
@@ -67,6 +67,7 @@ install -m 644 %{_sourcedir}/packaging/icon/rbwa.png \
 %{_libdir}/rbwa/rbwa
 %{_libdir}/rbwa/lib/*
 %{_libdir}/rbwa/data/
+%{_libdir}/rbwa/models/
 %{_datadir}/applications/rbwa.desktop
 %{_datadir}/icons/hicolor/512x512/apps/rbwa.png
 

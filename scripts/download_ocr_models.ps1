@@ -5,9 +5,11 @@
 #   powershell -ExecutionPolicy Bypass -File scripts/download_ocr_models.ps1            # 高精度（默认，server 模型）
 #   powershell -ExecutionPolicy Bypass -File scripts/download_ocr_models.ps1 -Fast      # 快速模式（mobile 模型）
 #   powershell -ExecutionPolicy Bypass -File scripts/download_ocr_models.ps1 -All       # 两种都下载
+#   powershell -ExecutionPolicy Bypass -File scripts/download_ocr_models.ps1 -All -Dir <path>  # 下载到指定目录（打包用）
 #
-# Models land in %APPDATA%\RBWA\models (dirs::data_dir() on Windows) -- the same
-# directory the Rust core resolves via app_data_dir:
+# Packaged builds ship the models next to the exe (install from CMake);
+# dev builds land in %APPDATA%\RBWA\models (dirs::data_dir() on Windows) --
+# the fallback directory the Rust core resolves via app_data_dir:
 #
 #   models\
 #     cls.onnx               # 方向分类（两模式共用）
@@ -21,13 +23,18 @@
 
 param(
     [switch]$Fast,
-    [switch]$All
+    [switch]$All,
+    [string]$Dir
 )
 
 $ErrorActionPreference = "Stop"
 
 $BaseUrl = "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.0"
-$ModelsDir = Join-Path $env:APPDATA "RBWA\models"
+if ($Dir) {
+    $ModelsDir = $Dir
+} else {
+    $ModelsDir = Join-Path $env:APPDATA "RBWA\models"
+}
 
 # 源文件 → 本地路径 + sha256（det/rec 按模式子目录存放）。
 $Files = @(

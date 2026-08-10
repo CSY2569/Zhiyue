@@ -1,6 +1,7 @@
 //! Real OCR engine: PP-OCRv4 (det / cls / rec) via rapidocr-core on ONNX
-//! Runtime (FEATURES §7.1). Models are provisioned by
-//! `scripts/download_ocr_models.sh` into `{data_dir}/models/`:
+//! Runtime (FEATURES §7.1). Models are shipped inside the application
+//! bundle (packaged builds) or provisioned by
+//! `scripts/download_ocr_models.sh` into `{data_dir}/models/` (dev builds):
 //!
 //! ```text
 //! models/
@@ -69,7 +70,7 @@ impl RapidOcrEngine {
     /// The four model files for [mode]; shared cls/dict live at the models
     /// root. Returns `None` when any file is missing (models not installed).
     fn model_files(mode: &str) -> Option<(PathBuf, PathBuf, PathBuf, PathBuf)> {
-        let root = db::app_data_dir().ok()?.join("models");
+        let root = Self::model_root()?;
         let dir = root.join(mode);
         let det = dir.join(DET_FILE);
         let rec = dir.join(REC_FILE);
@@ -81,6 +82,23 @@ impl RapidOcrEngine {
             }
         }
         Some((det, rec, cls, dict))
+    }
+
+    /// Model root: the `models/` dir shipped next to the executable wins
+    /// (packaged builds: deb/rpm install to `/usr/lib/rbwa/models`, the
+    /// AppImage and the Flutter bundle carry it beside the binary); dev
+    /// builds fall back to `{data_dir}/models/` provisioned by
+    /// `scripts/download_ocr_models.sh`.
+    fn model_root() -> Option<PathBuf> {
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(dir) = exe.parent() {
+                let bundled = dir.join("models");
+                if bundled.is_dir() {
+                    return Some(bundled);
+                }
+            }
+        }
+        db::app_data_dir().ok().map(|d| d.join("models"))
     }
 
     /// Build the rapidocr pipeline for [mode], loading the ONNX sessions

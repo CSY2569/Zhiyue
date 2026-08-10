@@ -22,10 +22,8 @@ cd RBWA
 # 2. 下载 PDFium（Windows 版，放到 rust/libpdfium/pdfium.dll）
 powershell -ExecutionPolicy Bypass -File scripts/fetch_pdfium_windows.ps1
 
-# 3. 下载 OCR 模型（三选一；首次扫描时才加载）
-powershell -ExecutionPolicy Bypass -File scripts\download_ocr_models.ps1             # 高精度（默认，~200MB）
-powershell -ExecutionPolicy Bypass -File scripts\download_ocr_models.ps1 -Fast       # 快速模式（16MB）
-powershell -ExecutionPolicy Bypass -File scripts\download_ocr_models.ps1 -All        # 两种都下载
+# 3. 下载 OCR 模型到打包目录（两套都打，随安装包分发；构建时 CMake 自动复制到 exe 旁）
+powershell -ExecutionPolicy Bypass -File scripts\download_ocr_models.ps1 -All -Dir rust\models
 
 # 4. 获取依赖
 flutter pub get
@@ -35,8 +33,8 @@ flutter build windows --release
 
 # 6. 产物位置
 #    build\windows\x64\runner\Release\
-#    里面的 rbwa.exe 就是主程序；rbwa_core.dll / pdfium.dll 已自动复制到同目录。
-#    打包分发时把整个 Release 目录压缩即可（不含 OCR 模型；模型在用户首次扫描时提示下载）。
+#    里面的 rbwa.exe 就是主程序；rbwa_core.dll / pdfium.dll / models\ 已自动复制到同目录。
+#    打包分发时把整个 Release 目录压缩即可（含 OCR 模型，用户无需再下载）。
 ```
 
 > 注意：Rust 的 `cargo build` 由 CMake 自动触发（首次构建会编译整个 Rust 核心，
@@ -46,7 +44,7 @@ flutter build windows --release
 
 | 项目 | 说明 |
 |------|------|
-| OCR 模型目录 | `%APPDATA%\RBWA\models`（`dirs::data_dir()` 在 Windows 解析为 Roaming AppData，与 Linux 的 `~/.local/share/RBWA/models` 对应） |
+| OCR 模型 | 与 exe 同目录的 `models\`（内置，无需下载）；开发运行（VS 直接跑）时若缺模型，Rust 回退到 `%APPDATA%\RBWA\models` |
 | 截图保存目录 | `%USERPROFILE%\Pictures\RBWA`（已适配 Windows 的 USERPROFILE） |
 | 数据库 | `%APPDATA%\RBWA\rbwa.db`（SQLite 单文件 + WAL） |
 | PDFium | 与 exe 同目录的 `pdfium.dll`（已自动复制） |
