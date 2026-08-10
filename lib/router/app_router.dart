@@ -9,6 +9,7 @@ import 'package:rbwa/features/reader/reader_page.dart';
 import 'package:rbwa/features/search/search_page.dart';
 import 'package:rbwa/features/settings/settings_page.dart';
 import 'package:rbwa/features/shell/app_title_bar.dart';
+import 'package:rbwa/main.dart' show isDesktop;
 
 /// Application routes (FEATURES §2/3 + §8.1 navigation).
 ///
@@ -17,12 +18,17 @@ import 'package:rbwa/features/shell/app_title_bar.dart';
 /// the shell builder runs inside the Router's Navigator on every
 /// navigation, it always reflects the current route: the reader shows the
 /// book title and a back button, other routes show the app name
-/// (FEATURES 8.1 "居中显示当前书名").
+/// (FEATURES 8.1 "居中显示当前书名"). On mobile (Android) the system
+/// chrome replaces the frameless bar, so the shell renders the child
+/// directly.
 final appRouter = GoRouter(
   initialLocation: '/library',
   routes: [
     ShellRoute(
       builder: (context, state, child) {
+        if (!isDesktop) {
+          return child;
+        }
         final isReader = state.matchedLocation.startsWith('/reader');
         final isAiChat = state.matchedLocation.startsWith('/ai-chat');
         final isSearch = state.matchedLocation.startsWith('/search');

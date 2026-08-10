@@ -12,4 +12,4 @@ pub mod schema;
 // Re-export the init entrypoints used by `api` (production path + the
 // test-isolation hook), plus the shared connection accessor used by
 // subsystem repositories.
-pub use connection::{app_data_dir, db, db_path, init_database_at};
+pub use connection::{app_data_dir, db, db_path, init_database_at, set_app_data_dir};

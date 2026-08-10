@@ -17,6 +17,12 @@ import 'pdf/types.dart';
 /// Crate version, surfaced in the About / settings UI.
 Future<String> appVersion() => RustLib.instance.api.crateApiAppVersion();
 
+/// Point the app data directory at an explicit path. Called once at startup
+/// on Android with the host's `filesDir` (dirs::data_dir cannot resolve on
+/// Android); a no-op on desktop where the default resolution is used.
+Future<void> setAppDataDir({required String path}) =>
+    RustLib.instance.api.crateApiSetAppDataDir(path: path);
+
 /// Initialize the Rust core. Called exactly once on app startup, before any
 /// other command. Opens SQLite, applies the schema (idempotent), and sets up
 /// tracing. Safe to call again; returns the cached result.

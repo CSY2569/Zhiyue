@@ -35,13 +35,29 @@ pub fn db() -> DbGuard<'static> {
         .expect("DB mutex poisoned")
 }
 
+/// Override for the app data directory (mobile: Android `filesDir` passed
+/// from the host, where `dirs::data_dir()` cannot resolve a path).
+static APP_DATA_OVERRIDE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// Point the app data directory at an explicit path (called once at startup
+/// on Android with the host's `filesDir`; no-op on desktop).
+pub fn set_app_data_dir(path: String) {
+    let _ = APP_DATA_OVERRIDE.set(PathBuf::from(path));
+}
+
 /// Resolve the application data directory.
 ///
 /// Linux: `$XDG_DATA_HOME/RBWA` or `~/.local/share/RBWA`.
+/// Android: the path set via [`set_app_data_dir`] (host `filesDir`).
 /// Created if missing. Falls back to `./RBWA_data` if `dirs` cannot resolve.
 pub fn app_data_dir() -> AppResult<PathBuf> {
-    let base = dirs::data_dir().unwrap_or_else(|| PathBuf::from("./RBWA_data"));
-    let dir = base.join("RBWA");
+    let dir = match APP_DATA_OVERRIDE.get() {
+        Some(p) => p.clone(),
+        None => {
+            let base = dirs::data_dir().unwrap_or_else(|| PathBuf::from("./RBWA_data"));
+            base.join("RBWA")
+        }
+    };
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
 }

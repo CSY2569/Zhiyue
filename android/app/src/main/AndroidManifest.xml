@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- AI features (translate / explain / search / vision) call user-configured APIs. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="rbwa"
+        android:label="智阅"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

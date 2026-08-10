@@ -23,6 +23,13 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Only arm64-v8a is shipped: ONNX Runtime publishes no prebuilt
+        // binaries for Android x86_64 / armeabi-v7a, so the Rust core (OCR)
+        // cannot be built for those ABIs. Other ABIs would crash on startup
+        // (missing librbwa_core.so), so exclude them.
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     buildTypes {

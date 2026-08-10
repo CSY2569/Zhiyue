@@ -38,6 +38,13 @@ pub fn app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
+/// Point the app data directory at an explicit path. Called once at startup
+/// on Android with the host's `filesDir` (dirs::data_dir cannot resolve on
+/// Android); a no-op on desktop where the default resolution is used.
+pub fn set_app_data_dir(path: String) {
+    db::set_app_data_dir(path);
+}
+
 /// Result of core initialization, returned to Flutter.
 pub struct InitResult {
     pub ok: bool,
