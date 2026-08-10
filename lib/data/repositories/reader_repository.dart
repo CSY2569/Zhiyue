@@ -179,6 +179,22 @@ class ReaderRepository {
   /// Full-page OCR scan (original resolution; cached per page+mode).
   Future<rust.ScanPageResult> scanPage(int bookId, int page, rust.OcrMode mode) =>
       rust.scanPage(bookId: bookId, page: page, mode: mode);
+
+  /// Apply manual corrections to a page's cached OCR result (7.1.7): each
+  /// [edits] entry replaces the text of one recognized line; the updated
+  /// result is persisted and re-indexed for full-text search.
+  Future<OcrResult?> updatePageOcrLines(
+    int bookId,
+    int page,
+    rust.OcrMode mode,
+    List<rust.OcrLineEdit> edits,
+  ) =>
+      rust.updatePageOcrLines(
+        bookId: bookId,
+        page: page,
+        mode: mode,
+        edits: edits,
+      );
 }
 
 /// Riverpod provider for the singleton [ReaderRepository].

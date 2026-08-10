@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:rbwa/data/repositories/reader_repository.dart';
+import 'package:rbwa/features/ai/providers/ai_config_provider.dart';
 import 'package:rbwa/features/reader/providers/ocr_helpers.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
 import 'package:rbwa/src/rust/pdf/types.dart' show CharBox;
@@ -54,14 +55,21 @@ class CharBoxCache extends Notifier<Map<int, List<CharBox>>> {
   }
 
   /// OCR invisible text layer (FEATURES 7.1.3): each cached line becomes one
-  /// whole-line char box (line-level selection). Uses the configured model
-  /// set (7.1.9) so the layer matches what the scan produced -- the OCR
-  /// cache is keyed by mode, and [cachedOcrAnyMode] falls back to the other
-  /// mode so switching 高精度/快速 in settings never makes already-scanned
-  /// pages lose their text layer.
+  /// whole-line CharBox (`char` = the full line text, box = the line's
+  /// normalized rect). Per-character positions are NOT synthesized here --
+  /// the selection layer uses `TextPainter.getPositionForOffset` for precise
+  /// in-line character hit-testing (accurate for mixed CJK + Latin + symbols
+  /// with kerning). Uses the configured model set (7.1.9) so the layer
+  /// matches what the scan produced.
   Future<List<CharBox>> _ocrBoxes(int bookId, int page) async {
     try {
-      final ocr = await cachedOcrAnyMode(ref, bookId, page);
+      final ocr = await cachedOcrAnyMode(
+        repo: ref.read(readerRepositoryProvider),
+        modeResolver: () =>
+            configuredOcrMode(ref.read(aiConfigProvider.future)),
+        bookId: bookId,
+        page: page,
+      );
       if (ocr == null) return const [];
       return [
         for (final l in ocr.lines)

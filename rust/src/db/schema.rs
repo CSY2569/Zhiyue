@@ -19,7 +19,10 @@
 /// 5: full-text search (M6) -- `page_text_index.original_text` (snippet /
 /// hit-locate source; `raw_text` holds the jieba-segmented text) and the
 /// external-content FTS triggers that keep `page_text_fts` in sync.
-pub const SCHEMA_VERSION: u32 = 5;
+/// 6: `ai_messages.action_type` -- per-message action label (翻译/解释/搜索/
+/// 聊天/识图) so the history view can show which instruction produced each
+/// turn, not just the thread's latest action.
+pub const SCHEMA_VERSION: u32 = 6;
 
 /// Indexes for per-book AI conversation windows (v3, FEATURES 6.5.4).
 ///
@@ -214,6 +217,7 @@ CREATE TABLE IF NOT EXISTS ai_messages (
     role        TEXT NOT NULL,                 -- 'user' | 'assistant' | 'system'
     content     TEXT NOT NULL,                 -- markdown
     image_path  TEXT,                          -- vision screenshot file (v4)
+    action_type TEXT,                          -- per-message action label (v6)
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (thread_id) REFERENCES ai_threads(id) ON DELETE CASCADE
 );

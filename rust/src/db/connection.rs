@@ -163,6 +163,13 @@ fn migrate(conn: &Connection) -> AppResult<()> {
             )?;
             record_version(conn)?;
         }
+        Some(5) => {
+            tracing::info!("migrating schema 5 -> 6 (ai_messages.action_type)");
+            conn.execute_batch(
+                "ALTER TABLE ai_messages ADD COLUMN action_type TEXT;",
+            )?;
+            record_version(conn)?;
+        }
         Some(v) => {
             tracing::warn!(recorded = v, expected = SCHEMA_VERSION, "schema version mismatch -- migration not yet implemented");
         }

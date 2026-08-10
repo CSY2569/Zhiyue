@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/data/repositories/reader_repository.dart';
+import 'package:rbwa/features/ai/providers/ai_config_provider.dart';
 import 'package:rbwa/features/annotation/models/selection.dart';
 import 'package:rbwa/features/annotation/providers/char_box_cache.dart';
+import 'package:rbwa/features/annotation/providers/low_confidence_provider.dart';
 import 'package:rbwa/features/annotation/providers/selection_provider.dart';
 import 'package:rbwa/features/annotation/selection_geometry.dart';
+import 'package:rbwa/features/reader/providers/ocr_helpers.dart';
+import 'package:rbwa/features/reader/providers/scan_provider.dart';
+import 'package:rbwa/src/rust/api.dart' as rust;
 import 'package:rbwa/src/rust/models/annotation.dart';
+import 'package:rbwa/src/rust/ocr.dart' show OcrLine;
 import 'package:rbwa/src/rust/pdf/types.dart' show CharBox;
 
 /// Pointer layer on top of one page: drag to select characters (FEATURES
@@ -16,6 +23,14 @@ import 'package:rbwa/src/rust/pdf/types.dart' show CharBox;
 /// (scaled from the layer's own size), so it stays correct at any zoom. The
 /// char boxes are preloaded on init / page change so the first drag works
 /// immediately.
+///
+/// Two paths:
+/// - **Native PDF** (pdfium per-glyph boxes): one char per box, hit-tested by
+///   [charIndexAt] (horizontal proximity). High precision.
+/// - **OCR** (one box per recognized line): hit-tested by [lineIndexAt] +
+///   [LineLayout], which uses [TextPainter.getPositionForOffset] for
+///   kerning-aware in-line character positioning. This handles mixed CJK +
+///   Latin + symbols accurately without synthesizing fake per-char boxes.
 class SelectionLayer extends ConsumerStatefulWidget {
   const SelectionLayer({
     super.key,
@@ -40,6 +55,8 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
   // from onPanDown to keep the selection starting exactly where the user
   // pressed.
   Offset? _dragDownPos;
+  // Line layouts for OCR (line-level) boxes; null for native PDF (per-char).
+  List<LineLayout>? _lineLayouts;
 
   @override
   void initState() {
@@ -51,7 +68,24 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
   void didUpdateWidget(SelectionLayer oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.page != widget.page || oldWidget.bookId != widget.bookId) {
+      _disposeLineLayouts();
       _preloadBoxes();
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposeLineLayouts();
+    super.dispose();
+  }
+
+  void _disposeLineLayouts() {
+    final layouts = _lineLayouts;
+    _lineLayouts = null;
+    if (layouts != null) {
+      for (final l in layouts) {
+        l.dispose();
+      }
     }
   }
 
@@ -70,6 +104,20 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
   List<CharBox>? get _boxes =>
       ref.watch(charBoxCacheProvider.select((m) => m[widget.page]));
 
+  /// Build line layouts for OCR (line-level) boxes. Called after boxes arrive
+  /// when [isLineLevelBoxes] is true. The page width in pixels is the layer's
+  /// render width (so TextPainter lays out at display resolution).
+  void _ensureLineLayouts(List<CharBox> boxes) {
+    if (_lineLayouts != null) return; // already built
+    if (!isLineLevelBoxes(boxes)) return; // native PDF: per-char, no layouts
+    final render = context.findRenderObject() as RenderBox?;
+    final pageWidthPx = render?.size.width ?? 800.0;
+    _lineLayouts = [
+      for (final b in boxes)
+        if (b.char.length > 1) LineLayout(b, pageWidthPx),
+    ];
+  }
+
   /// Convert a local pointer position to normalized page coordinates.
   Offset _toNorm(Offset local) {
     final render = context.findRenderObject() as RenderBox?;
@@ -85,14 +133,26 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
     final boxes = _boxes;
     final anchor = _dragAnchor;
     if (boxes == null || anchor == null) return;
-    final sel = Selection(
-      page: widget.page,
-      anchorIndex: anchor,
-      currentIndex: idx,
-      text: selectionText(boxes, anchor, idx),
-      lineRects: selectionRects(boxes, anchor, idx),
-    );
-    ref.read(selectionProvider.notifier).updateSelection(sel);
+    final layouts = _lineLayouts;
+    if (layouts != null) {
+      final sel = Selection(
+        page: widget.page,
+        anchorIndex: anchor,
+        currentIndex: idx,
+        text: selectionTextFromLines(boxes, anchor, idx),
+        lineRects: selectionRectsFromLines(boxes, layouts, anchor, idx),
+      );
+      ref.read(selectionProvider.notifier).updateSelection(sel);
+    } else {
+      final sel = Selection(
+        page: widget.page,
+        anchorIndex: anchor,
+        currentIndex: idx,
+        text: selectionText(boxes, anchor, idx),
+        lineRects: selectionRects(boxes, anchor, idx),
+      );
+      ref.read(selectionProvider.notifier).updateSelection(sel);
+    }
   }
 
   void _onPanDown(DragDownDetails d) => _dragDownPos = d.localPosition;
@@ -106,7 +166,11 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
       return;
     }
     if (boxes.isEmpty) return; // no text layer on this page
-    final idx = charIndexAt(boxes, _toNorm(_dragDownPos ?? d.localPosition));
+    _ensureLineLayouts(boxes);
+    final norm = _toNorm(_dragDownPos ?? d.localPosition);
+    final idx = _lineLayouts != null
+        ? lineIndexAt(boxes, _lineLayouts!, norm)
+        : charIndexAt(boxes, norm);
     if (idx < 0) {
       // Drag began in whitespace: nothing to select.
       ref.read(selectionProvider.notifier).clear();
@@ -119,7 +183,10 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
   void _onPanUpdate(DragUpdateDetails d) {
     final boxes = _boxes;
     if (boxes == null || _dragAnchor == null) return;
-    final idx = charIndexAt(boxes, _toNorm(d.localPosition));
+    final norm = _toNorm(d.localPosition);
+    final idx = _lineLayouts != null
+        ? lineIndexAt(boxes, _lineLayouts!, norm)
+        : charIndexAt(boxes, norm);
     if (idx < 0) return; // pointer left the text grid; keep last range
     _setSelection(idx);
   }
@@ -174,14 +241,100 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
       ref.read(selectionProvider.notifier).openNote(hit.id);
       return;
     }
+    // Tap a low-confidence OCR marker -> edit that line's text (7.1.7).
+    final low = _lowConfidenceAt(norm);
+    if (low != null) {
+      _editOcrLine(low.index, low.line);
+      return;
+    }
     // Tap on whitespace clears the selection (FEATURES 4.1.3).
     ref.read(selectionProvider.notifier).clear();
+  }
+
+  /// The low-confidence line whose normalized rect contains [norm], or null.
+  /// The cache is shared with the marking layer via
+  /// [lowConfidenceCacheProvider]; a miss kicks off the async fetch (the
+  /// markers appear once it lands).
+  LowConfidenceLine? _lowConfidenceAt(Offset norm) {
+    final cache = ref.read(lowConfidenceCacheProvider);
+    var low = cache[widget.page];
+    if (low == null) {
+      ref
+          .read(lowConfidenceCacheProvider.notifier)
+          .getOrFetch(widget.bookId, widget.page);
+      return null;
+    }
+    for (final entry in low) {
+      final l = entry.line;
+      if (norm.dx >= l.x &&
+          norm.dx <= l.x + l.w &&
+          norm.dy >= l.y &&
+          norm.dy <= l.y + l.h) {
+        return entry;
+      }
+    }
+    return null;
+  }
+
+  /// Edit dialog for one OCR line (7.1.7): correct the text, persist via the
+  /// Rust core (re-indexes for search), refresh the text layer + scan count.
+  Future<void> _editOcrLine(int index, OcrLine line) async {
+    final controller = TextEditingController(text: line.text);
+    final newText = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('修正识别文本'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 3,
+          decoration: const InputDecoration(hintText: '输入修正后的文字'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(controller.text),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    if (newText == null || newText.trim().isEmpty || newText == line.text) {
+      return;
+    }
+    final mode = await configuredOcrMode(ref.read(aiConfigProvider.future));
+    final updated = await ref.read(readerRepositoryProvider).updatePageOcrLines(
+          widget.bookId,
+          widget.page,
+          mode,
+          [rust.OcrLineEdit(lineIndex: index, text: newText.trim())],
+        );
+    if (!mounted || updated == null) return;
+    // Refresh the invisible text layer and the low-confidence markers.
+    ref.invalidate(charBoxCacheProvider);
+    ref.invalidate(lowConfidenceCacheProvider);
+    // Re-derive the low-confidence count for the scan overlay.
+    final count = updated.lines
+        .where((l) => l.confidence < kLowConfidenceThreshold)
+        .length;
+    ref.read(scanStateProvider.notifier).refreshLowConfidence(widget.page, count);
   }
 
   @override
   Widget build(BuildContext context) {
     // Preview only the selection belonging to this page.
     final selection = ref.watch(selectionProvider.select((s) => s.selection));
+    // Ensure line layouts are built when boxes arrive (post-frame, because
+    // findRenderObject needs the layer to be laid out).
+    final boxes = _boxes;
+    if (boxes != null && boxes.isNotEmpty && _lineLayouts == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _ensureLineLayouts(boxes);
+      });
+    }
     final mine = selection != null && selection.page == widget.page
         ? selection
         : null;

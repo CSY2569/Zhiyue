@@ -12,7 +12,7 @@ import 'ocr.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'pdf/types.dart';
 
-// These functions are ignored because they are not marked as `pub`: `ai_client`, `builtin_search_stream`, `current_bitmap`, `current_boxes`, `current_page_has_text`, `current_thumbnail`, `drain_stream`, `ensure_api_key`, `err`, `import_book_inner`, `init_result`, `ok`, `open_error`, `page_render_result`, `resolve_ai_image_path`, `save_ai_image`, `save_cover_thumbnail`, `save_rgba_as_png`, `search_system_prompt`, `system_message`, `system_prompt_for`, `try_init_at`, `try_init`
+// These functions are ignored because they are not marked as `pub`: `ai_client`, `builtin_search_stream`, `current_bitmap`, `current_boxes`, `current_page_has_text`, `current_thumbnail`, `drain_stream`, `ensure_api_key`, `err`, `import_book_inner`, `init_result`, `ok`, `open_error`, `page_render_result`, `resolve_ai_image_path`, `save_ai_image`, `save_cover_thumbnail`, `save_rgba_as_png`, `search_system_prompt`, `system_message`, `system_prompt_for`, `try_init_at`, `try_init`, `wrap_untrusted_input`
 
 /// Crate version, surfaced in the About / settings UI.
 Future<String> appVersion() => RustLib.instance.api.crateApiAppVersion();
@@ -364,7 +364,6 @@ Future<int> appendAiMessage({
 Future<int> deleteAiThread({required PlatformInt64 threadId}) =>
     RustLib.instance.api.crateApiDeleteAiThread(threadId: threadId);
 
-/// Streaming text action (translate / explain / search / chat, FEATURES
 /// 6.2). `history` carries the thread's prior turns (6.5.2); the action's
 /// system prompt is prepended here. Emits SSE chunks; errors (including
 /// "not configured", 10.4) arrive on the stream's error channel.
@@ -403,6 +402,23 @@ Future<OcrResult?> getPageOcr({
   bookId: bookId,
   page: page,
   mode: mode,
+);
+
+/// Apply manual corrections to a page's cached OCR result (FEATURES 7.1.7):
+/// replace the text of the edited lines, persist the updated result, and
+/// re-index the page so full-text search sees the corrected text (the same
+/// incremental-index path scan_page uses). Returns the updated result, or
+/// None when the page has no cached scan in [mode].
+Future<OcrResult?> updatePageOcrLines({
+  required PlatformInt64 bookId,
+  required PlatformInt64 page,
+  required OcrMode mode,
+  required List<OcrLineEdit> edits,
+}) => RustLib.instance.api.crateApiUpdatePageOcrLines(
+  bookId: bookId,
+  page: page,
+  mode: mode,
+  edits: edits,
 );
 
 /// Full-page OCR scan (FEATURES 7.1.2 / 7.1.8): renders the page at its
@@ -601,6 +617,26 @@ class InitResult {
           dbPath == other.dbPath &&
           schemaVersion == other.schemaVersion &&
           error == other.error;
+}
+
+/// One manual correction of a recognized line (FEATURES 7.1.7): [line_index]
+/// into the cached result's lines, [text] the corrected line text.
+class OcrLineEdit {
+  final PlatformInt64 lineIndex;
+  final String text;
+
+  const OcrLineEdit({required this.lineIndex, required this.text});
+
+  @override
+  int get hashCode => lineIndex.hashCode ^ text.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is OcrLineEdit &&
+          runtimeType == other.runtimeType &&
+          lineIndex == other.lineIndex &&
+          text == other.text;
 }
 
 /// The OCR mode (FEATURES 7.1.9): high-precision server models by default,

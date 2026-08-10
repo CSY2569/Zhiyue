@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -436529626;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 320604452;
 
 // Section: executor
 
@@ -1911,6 +1911,47 @@ fn wire__crate__api__update_image_annotation_impl(
         },
     )
 }
+fn wire__crate__api__update_page_ocr_lines_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "update_page_ocr_lines",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_book_id = <i64>::sse_decode(&mut deserializer);
+            let api_page = <i64>::sse_decode(&mut deserializer);
+            let api_mode = <crate::api::OcrMode>::sse_decode(&mut deserializer);
+            let api_edits = <Vec<crate::api::OcrLineEdit>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(crate::api::update_page_ocr_lines(
+                        api_book_id,
+                        api_page,
+                        api_mode,
+                        api_edits,
+                    ))?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 
 // Section: dart2rust
 
@@ -2019,6 +2060,8 @@ impl SseDecode for crate::models::ai::AiMessage {
         let mut var_role = <crate::models::ai::AiRole>::sse_decode(deserializer);
         let mut var_content = <String>::sse_decode(deserializer);
         let mut var_imagePath = <Option<String>>::sse_decode(deserializer);
+        let mut var_actionType =
+            <Option<crate::models::ai::AiActionType>>::sse_decode(deserializer);
         let mut var_createdAt = <String>::sse_decode(deserializer);
         return crate::models::ai::AiMessage {
             id: var_id,
@@ -2026,6 +2069,7 @@ impl SseDecode for crate::models::ai::AiMessage {
             role: var_role,
             content: var_content,
             image_path: var_imagePath,
+            action_type: var_actionType,
             created_at: var_createdAt,
         };
     }
@@ -2436,6 +2480,18 @@ impl SseDecode for Vec<crate::ocr::OcrLine> {
     }
 }
 
+impl SseDecode for Vec<crate::api::OcrLineEdit> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::OcrLineEdit>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::pdf::types::OutlineEntry> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2530,6 +2586,18 @@ impl SseDecode for crate::ocr::OcrLine {
             w: var_w,
             h: var_h,
             confidence: var_confidence,
+        };
+    }
+}
+
+impl SseDecode for crate::api::OcrLineEdit {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_lineIndex = <i64>::sse_decode(deserializer);
+        let mut var_text = <String>::sse_decode(deserializer);
+        return crate::api::OcrLineEdit {
+            line_index: var_lineIndex,
+            text: var_text,
         };
     }
 }
@@ -2917,6 +2985,7 @@ fn pde_ffi_dispatcher_primary_impl(
         49 => wire__crate__api__touch_last_opened_impl(port, ptr, rust_vec_len, data_len),
         50 => wire__crate__api__update_annotation_content_impl(port, ptr, rust_vec_len, data_len),
         51 => wire__crate__api__update_image_annotation_impl(port, ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__update_page_ocr_lines_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -3004,6 +3073,7 @@ impl flutter_rust_bridge::IntoDart for crate::models::ai::AiMessage {
             self.role.into_into_dart().into_dart(),
             self.content.into_into_dart().into_dart(),
             self.image_path.into_into_dart().into_dart(),
+            self.action_type.into_into_dart().into_dart(),
             self.created_at.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -3387,6 +3457,22 @@ impl flutter_rust_bridge::IntoIntoDart<crate::ocr::OcrLine> for crate::ocr::OcrL
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::OcrLineEdit {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.line_index.into_into_dart().into_dart(),
+            self.text.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::OcrLineEdit {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::OcrLineEdit> for crate::api::OcrLineEdit {
+    fn into_into_dart(self) -> crate::api::OcrLineEdit {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::OcrMode {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
@@ -3726,6 +3812,7 @@ impl SseEncode for crate::models::ai::AiMessage {
         <crate::models::ai::AiRole>::sse_encode(self.role, serializer);
         <String>::sse_encode(self.content, serializer);
         <Option<String>>::sse_encode(self.image_path, serializer);
+        <Option<crate::models::ai::AiActionType>>::sse_encode(self.action_type, serializer);
         <String>::sse_encode(self.created_at, serializer);
     }
 }
@@ -4041,6 +4128,16 @@ impl SseEncode for Vec<crate::ocr::OcrLine> {
     }
 }
 
+impl SseEncode for Vec<crate::api::OcrLineEdit> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::OcrLineEdit>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::pdf::types::OutlineEntry> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -4110,6 +4207,14 @@ impl SseEncode for crate::ocr::OcrLine {
         <f64>::sse_encode(self.w, serializer);
         <f64>::sse_encode(self.h, serializer);
         <f64>::sse_encode(self.confidence, serializer);
+    }
+}
+
+impl SseEncode for crate::api::OcrLineEdit {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.line_index, serializer);
+        <String>::sse_encode(self.text, serializer);
     }
 }
 

@@ -160,6 +160,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<OcrLine> dco_decode_list_ocr_line(dynamic raw);
 
   @protected
+  List<OcrLineEdit> dco_decode_list_ocr_line_edit(dynamic raw);
+
+  @protected
   List<OutlineEntry> dco_decode_list_outline_entry(dynamic raw);
 
   @protected
@@ -182,6 +185,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   OcrLine dco_decode_ocr_line(dynamic raw);
+
+  @protected
+  OcrLineEdit dco_decode_ocr_line_edit(dynamic raw);
 
   @protected
   OcrMode dco_decode_ocr_mode(dynamic raw);
@@ -417,6 +423,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<OcrLine> sse_decode_list_ocr_line(SseDeserializer deserializer);
 
   @protected
+  List<OcrLineEdit> sse_decode_list_ocr_line_edit(SseDeserializer deserializer);
+
+  @protected
   List<OutlineEntry> sse_decode_list_outline_entry(
     SseDeserializer deserializer,
   );
@@ -445,6 +454,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   OcrLine sse_decode_ocr_line(SseDeserializer deserializer);
+
+  @protected
+  OcrLineEdit sse_decode_ocr_line_edit(SseDeserializer deserializer);
 
   @protected
   OcrMode sse_decode_ocr_mode(SseDeserializer deserializer);
@@ -718,6 +730,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_ocr_line(List<OcrLine> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_ocr_line_edit(
+    List<OcrLineEdit> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_outline_entry(
     List<OutlineEntry> self,
     SseSerializer serializer,
@@ -755,6 +773,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_ocr_line(OcrLine self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ocr_line_edit(OcrLineEdit self, SseSerializer serializer);
 
   @protected
   void sse_encode_ocr_mode(OcrMode self, SseSerializer serializer);

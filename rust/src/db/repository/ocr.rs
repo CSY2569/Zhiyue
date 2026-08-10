@@ -111,4 +111,23 @@ mod tests {
             1
         );
     }
+
+    #[test]
+    fn manual_correction_overwrites_line_text() {
+        // FEATURES 7.1.7: an edited line's text is persisted over the scan
+        // result (the api::update_page_ocr_lines flow reads -> modifies ->
+        // saves; this tests the save side accepts the corrected text).
+        let conn = test_conn();
+        save_page_ocr(&conn, 1, 0, "high_precision", &result("high_precision")).unwrap();
+
+        let mut corrected = result("high_precision");
+        corrected.lines[0].text = "你好，修正后的世界".into();
+        save_page_ocr(&conn, 1, 0, "high_precision", &corrected).unwrap();
+
+        let cached = get_page_ocr(&conn, 1, 0, "high_precision").unwrap().unwrap();
+        assert_eq!(cached.lines[0].text, "你好，修正后的世界");
+        // Confidence and geometry survive the edit (only text changes).
+        assert_eq!(cached.lines[0].confidence, 0.98);
+        assert_eq!(cached.lines[0].x, 0.1);
+    }
 }

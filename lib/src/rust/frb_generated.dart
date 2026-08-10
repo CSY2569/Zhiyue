@@ -70,7 +70,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => -436529626;
+  int get rustContentHash => 320604452;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -276,6 +276,13 @@ abstract class RustLibApi extends BaseApi {
     required double rotation,
     required String payload,
     required String style,
+  });
+
+  Future<OcrResult?> crateApiUpdatePageOcrLines({
+    required PlatformInt64 bookId,
+    required PlatformInt64 page,
+    required OcrMode mode,
+    required List<OcrLineEdit> edits,
   });
 }
 
@@ -1947,6 +1954,44 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         ],
       );
 
+  @override
+  Future<OcrResult?> crateApiUpdatePageOcrLines({
+    required PlatformInt64 bookId,
+    required PlatformInt64 page,
+    required OcrMode mode,
+    required List<OcrLineEdit> edits,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_i_64(bookId, serializer);
+          sse_encode_i_64(page, serializer);
+          sse_encode_ocr_mode(mode, serializer);
+          sse_encode_list_ocr_line_edit(edits, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 52,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_opt_box_autoadd_ocr_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiUpdatePageOcrLinesConstMeta,
+        argValues: [bookId, page, mode, edits],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiUpdatePageOcrLinesConstMeta => const TaskConstMeta(
+    debugName: "update_page_ocr_lines",
+    argNames: ["bookId", "page", "mode", "edits"],
+  );
+
   @protected
   AnyhowException dco_decode_AnyhowException(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -2015,15 +2060,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   AiMessage dco_decode_ai_message(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
     return AiMessage(
       id: dco_decode_i_64(arr[0]),
       threadId: dco_decode_i_64(arr[1]),
       role: dco_decode_ai_role(arr[2]),
       content: dco_decode_String(arr[3]),
       imagePath: dco_decode_opt_String(arr[4]),
-      createdAt: dco_decode_String(arr[5]),
+      actionType: dco_decode_opt_box_autoadd_ai_action_type(arr[5]),
+      createdAt: dco_decode_String(arr[6]),
     );
   }
 
@@ -2365,6 +2411,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<OcrLineEdit> dco_decode_list_ocr_line_edit(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_ocr_line_edit).toList();
+  }
+
+  @protected
   List<OutlineEntry> dco_decode_list_outline_entry(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_outline_entry).toList();
@@ -2427,6 +2479,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       w: dco_decode_f_64(arr[3]),
       h: dco_decode_f_64(arr[4]),
       confidence: dco_decode_f_64(arr[5]),
+    );
+  }
+
+  @protected
+  OcrLineEdit dco_decode_ocr_line_edit(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return OcrLineEdit(
+      lineIndex: dco_decode_i_64(arr[0]),
+      text: dco_decode_String(arr[1]),
     );
   }
 
@@ -2760,6 +2824,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_role = sse_decode_ai_role(deserializer);
     var var_content = sse_decode_String(deserializer);
     var var_imagePath = sse_decode_opt_String(deserializer);
+    var var_actionType = sse_decode_opt_box_autoadd_ai_action_type(
+      deserializer,
+    );
     var var_createdAt = sse_decode_String(deserializer);
     return AiMessage(
       id: var_id,
@@ -2767,6 +2834,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       role: var_role,
       content: var_content,
       imagePath: var_imagePath,
+      actionType: var_actionType,
       createdAt: var_createdAt,
     );
   }
@@ -3176,6 +3244,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<OcrLineEdit> sse_decode_list_ocr_line_edit(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <OcrLineEdit>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_ocr_line_edit(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<OutlineEntry> sse_decode_list_outline_entry(
     SseDeserializer deserializer,
   ) {
@@ -3270,6 +3352,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       h: var_h,
       confidence: var_confidence,
     );
+  }
+
+  @protected
+  OcrLineEdit sse_decode_ocr_line_edit(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_lineIndex = sse_decode_i_64(deserializer);
+    var var_text = sse_decode_String(deserializer);
+    return OcrLineEdit(lineIndex: var_lineIndex, text: var_text);
   }
 
   @protected
@@ -3637,6 +3727,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_ai_role(self.role, serializer);
     sse_encode_String(self.content, serializer);
     sse_encode_opt_String(self.imagePath, serializer);
+    sse_encode_opt_box_autoadd_ai_action_type(self.actionType, serializer);
     sse_encode_String(self.createdAt, serializer);
   }
 
@@ -3991,6 +4082,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_ocr_line_edit(
+    List<OcrLineEdit> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_ocr_line_edit(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_outline_entry(
     List<OutlineEntry> self,
     SseSerializer serializer,
@@ -4078,6 +4181,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.w, serializer);
     sse_encode_f_64(self.h, serializer);
     sse_encode_f_64(self.confidence, serializer);
+  }
+
+  @protected
+  void sse_encode_ocr_line_edit(OcrLineEdit self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.lineIndex, serializer);
+    sse_encode_String(self.text, serializer);
   }
 
   @protected
