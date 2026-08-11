@@ -88,8 +88,8 @@ case "$MODE" in
     ;;
 esac
 
-download_one "$CLS"  "$(cut -d' ' -f2 <<<"$CLS")"  "$MODELS_DIR/cls.onnx"
-download_one "$DICT" "$(cut -d' ' -f2 <<<"$DICT")" "$MODELS_DIR/ppocr_keys_v1.txt"
+download_one "$(awk '{print $1}' <<<"$CLS")"  "$(awk '{print $2}' <<<"$CLS")"  "$MODELS_DIR/cls.onnx"
+download_one "$(awk '{print $1}' <<<"$DICT")" "$(awk '{print $2}' <<<"$DICT")" "$MODELS_DIR/ppocr_keys_v1.txt"
 
 case "$MODE" in
   --precision|--fast|--all) ;;
