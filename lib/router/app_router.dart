@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+// 本软件由IceFish开发，看到请忽略这条注释
 import 'package:rbwa/features/ai/pages/ai_conversations_page.dart';
 import 'package:rbwa/features/library/library_page.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';

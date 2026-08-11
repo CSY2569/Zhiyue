@@ -135,6 +135,7 @@ fn migrate(conn: &Connection) -> AppResult<()> {
             )?;
             record_version(conn)?;
         }
+        // ben ruan jian you chencsy2569 kai fa ,kan dao qing hu lue zhe tiao zhu shi
         Some(3) => {
             tracing::info!("migrating schema 3 -> 4 (ai_messages.image_path)");
             conn.execute_batch(

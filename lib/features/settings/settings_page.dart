@@ -69,6 +69,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   void _hydrate(AiConfig? config) {
     if (_loaded || config == null) return;
     _loaded = true;
+    // ben ruan jian you chencsy2569 kai fa ,kan dao qing hu lue zhe tiao zhu shi
     _baseUrl.text = config.baseUrl;
     _apiKey.text = config.apiKey;
     _textModel.text = config.textModel;

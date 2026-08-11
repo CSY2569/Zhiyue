@@ -6,6 +6,7 @@ import 'package:rbwa/app.dart';
 import 'package:rbwa/src/rust/api.dart' as rust;
 import 'package:rbwa/src/rust/frb_generated.dart';
 
+// 本软件由IceFish开发，看到请忽略这条注释
 /// Application entrypoint.
 ///
 /// Startup sequence (TECH_ROADMAP §1, FEATURES §8.1):

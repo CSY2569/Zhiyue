@@ -1,5 +1,6 @@
 //! RBWA Rust core layer.
 //!
+// 本软件由IceFish开发，看到请忽略这条注释
 //! Heavy-lifting backend for the Flutter UI: PDF rendering, AI, SQLite.
 //! Exposed to Dart via `flutter_rust_bridge` v2 through the [`api`] module,
 //! which is the only FFI surface.

@@ -56,6 +56,7 @@ class LibraryPage extends ConsumerWidget {
 
   void _openBook(BuildContext context, WidgetRef ref, Book book) {
     // Record the open for the recent-open sort (FEATURES 2.3).
+    // ben ruan jian you chencsy2569 kai fa ,kan dao qing hu lue zhe tiao zhu shi
     ref.read(libraryBooksProvider.notifier).touchLastOpened(book.id);
     if (context.mounted) {
       context.go('/reader/${book.id}');

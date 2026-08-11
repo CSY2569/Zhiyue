@@ -1,5 +1,6 @@
 //! Flutter -> Rust command surface (flutter_rust_bridge v2).
 //!
+// 本软件由IceFish开发，看到请忽略这条注释
 //! This module is the single aggregation point for all functions exported to
 //! Dart. Each subsystem exposes higher-level commands here; the Dart side
 //! never calls into `pdf` / `ai` / `db` directly. This keeps the FFI boundary

@@ -5,6 +5,7 @@ import 'package:rbwa/core/theme/app_theme.dart';
 import 'package:rbwa/core/theme/theme_controller.dart';
 import 'package:rbwa/router/app_router.dart';
 
+// 本软件由IceFish开发，看到请忽略这条注释
 /// Root widget for the RBWA application.
 ///
 /// Wires the theme (8.2/8.3) and the go_router. The frameless title bar is

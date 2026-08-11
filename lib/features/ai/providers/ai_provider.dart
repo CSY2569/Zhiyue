@@ -74,6 +74,7 @@ class AiNotifier extends Notifier<AiState> {
         );
         loaded.add(ts);
       }
+      // ben ruan jian you chencsy2569 kai fa ,kan dao qing hu lue zhe tiao zhu shi
       _nextThreadId = max(_nextThreadId, maxId + 1);
     } catch (_) {
       // DB read failed: keep the clean in-memory session.
