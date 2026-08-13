@@ -51,6 +51,7 @@ install -d %{buildroot}%{_bindir}
 install -d %{buildroot}%{_libdir}/zhiyue/lib
 install -d %{buildroot}%{_datadir}/applications
 install -d %{buildroot}%{_datadir}/icons/hicolor/512x512/apps
+install -d %{buildroot}%{_datadir}/licenses/zhiyue
 
 install -m 755 %{_sourcedir}/bundle/ZhiYue %{buildroot}%{_libdir}/zhiyue/ZhiYue
 cp -a %{_sourcedir}/bundle/lib/*.so %{buildroot}%{_libdir}/zhiyue/lib/
@@ -61,8 +62,10 @@ install -m 644 %{_sourcedir}/packaging/ZhiYue.desktop \
   %{buildroot}%{_datadir}/applications/ZhiYue.desktop
 install -m 644 %{_sourcedir}/packaging/icon/zhiyue.png \
   %{buildroot}%{_datadir}/icons/hicolor/512x512/apps/zhiyue.png
+install -m 644 %{_sourcedir}/LICENSE %{buildroot}%{_datadir}/licenses/zhiyue/LICENSE
 
 %files
+%license %{_datadir}/licenses/zhiyue/LICENSE
 %{_bindir}/ZhiYue
 %{_libdir}/zhiyue/ZhiYue
 %{_libdir}/zhiyue/lib/*

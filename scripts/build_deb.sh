@@ -12,6 +12,7 @@
 #   usr/lib/zhiyue/data/                 (flutter_assets + icudtl.dat)
 #   usr/share/applications/ZhiYue.desktop
 #   usr/share/icons/hicolor/512x512/apps/zhiyue.png
+#   usr/share/doc/zhiyue/copyright            (GPL-3.0 license text)
 #
 # Usage: bash scripts/build_deb.sh [version]
 
@@ -35,7 +36,8 @@ DATA="$WORK/data"
 mkdir -p "$DATA/usr/bin" \
          "$DATA/usr/lib/zhiyue/lib" \
          "$DATA/usr/share/applications" \
-         "$DATA/usr/share/icons/hicolor/512x512/apps"
+         "$DATA/usr/share/icons/hicolor/512x512/apps" \
+         "$DATA/usr/share/doc/zhiyue"
 
 cp "$BUNDLE/ZhiYue" "$DATA/usr/lib/zhiyue/ZhiYue"
 cp "$BUNDLE"/lib/*.so "$DATA/usr/lib/zhiyue/lib/"
@@ -46,6 +48,8 @@ ln -s ../lib/zhiyue/ZhiYue "$DATA/usr/bin/ZhiYue"
 cp "$PROJECT_ROOT/packaging/ZhiYue.desktop" "$DATA/usr/share/applications/"
 cp "$PROJECT_ROOT/packaging/icon/zhiyue.png" \
    "$DATA/usr/share/icons/hicolor/512x512/apps/zhiyue.png"
+# License text (Debian convention: copyright file under share/doc).
+cp "$PROJECT_ROOT/LICENSE" "$DATA/usr/share/doc/zhiyue/copyright"
 
 # normalize owner/perms
 find "$DATA" -type f -exec chmod 644 {} \;

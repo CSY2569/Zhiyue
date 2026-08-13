@@ -54,6 +54,7 @@ mkdir -p "$RPMBUILD_DIR"/{SOURCES,BUILD,RPMS}
 rm -rf "$RPMBUILD_DIR/SOURCES/bundle"
 cp -r "$BUNDLE" "$RPMBUILD_DIR/SOURCES/bundle"
 cp -r "$PROJECT_ROOT/packaging" "$RPMBUILD_DIR/SOURCES/"
+cp "$PROJECT_ROOT/LICENSE" "$RPMBUILD_DIR/SOURCES/"
 rpmbuild -bb "$RPMBUILD_DIR/SOURCES/packaging/ZhiYue.spec" >/dev/null
 cp "$RPMBUILD_DIR"/RPMS/x86_64/ZhiYue-*.x86_64.rpm "$DIST/"
 
@@ -84,6 +85,7 @@ mkdir -p "$APPDIR"
 cp -r "$BUNDLE/ZhiYue" "$BUNDLE/lib" "$BUNDLE/data" "$BUNDLE/models" "$APPDIR/"
 cp "$PROJECT_ROOT/packaging/ZhiYue.desktop" "$APPDIR/"
 cp "$PROJECT_ROOT/packaging/icon/zhiyue.png" "$APPDIR/"
+cp "$PROJECT_ROOT/LICENSE" "$APPDIR/"
 cat > "$APPDIR/AppRun" <<'EOF'
 #!/bin/sh
 HERE="$(dirname "$(readlink -f "$0")")"
