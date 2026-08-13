@@ -63,7 +63,7 @@ flutter build windows --release
 
 ```
 build\windows\x64\runner\Release\
-├── rbwa.exe                  # 主程序（BINARY_NAME，内部标识保留为 rbwa）
+├── ZhiYue.exe               # 主程序（BINARY_NAME = ZhiYue）
 ├── rbwa_core.dll             # Rust 核心（FRB：exe 目录 DLL 搜索优先）
 ├── pdfium.dll                # PDF 渲染库
 ├── flutter_windows.dll       # Flutter 引擎
@@ -77,17 +77,17 @@ build\windows\x64\runner\Release\
 ### 方式 A：绿色免安装版（最快）
 
 ```powershell
-Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath rbwa-0.1.0-win-x64.zip
+Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath ZhiYue-0.1.0-win-x64.zip
 ```
 
-用户解压后直接运行 `rbwa.exe`（首次运行时 Windows SmartScreen 可能提示，选择"仍要运行"）。
+用户解压后直接运行 `ZhiYue.exe`（首次运行时 Windows SmartScreen 可能提示，选择"仍要运行"）。
 
 ### 方式 B：Inno Setup 安装程序（推荐分发）
 
 1. 安装 [Inno Setup](https://jrsoftware.org/isinfo.php)（免费）
 2. 仓库已附示例脚本 `packaging\rbwa.iss`（AppName=智阅、装到 Program Files、
    创建开始菜单/桌面快捷方式、卸载入口齐全）
-3. 编译：右键 `packaging\rbwa.iss` → Compile，产物 `dist\rbwa-0.1.0-win-x64-setup.exe`
+3. 编译：右键 `packaging\rbwa.iss` → Compile，产物 `dist\ZhiYue-0.1.0-win-x64-setup.exe`
 
 > 脚本要点：`Source: "..\build\windows\x64\runner\Release\*"` 整目录递归打包
 > （含 `models\`），`ArchitecturesInstallIn64BitMode=x64` 强制 64 位安装。
@@ -107,7 +107,7 @@ https://aka.ms/vs/17/release/vc_redist.x64.exe
 
 | 项目 | 操作 | 预期 |
 |------|------|------|
-| 启动 | 双击 rbwa.exe | 窗口标题"智阅"，进入书库 |
+| 启动 | 双击 ZhiYue.exe | 窗口标题"智阅"，进入书库 |
 | 导入书籍 | 导入 PDF/图片 | 出现封面，双击可打开 |
 | 文字版 PDF | 打开 | 文字可选择、可搜索 |
 | OCR 扫描版 | 打开扫描书 → 整页 OCR | 直接可用（模型已内置，**无需下载**） |
@@ -124,7 +124,7 @@ https://aka.ms/vs/17/release/vc_redist.x64.exe
 | CMake 警告 `OCR models not found` | 未运行 `download_ocr_models.ps1 -All -Dir rust\models` |
 | 运行提示缺 `VCRUNTIME140.dll` | 目标机装 VC++ Redistributable（见第五节） |
 | Rust target 不对 | `rustup default stable-x86_64-pc-windows-msvc` |
-| 用户机器 OCR 无反应 | 确认 `models\` 与 `rbwa.exe` 同目录（zip 解压时目录结构别拆散） |
+| 用户机器 OCR 无反应 | 确认 `models\` 与 `ZhiYue.exe` 同目录（zip 解压时目录结构别拆散） |
 | SmartScreen 拦截 | 未签名程序首次运行提示，选"仍要运行"；商业分发请购买代码签名证书 |
 
 ## 八、版本迭代
