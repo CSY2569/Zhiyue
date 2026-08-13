@@ -48,6 +48,10 @@ bash "$SCRIPT_DIR/build_deb.sh" "$VERSION"
 echo "==> .rpm (rpmbuild)"
 RPMBUILD_DIR="${RPMBUILD_DIR:-$HOME/rpmbuild}"
 mkdir -p "$RPMBUILD_DIR"/{SOURCES,BUILD,RPMS}
+# Fresh copy each run: a stale SOURCES/bundle (e.g. from a previous binary
+# name) would otherwise linger or nest (cp -r into an existing dir creates
+# SOURCES/bundle/bundle) and break %{_sourcedir}/bundle lookups.
+rm -rf "$RPMBUILD_DIR/SOURCES/bundle"
 cp -r "$BUNDLE" "$RPMBUILD_DIR/SOURCES/bundle"
 cp -r "$PROJECT_ROOT/packaging" "$RPMBUILD_DIR/SOURCES/"
 rpmbuild -bb "$RPMBUILD_DIR/SOURCES/packaging/ZhiYue.spec" >/dev/null
