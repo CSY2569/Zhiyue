@@ -3,20 +3,20 @@
 # Requires the release bundle to be built first:
 #   flutter build linux --release
 # Then:
-#   rpmbuild -bb packaging/rbwa.spec
+#   rpmbuild -bb packaging/ZhiYue.spec
 #
 # The bundle's RPATH is $ORIGIN/lib, so the exe and its lib/ dir must stay
-# together under %%{_libdir}/rbwa; /usr/bin/rbwa is a symlink (the kernel
+# together under %%{_libdir}/zhiyue; /usr/bin/ZhiYue is a symlink (the kernel
 # resolves $ORIGIN against the real path).
 
-%global __requires_exclude_from ^%{_libdir}/rbwa/lib/.*$
+%global __requires_exclude_from ^%{_libdir}/zhiyue/lib/.*$
 
-Name:           rbwa
+Name:           ZhiYue
 Version:        0.1.0
 Release:        1%{?dist}
 Summary:        智阅 - AI-powered local PDF/image reader
 License:        MIT OR Apache-2.0
-URL:            https://localhost/rbwa
+URL:            https://github.com/CSY2569/Zhiyue
 BuildArch:      x86_64
 
 # Runtime dependencies (major desktop distributions ship these)
@@ -48,29 +48,29 @@ OCR models (both modes) are bundled with the package.
 %install
 rm -rf %{buildroot}
 install -d %{buildroot}%{_bindir}
-install -d %{buildroot}%{_libdir}/rbwa/lib
+install -d %{buildroot}%{_libdir}/zhiyue/lib
 install -d %{buildroot}%{_datadir}/applications
 install -d %{buildroot}%{_datadir}/icons/hicolor/512x512/apps
 
-install -m 755 %{_sourcedir}/bundle/rbwa %{buildroot}%{_libdir}/rbwa/rbwa
-cp -a %{_sourcedir}/bundle/lib/*.so %{buildroot}%{_libdir}/rbwa/lib/
-cp -a %{_sourcedir}/bundle/data %{buildroot}%{_libdir}/rbwa/data
-cp -a %{_sourcedir}/bundle/models %{buildroot}%{_libdir}/rbwa/models
-ln -s ../lib/rbwa/rbwa %{buildroot}%{_bindir}/rbwa
-install -m 644 %{_sourcedir}/packaging/rbwa.desktop \
-  %{buildroot}%{_datadir}/applications/rbwa.desktop
-install -m 644 %{_sourcedir}/packaging/icon/rbwa.png \
-  %{buildroot}%{_datadir}/icons/hicolor/512x512/apps/rbwa.png
+install -m 755 %{_sourcedir}/bundle/ZhiYue %{buildroot}%{_libdir}/zhiyue/ZhiYue
+cp -a %{_sourcedir}/bundle/lib/*.so %{buildroot}%{_libdir}/zhiyue/lib/
+cp -a %{_sourcedir}/bundle/data %{buildroot}%{_libdir}/zhiyue/data
+cp -a %{_sourcedir}/bundle/models %{buildroot}%{_libdir}/zhiyue/models
+ln -s ../lib/zhiyue/ZhiYue %{buildroot}%{_bindir}/ZhiYue
+install -m 644 %{_sourcedir}/packaging/ZhiYue.desktop \
+  %{buildroot}%{_datadir}/applications/ZhiYue.desktop
+install -m 644 %{_sourcedir}/packaging/icon/zhiyue.png \
+  %{buildroot}%{_datadir}/icons/hicolor/512x512/apps/zhiyue.png
 
 %files
-%{_bindir}/rbwa
-%{_libdir}/rbwa/rbwa
-%{_libdir}/rbwa/lib/*
-%{_libdir}/rbwa/data/
-%{_libdir}/rbwa/models/
-%{_datadir}/applications/rbwa.desktop
-%{_datadir}/icons/hicolor/512x512/apps/rbwa.png
+%{_bindir}/ZhiYue
+%{_libdir}/zhiyue/ZhiYue
+%{_libdir}/zhiyue/lib/*
+%{_libdir}/zhiyue/data/
+%{_libdir}/zhiyue/models/
+%{_datadir}/applications/ZhiYue.desktop
+%{_datadir}/icons/hicolor/512x512/apps/zhiyue.png
 
 %changelog
-* Mon Aug 10 2026 RBWA <rbwa@localhost> - 0.1.0-1
+* Mon Aug 10 2026 ZhiYue <zhiyue@localhost> - 0.1.0-1
 - Initial package.
