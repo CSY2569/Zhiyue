@@ -138,4 +138,4 @@ bash scripts/build_packages.sh
 
 ## 许可证
 
-MIT OR Apache-2.0
+[GNU General Public License v3.0](LICENSE) — Copyleft：允许使用、修改与分发，但衍生作品必须以 GPL 开源

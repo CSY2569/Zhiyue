@@ -3,7 +3,7 @@ name = "rbwa_core"
 version = "0.1.0"
 edition = "2021"
 description = "RBWA Rust core layer - PDF/OCR/AI/DB heavy lifting for the Flutter UI"
-license = "MIT OR Apache-2.0"
+license = "GPL-3.0"
 publish = false
 
 [lib]
