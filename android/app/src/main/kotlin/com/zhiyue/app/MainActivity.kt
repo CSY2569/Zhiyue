@@ -1,4 +1,4 @@
-package com.example.rbwa
+package com.zhiyue.app
 
 import io.flutter.embedding.android.FlutterActivity
 
