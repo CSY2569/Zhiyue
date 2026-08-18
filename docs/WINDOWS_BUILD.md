@@ -12,6 +12,7 @@ Windows 目标需要 Visual Studio 工具链，Linux 无法交叉编译。
 | **Rust 工具链** | 官方 rustup 安装 | 默认 MSVC target：`x86_64-pc-windows-msvc`（`rustup show` 确认） |
 | **Git** | 任意版本 | 拉取代码 |
 | **PowerShell** | 5.1+（Win10 1803+ 自带） | 运行下载脚本（内置 tar 解压） |
+| **开发者模式** | 设置 → 开发者选项 | Flutter 插件构建需要符号链接权限，必须开启 |
 
 检查命令：
 
@@ -23,6 +24,9 @@ git --version
 
 > 国内网络建议为 Flutter 配置镜像：`PUB_HOSTED_URL=https://pub.flutter-io.cn`
 > `FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn`（系统环境变量）。
+> Rust 同理：`RUSTUP_DIST_SERVER=https://rsproxy.cn`、`RUSTUP_UPDATE_ROOT=https://rsproxy.cn/rustup`，
+> 并在 `%USERPROFILE%\.cargo\config.toml` 配置 rsproxy sparse 源
+> （`sparse+https://rsproxy.cn/index/`）加速 crates 下载。
 
 ## 二、拉取代码
 
@@ -34,7 +38,8 @@ cd RBWA
 ## 三、下载外部依赖（两个脚本）
 
 ```powershell
-# 1. PDFium 动态库（约 40MB，落到 rust\libpdfium\pdfium.dll，脚本会校验 PE 头）
+# 1. PDFium 动态库（约 7MB，落到 rust\libpdfium\pdfium.dll，脚本会校验 PE 头）
+#    默认经国内加速代理（ghfast.top）拉取 GitHub Release，可用 -Mirror 覆盖
 powershell -ExecutionPolicy Bypass -File scripts\fetch_pdfium_windows.ps1
 
 # 2. OCR 模型两套（约 210MB，落到 rust\models\，构建时自动打进产物）
@@ -44,6 +49,16 @@ powershell -ExecutionPolicy Bypass -File scripts\download_ocr_models.ps1 -All -D
 
 > 若仅本机开发（不打包分发），第 2 步可以省略 `-Dir`（模型下载到
 > `%APPDATA%\RBWA\models`，Rust 回退路径加载）；打包分发必须用 `-Dir`。
+
+### 开发自测补充（跑 `flutter test` 前）
+
+widget 测试通过 FRB 加载 `rust/target/release/rbwa_core.dll`，因此需要先：
+
+```powershell
+cd rust; cargo build --release; cd ..
+```
+
+pdfium 由 Rust 核心按 cwd 回退到 `rust/libpdfium/` 自动定位，无需额外复制。
 
 ## 四、构建 release
 
@@ -63,7 +78,7 @@ flutter build windows --release
 
 ```
 build\windows\x64\runner\Release\
-├── ZhiYue.exe               # 主程序（BINARY_NAME = ZhiYue）
+├── ZhiYue.exe                 # 主程序（BINARY_NAME = "ZhiYue"）
 ├── rbwa_core.dll             # Rust 核心（FRB：exe 目录 DLL 搜索优先）
 ├── pdfium.dll                # PDF 渲染库
 ├── flutter_windows.dll       # Flutter 引擎
@@ -88,6 +103,8 @@ Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath ZhiYu
 2. 仓库已附示例脚本 `packaging\rbwa.iss`（AppName=智阅、装到 Program Files、
    创建开始菜单/桌面快捷方式、卸载入口齐全）
 3. 编译：右键 `packaging\rbwa.iss` → Compile，产物 `dist\ZhiYue-0.1.0-win-x64-setup.exe`
+   （安装向导为简体中文，语言文件 `packaging\ChineseSimplified.isl` 随脚本携带；
+   安装向导与卸载图标使用 `packaging\icon\setup.ico`）
 
 > 脚本要点：`Source: "..\build\windows\x64\runner\Release\*"` 整目录递归打包
 > （含 `models\`），`ArchitecturesInstallIn64BitMode=x64` 强制 64 位安装。
@@ -119,6 +136,7 @@ https://aka.ms/vs/17/release/vc_redist.x64.exe
 
 | 现象 | 原因/解决 |
 |------|-----------|
+| `Building with plugins requires symlink support` | 未开启开发者模式（设置 → 开发者选项） |
 | 构建报 `rbwa_core.dll` 找不到 | VS 未装"使用 C++ 的桌面开发"；或首次 cargo 编译未完成（等它跑完，约 5-15 分钟） |
 | CMake 警告 `pdfium.dll not found` | 未运行 `fetch_pdfium_windows.ps1` |
 | CMake 警告 `OCR models not found` | 未运行 `download_ocr_models.ps1 -All -Dir rust\models` |

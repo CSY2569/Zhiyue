@@ -600,10 +600,22 @@ mod tests {
 
     // --- End-to-end helpers (require downloaded models; see below) --------
 
-    /// Load the system DejaVu font used by all synthetic pages. Box::leak
-    /// gives the FontRef a 'static lifetime (test-only; ~700KB per call).
+    /// Load the system font used by all synthetic pages (DejaVu on Linux,
+    /// Arial on Windows). Box::leak gives the FontRef a 'static lifetime
+    /// (test-only; ~700KB per call).
     fn test_font() -> FontRef<'static> {
-        let data = std::fs::read("/usr/share/fonts/TTF/DejaVuSans.ttf").expect("system font");
+        let candidates: &[&str] = if cfg!(windows) {
+            &[r"C:\Windows\Fonts\arial.ttf", r"C:\Windows\Fonts\segoeui.ttf"]
+        } else {
+            &[
+                "/usr/share/fonts/TTF/DejaVuSans.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            ]
+        };
+        let data = candidates
+            .iter()
+            .find_map(|p| std::fs::read(p).ok())
+            .expect("system font");
         FontRef::try_from_slice(Box::leak(data.into_boxed_slice())).expect("font parse")
     }
 

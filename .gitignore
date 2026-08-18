@@ -86,6 +86,7 @@ app.*.map.json
 *.orig
 *~
 .vscode/
+.vs/
 .fvm/
 
 # Local env files
@@ -94,3 +95,4 @@ app.*.map.json
 
 # ZCode agent session state (not project code)
 .zcode/
+.qoder/

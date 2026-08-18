@@ -114,16 +114,15 @@ set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
 
-# Rust core dll: pick the cargo profile matching the CMake config
-# (Debug -> dev build, Profile/Release -> release build) and place it next to
-# the exe (Windows DLL search order prefers the exe directory).
-install(CODE "
-  if(\"\$<CONFIG>\" STREQUAL \"Debug\")
-    file(COPY \"${RBWA_RUST_DEBUG_LIB}\" DESTINATION \"\${CMAKE_INSTALL_PREFIX}\")
-  else()
-    file(COPY \"${RBWA_RUST_RELEASE_LIB}\" DESTINATION \"\${CMAKE_INSTALL_PREFIX}\")
-  endif()
-  " COMPONENT Runtime)
+# Rust core dll: install the cargo profile matching the CMake config
+# (Debug -> dev build, Profile/Release -> release build) next to the exe
+# (Windows DLL search order prefers the exe directory). install(CODE) is
+# unusable here: ${CMAKE_INSTALL_PREFIX} holds a generator expression that
+# only resolves inside install() commands.
+install(FILES "${RBWA_RUST_DEBUG_LIB}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+  CONFIGURATIONS Debug COMPONENT Runtime)
+install(FILES "${RBWA_RUST_RELEASE_LIB}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+  CONFIGURATIONS Profile;Release COMPONENT Runtime)
 
 # pdfium dynamic library (bundled, BSD-3). Fetched by
 # scripts/fetch_pdfium_windows.ps1 into rust/libpdfium/. Placed next to the

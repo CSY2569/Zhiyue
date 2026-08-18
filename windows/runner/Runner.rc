@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "CSY2569" "\0"
-            VALUE "FileDescription", "ZhiYue" "\0"
+            VALUE "CompanyName", "ZhiYue" "\0"
+            VALUE "FileDescription", "智阅 (ZhiYue)" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "ZhiYue" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 CSY2569. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 ZhiYue. All rights reserved." "\0"
             VALUE "OriginalFilename", "ZhiYue.exe" "\0"
-            VALUE "ProductName", "ZhiYue" "\0"
+            VALUE "ProductName", "智阅 (ZhiYue)" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

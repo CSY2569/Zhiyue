@@ -16,14 +16,14 @@ void main() {
 
   setUpAll(() async {
     // A self-contained sample PDF for the whole suite.
-    File('/tmp/test.pdf')
+    File(tmpFile('test.pdf'))
         .writeAsStringSync(buildMinimalPdf('Dummy PDF for RBWA smoke tests'));
     await initIsolatedCore();
   });
 
   test('rust async pdf pipeline completes', () async {
     // Async pdfium open (runs on FRB worker thread).
-    final open = await rust.openBook(storedPath: '/tmp/test.pdf');
+    final open = await rust.openBook(storedPath: tmpFile('test.pdf'));
     expect(open.error, isNull, reason: 'open_book: ${open.error}');
     expect(open.pageCount, greaterThanOrEqualTo(1));
 
@@ -46,7 +46,7 @@ void main() {
 
   test('rust annotation CRUD + export round-trip', () async {
     // Import the sample PDF to get a real book row (FK target).
-    final imported = await rust.importBook(path: '/tmp/test.pdf');
+    final imported = await rust.importBook(path: tmpFile('test.pdf'));
     expect(imported.error, isNull,
         reason: 'import_book: ${imported.error}');
     final bookId = imported.book!.id;
@@ -116,7 +116,7 @@ void main() {
   }, timeout: const Timeout(Duration(seconds: 30)));
 
   test('pdf import generates a cover thumbnail (FEATURES 2.6)', () async {
-    final imported = await rust.importBook(path: '/tmp/test.pdf');
+    final imported = await rust.importBook(path: tmpFile('test.pdf'));
     expect(imported.error, isNull, reason: 'import: ${imported.error}');
     final book = imported.book!;
 
@@ -139,7 +139,7 @@ void main() {
       () async {
     // Import the sample PDF (its only page holds 'Dummy PDF for RBWA AI
     // tests'), then let the background index build run to completion.
-    final imported = await rust.importBook(path: '/tmp/test.pdf');
+    final imported = await rust.importBook(path: tmpFile('test.pdf'));
     expect(imported.error, isNull, reason: 'import: ${imported.error}');
     final book = imported.book!;
 
@@ -174,7 +174,7 @@ void main() {
   test('image book renders the image, not the previous PDF (regression)',
       () async {
     // Simulate "last opened PDF": open the sample PDF and render it.
-    final pdfOpen = await rust.openBook(storedPath: '/tmp/test.pdf');
+    final pdfOpen = await rust.openBook(storedPath: tmpFile('test.pdf'));
     expect(pdfOpen.error, isNull);
     final pdfRender = await rust.renderPage(
         bookId: 1, page: 0, zoom: 1.0, dpiScale: 1.0);
@@ -183,7 +183,7 @@ void main() {
     // Now open an 8x8 red PNG: the render must show the IMAGE (8x8), not
     // the PDF's first page (regression: the image pipeline used to keep
     // the previous PDF document open and rendered its page 1).
-    final pngPath = '/tmp/test_image.png';
+    final pngPath = tmpFile('test_image.png');
     File(pngPath).writeAsBytesSync(base64Decode(
         'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAEklEQVR4nGP4z8DwHx9mGBkKAMLXf4EvceABAAAAAElFTkSuQmCC'));
     final imported = await rust.importBook(path: pngPath);

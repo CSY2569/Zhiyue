@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart' show kSecondaryMouseButton;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 
 import 'package:rbwa/features/library/providers/library_providers.dart';
 import 'helpers/widget_harness.dart';
@@ -31,10 +32,10 @@ Book _book({int? categoryId}) => Book(
 
 /// 1x1 transparent PNG written to a temp file as a fake cover image.
 String _writeFakeCover() {
-  final p = '/tmp/rbwa_cover_test.png';
-  File(p).writeAsBytesSync(base64Decode(
+  final coverPath = p.join(Directory.systemTemp.path, 'rbwa_cover_test.png');
+  File(coverPath).writeAsBytesSync(base64Decode(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='));
-  return p;
+  return coverPath;
 }
 
 Widget _tile(Book book) => ProviderScope(

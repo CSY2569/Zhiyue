@@ -5,11 +5,17 @@
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File scripts/fetch_pdfium_windows.ps1
 #
-# The Windows bundle of the upstream project is a rolling release (no pinned
-# tag), so the script fetches the latest release; after download it verifies
-# the file is a valid PE DLL and prints its SHA-256 for audit.
+# Source: bblanchon/pdfium-binaries (rolling release, no pinned tag). GitHub
+# is fetched through a domestic acceleration proxy by default (override with
+# -Mirror or $env:PDFIUM_MIRROR; pass -Mirror "" for a direct connection);
+# after download the script verifies the file is a valid PE DLL and prints its
+# SHA-256 for audit.
 #
 # Requires: PowerShell 5.1+ (built-in tar supports .tgz on Win10 1803+).
+
+param(
+    [string]$Mirror = $(if ($env:PDFIUM_MIRROR) { $env:PDFIUM_MIRROR } else { "https://ghfast.top/" })
+)
 
 $ErrorActionPreference = "Stop"
 
@@ -26,8 +32,18 @@ $Url = "https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pd
 $Tgz = Join-Path $env:TEMP "pdfium-win-x64.tgz"
 $ExtractDir = Join-Path $env:TEMP "pdfium-win-x64-extract"
 
-Write-Host "Downloading $Url ..."
-Invoke-WebRequest -Uri $Url -OutFile $Tgz
+$DownloadUrl = if ($Mirror) { "$Mirror$Url" } else { $Url }
+Write-Host "Downloading $DownloadUrl ..."
+try {
+    Invoke-WebRequest -Uri $DownloadUrl -OutFile $Tgz
+} catch {
+    if ($Mirror) {
+        Write-Warning "镜像下载失败，回退到 GitHub 直连: $_"
+        Invoke-WebRequest -Uri $Url -OutFile $Tgz
+    } else {
+        throw
+    }
+}
 
 if (Test-Path $ExtractDir) { Remove-Item -Recurse -Force $ExtractDir }
 New-Item -ItemType Directory -Path $ExtractDir | Out-Null

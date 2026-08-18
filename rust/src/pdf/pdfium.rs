@@ -42,6 +42,9 @@ fn pdfium() -> AppResult<&'static Pdfium> {
         candidates.push(dir.join("lib"));
     }
     if let Ok(cwd) = std::env::current_dir() {
+        // Dev fallback: the repo keeps the fetched library in rust/libpdfium/
+        // (tests run with the workspace root as cwd).
+        candidates.push(cwd.join("rust").join("libpdfium"));
         candidates.push(cwd);
     }
 
@@ -57,7 +60,9 @@ fn pdfium() -> AppResult<&'static Pdfium> {
         .or_else(|| Pdfium::bind_to_system_library().ok())
         .ok_or_else(|| {
             AppError::Pdf(
-                "libpdfium not found: run scripts/fetch_pdfium.sh and rebuild".into(),
+                "libpdfium not found: run scripts/fetch_pdfium.sh (Linux) or \
+                 scripts/fetch_pdfium_windows.ps1 (Windows) and rebuild"
+                    .into(),
             )
         })?;
     let handle = Pdfium::new(bindings);

@@ -1,4 +1,4 @@
-# Downloads the PP-OCRv4 models for the RBWA full-page OCR engine
+﻿# Downloads the PP-OCRv4 models for the RBWA full-page OCR engine
 # (FEATURES 7.1.1 / 7.1.9). Windows counterpart of scripts/download_ocr_models.sh.
 #
 # Usage:

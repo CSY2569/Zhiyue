@@ -1,4 +1,4 @@
-; Inno Setup 安装脚本 —— 智阅（Windows x64）
+﻿; Inno Setup 安装脚本 —— 智阅（ZhiYue，Windows x64）
 ; 用法：安装 Inno Setup（https://jrsoftware.org/isinfo.php），
 ;       在 packaging\ 目录下编译本文件（右键 → Compile）。
 ; 产物：dist\ZhiYue-<version>-win-x64-setup.exe
@@ -14,6 +14,7 @@ DefaultDirName={autopf}\ZhiYue
 DefaultGroupName=智阅
 OutputDir=..\dist
 OutputBaseFilename=ZhiYue-0.1.0-win-x64-setup
+SetupIconFile=icon\setup.ico
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64
@@ -21,6 +22,9 @@ ArchitecturesAllowed=x64
 SetupLogging=yes
 UninstallDisplayName=智阅
 UninstallDisplayIcon={app}\ZhiYue.exe
+
+[Languages]
+Name: "chinesesimplified"; MessagesFile: "ChineseSimplified.isl"
 
 [Files]
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion

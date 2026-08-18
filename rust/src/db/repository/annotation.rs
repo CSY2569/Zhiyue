@@ -49,6 +49,8 @@ pub fn list(conn: &Connection, book_id: i64) -> AppResult<Vec<TextAnnotation>> {
 }
 
 /// Insert a new annotation; returns the new row id.
+// One param per persisted column keeps call sites (api.rs) explicit.
+#[allow(clippy::too_many_arguments)]
 pub fn create(
     conn: &Connection,
     book_id: i64,

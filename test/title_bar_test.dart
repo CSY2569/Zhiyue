@@ -21,7 +21,7 @@ void main() {
 
     // On /library: app title, no back button.
     expect(find.byType(AppTitleBar), findsOneWidget);
-    expect(find.text('RBWA'), findsOneWidget);
+    expect(find.text('智阅'), findsOneWidget);
     expect(find.byTooltip('返回书库'), findsNothing);
     expect(tester.takeException(), isNull,
         reason: 'library: ${tester.takeException()}');
@@ -42,7 +42,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.byTooltip('返回书库'), findsNothing);
-    expect(find.text('RBWA'), findsOneWidget);
+    expect(find.text('智阅'), findsOneWidget);
     expect(tester.takeException(), isNull,
         reason: 'back-to-library: ${tester.takeException()}');
   });

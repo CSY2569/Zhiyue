@@ -1,5 +1,5 @@
 name: rbwa
-description: "Read Book With AI - native AI-integrated local document reader"
+description: "智阅 (ZhiYue) - native AI-integrated local document reader"
 publish_to: 'none'
 
 version: 0.1.0+1

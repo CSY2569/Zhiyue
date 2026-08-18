@@ -835,6 +835,8 @@ pub fn list_image_annotations(book_id: i64) -> Vec<ImageAnnotation> {
 
 /// Create an image-layer mark (brush / shape / sticky / stamp). `payload`
 /// and `style` are kind-specific JSON strings (FEATURES 5.1-5.5).
+// Arg count is dictated by the FRB/Dart contract; no point in a params struct.
+#[allow(clippy::too_many_arguments)]
 pub fn create_image_annotation(
     book_id: i64,
     page: i64,
@@ -862,6 +864,7 @@ pub fn create_image_annotation(
 /// Update an image-layer mark in full (position / payload / style -- marks
 /// are selectable, movable and editable, FEATURES 5.1-5.5). Returns 1 on
 /// success.
+#[allow(clippy::too_many_arguments)]
 pub fn update_image_annotation(
     annotation_id: i64,
     x: f64,
