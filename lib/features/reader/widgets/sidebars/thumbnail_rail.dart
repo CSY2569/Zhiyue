@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/features/reader/providers/panel_layout.dart';
 import 'package:rbwa/features/reader/providers/thumbnail_cache.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
 
@@ -24,9 +25,11 @@ class _ThumbnailRailState extends ConsumerState<ThumbnailRail> {
   Widget build(BuildContext context) {
     final state = ref.watch(viewerProvider);
     final theme = Theme.of(context);
+    final width = ref.watch(
+        panelLayoutProvider.select((p) => p.thumbnailsWidth));
 
     return SizedBox(
-      width: 180,
+      width: width,
       child: Material(
         color: theme.colorScheme.surfaceContainerLow,
         child: state.pageCount == 0

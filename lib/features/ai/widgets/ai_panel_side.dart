@@ -6,6 +6,7 @@ import 'package:rbwa/features/ai/providers/ai_provider.dart';
 import 'package:rbwa/features/ai/widgets/ai_utils.dart';
 import 'package:rbwa/features/ai/widgets/message_bubble.dart'
     show AiMessageBubble, aiActionIcon;
+import 'package:rbwa/features/reader/providers/panel_layout.dart';
 import 'package:rbwa/src/rust/models/ai.dart';
 
 /// AI side panel (FEATURES 6.5): three-view state machine -- empty guide,
@@ -65,9 +66,11 @@ class _AiPanelSideState extends ConsumerState<AiPanelSide> {
     final active = state.threadOf(state.activeThreadId);
     // Input is disabled while an answer is streaming (no concurrent sends).
     final inputEnabled = state.streamingThreadId == null;
+    final width =
+        ref.watch(panelLayoutProvider.select((p) => p.aiPanelWidth));
 
     return SizedBox(
-      width: 320,
+      width: width,
       child: Material(
         color: theme.colorScheme.surfaceContainerLow,
         child: Column(

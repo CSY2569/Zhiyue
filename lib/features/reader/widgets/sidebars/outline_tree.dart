@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:rbwa/data/repositories/reader_repository.dart';
 import 'package:rbwa/features/reader/providers/outline_settings.dart';
+import 'package:rbwa/features/reader/providers/panel_layout.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
 import 'package:rbwa/src/rust/pdf/types.dart';
 
@@ -56,8 +57,10 @@ class _OutlineTreeState extends ConsumerState<OutlineTree> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final width =
+        ref.watch(panelLayoutProvider.select((p) => p.outlineWidth));
     return SizedBox(
-      width: 240,
+      width: width,
       child: Material(
         color: theme.colorScheme.surfaceContainerLow,
         child: _buildBody(theme),

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:rbwa/core/widgets/panel_resize_handle.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
 import 'package:rbwa/features/ai/widgets/ai_panel_side.dart';
 import 'package:rbwa/features/ai/widgets/result_card.dart';
@@ -14,6 +15,7 @@ import 'package:rbwa/features/annotation/widgets/floating_toolbar.dart';
 import 'package:rbwa/features/annotation/widgets/mark_toolbar.dart';
 import 'package:rbwa/features/annotation/widgets/note_composer.dart';
 import 'package:rbwa/features/annotation/widgets/note_popup.dart';
+import 'package:rbwa/features/reader/providers/panel_layout.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
 import 'package:rbwa/features/reader/widgets/pdf_page_scroll.dart';
 import 'package:rbwa/features/reader/widgets/reader_toolbar.dart';
@@ -193,13 +195,34 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 Expanded(
                   child: Row(
                     children: [
-                      if (state.openSidebar != null) _buildSidebar(state),
+                      if (state.openSidebar != null) ...[
+                        _buildSidebar(state),
+                        // Drag the sidebar's right edge to resize it (FEATURES
+                        // 3.4.4); the content Expanded reflows automatically.
+                        PanelResizeHandle(
+                          onResize: (dx) => ref
+                              .read(panelLayoutProvider.notifier)
+                              .resizeSidebar(state.openSidebar!, dx),
+                          onResizeEnd: () =>
+                              ref.read(panelLayoutProvider.notifier).commit(),
+                        ),
+                      ],
                       Expanded(child: _buildContent(context, state)),
-                      if (aiOpen)
+                      if (aiOpen) ...[
+                        // The AI panel is right-aligned: its left-edge handle
+                        // widens it when dragged left, so negate the delta.
+                        PanelResizeHandle(
+                          onResize: (dx) => ref
+                              .read(panelLayoutProvider.notifier)
+                              .resizeAiPanel(-dx),
+                          onResizeEnd: () =>
+                              ref.read(panelLayoutProvider.notifier).commit(),
+                        ),
                         AiPanelSide(
                           bookId: book?.id,
                           bookTitle: book?.title,
                         ),
+                      ],
                     ],
                   ),
                 ),
