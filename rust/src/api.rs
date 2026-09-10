@@ -1321,14 +1321,10 @@ async fn builtin_search_stream(
     };
     messages.insert(0, system_message(compose(ai::prompts::search_system(true))));
     let extras = ai::RequestExtras::from_config(config);
-    // Wrap the query in <text> tags (indirect prompt-injection defense:
-    // the query is selected page text the reader may not understand). A
-    // follow-up is user-typed, so it is passed verbatim like chat.
-    let wrapped_query = if is_follow_up {
-        query.to_string()
-    } else {
-        format!("<text>{query}</text>")
-    };
+    // Wrap the query in <text> tags (indirect prompt-injection defense: the
+    // query is selected page text the reader may not understand); a typed
+    // follow-up passes verbatim, exactly as the main stream_chat path does.
+    let wrapped_query = wrap_input(AiActionType::Search, query, is_follow_up);
     match ai::web_search_builtin(
         &config.base_url,
         &config.api_key,
@@ -1424,6 +1420,30 @@ pub struct OcrLineEdit {
     pub text: String,
 }
 
+/// Concatenate the recognized lines and (re)index the page for full-text
+/// search. The concatenation matches what the Dart char-box layer builds, so
+/// hit highlighting aligns with the line boxes. Shared by scan_page (fresh
+/// scan) and update_page_ocr_lines (manual correction) so the two never
+/// drift.
+fn index_ocr_result(
+    conn: &rusqlite::Connection,
+    book_id: i64,
+    page: i64,
+    result: &OcrResult,
+) {
+    let original: String = result.lines.iter().map(|l| l.text.as_str()).collect();
+    if !original.trim().is_empty() {
+        let _ = search_repo::index_page(
+            conn,
+            book_id,
+            page,
+            "ocr",
+            &original,
+            &crate::search::tokenize(&original),
+        );
+    }
+}
+
 /// Apply manual corrections to a page's cached OCR result (FEATURES 7.1.7):
 /// replace the text of the edited lines, persist the updated result, and
 /// re-index the page so full-text search sees the corrected text (the same
@@ -1444,18 +1464,7 @@ pub fn update_page_ocr_lines(
         }
     }
     let _ = ocr_repo::save_page_ocr(&conn, book_id, page, mode.as_str(), &result);
-    // Re-index the corrected text (same concatenation as scan_page).
-    let original: String = result.lines.iter().map(|l| l.text.as_str()).collect();
-    if !original.trim().is_empty() {
-        let _ = search_repo::index_page(
-            &conn,
-            book_id,
-            page,
-            "ocr",
-            &original,
-            &crate::search::tokenize(&original),
-        );
-    }
+    index_ocr_result(&conn, book_id, page, &result);
     Some(result)
 }
 
@@ -1520,23 +1529,11 @@ pub async fn scan_page(book_id: i64, page: i64, mode: OcrMode) -> ScanPageResult
         Ok(result) => {
             // Cache before returning so flips back are instant (7.1.4).
             // Incremental search index (M6, 3.5.1): scanned pages become
-            // searchable immediately. The text concatenates the recognized
-            // lines -- the same form the Dart char-box layer produces, so
-            // hit highlighting aligns with the line boxes.
-            let original: String = result.lines.iter().map(|l| l.text.as_str()).collect();
+            // searchable immediately.
             {
                 let conn = db::db();
                 let _ = ocr_repo::save_page_ocr(&conn, book_id, page, &mode_str, &result);
-                if !original.trim().is_empty() {
-                    let _ = search_repo::index_page(
-                        &conn,
-                        book_id,
-                        page,
-                        "ocr",
-                        &original,
-                        &crate::search::tokenize(&original),
-                    );
-                }
+                index_ocr_result(&conn, book_id, page, &result);
             }
             ScanPageResult {
                 lines: result.lines,

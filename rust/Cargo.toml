@@ -83,8 +83,9 @@ jieba-rs = "0.10.3"
 default = ["pdf", "ai", "ocr"]
 # Opt-in subsystem crates, enabled per milestone to keep the build lean.
 pdf = ["dep:pdfium-render", "dep:image"]
-# M4: AI streaming client. `image` provides PNG encoding for vision screenshots.
-ai = ["dep:reqwest", "dep:image"]
+# M4: AI streaming client (hand-written reqwest SSE). Vision screenshots are
+# sent as base64 data URLs, so no image-decoding dependency is needed here.
+ai = ["dep:reqwest"]
 # M5: local full-page OCR engine (rapidocr-core + onnxruntime). Without it
 # the OCR api layer falls back to an explicit "models not installed" error.
 ocr = ["dep:rapidocr-core", "dep:image"]

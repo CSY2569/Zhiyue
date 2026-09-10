@@ -126,12 +126,7 @@ fn build_request(model: &str, messages: Value, extras: &RequestExtras) -> Value 
 fn text_messages(history: &[AiMessage], user_input: &str) -> Value {
     let mut msgs: Vec<Value> = Vec::with_capacity(history.len() + 1);
     for m in history {
-        let role = match m.role {
-            AiRole::System => "system",
-            AiRole::User => "user",
-            AiRole::Assistant => "assistant",
-        };
-        msgs.push(json!({"role": role, "content": m.content}));
+        msgs.push(json!({"role": m.role.as_str(), "content": m.content}));
     }
     msgs.push(json!({"role": "user", "content": user_input}));
     Value::Array(msgs)
@@ -238,18 +233,30 @@ fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
         .position(|w| w == needle)
 }
 
-/// Parse one SSE event into a text chunk (None for role-only / `[DONE]` /
-/// non-content events).
-fn parse_event(event: &[u8]) -> Option<String> {
+/// The `data:` payload of one SSE event (trimmed); None when absent or empty.
+/// Both the chat-completions and Responses parsers frame events identically
+/// and only differ in how they interpret the JSON, so the extraction lives
+/// here.
+fn sse_data(event: &[u8]) -> Option<String> {
     let text = String::from_utf8_lossy(event);
     let data = text
         .lines()
-        .find_map(|l| l.strip_prefix("data:").map(str::trim))
-        .unwrap_or("");
-    if data.is_empty() || data == "[DONE]" {
+        .find_map(|l| l.strip_prefix("data:").map(str::trim))?;
+    if data.is_empty() {
+        None
+    } else {
+        Some(data.to_string())
+    }
+}
+
+/// Parse one SSE event into a text chunk (None for role-only / `[DONE]` /
+/// non-content events).
+fn parse_event(event: &[u8]) -> Option<String> {
+    let data = sse_data(event)?;
+    if data == "[DONE]" {
         return None;
     }
-    let value: Value = serde_json::from_str(data).ok()?;
+    let value: Value = serde_json::from_str(&data).ok()?;
     value
         .get("choices")?
         .as_array()?
@@ -301,19 +308,15 @@ fn responses_body(
     let mut instructions = String::new();
     let mut items: Vec<Value> = Vec::new();
     for m in history {
-        match m.role {
-            AiRole::System => {
-                // Merge multiple system messages into the single
-                // instructions slot.
-                if !instructions.is_empty() {
-                    instructions.push('\n');
-                }
-                instructions.push_str(&m.content);
+        if m.role == AiRole::System {
+            // Merge multiple system messages into the single instructions
+            // slot; all other roles become input items.
+            if !instructions.is_empty() {
+                instructions.push('\n');
             }
-            AiRole::User => items.push(json!({"role": "user", "content": m.content})),
-            AiRole::Assistant => {
-                items.push(json!({"role": "assistant", "content": m.content}))
-            }
+            instructions.push_str(&m.content);
+        } else {
+            items.push(json!({"role": m.role.as_str(), "content": m.content}));
         }
     }
     items.push(json!({"role": "user", "content": user_input}));
@@ -372,15 +375,8 @@ fn parse_responses_sse(
 /// Parse one Responses API event: `response.output_text.delta` -> text;
 /// `response.failed` -> error; anything else is ignored.
 fn parse_responses_event(event: &[u8]) -> Option<AppResult<String>> {
-    let text = String::from_utf8_lossy(event);
-    let data = text
-        .lines()
-        .find_map(|l| l.strip_prefix("data:").map(str::trim))
-        .unwrap_or("");
-    if data.is_empty() {
-        return None;
-    }
-    let value: Value = serde_json::from_str(data).ok()?;
+    let data = sse_data(event)?;
+    let value: Value = serde_json::from_str(&data).ok()?;
     match value["type"].as_str()? {
         "response.output_text.delta" => {
             let delta = value["delta"].as_str().unwrap_or("");

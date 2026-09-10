@@ -10,7 +10,6 @@ import 'package:rbwa/features/annotation/providers/selection_provider.dart';
 import 'package:rbwa/features/annotation/selection_geometry.dart';
 import 'package:rbwa/features/reader/providers/ocr_helpers.dart';
 import 'package:rbwa/features/reader/providers/scan_provider.dart';
-import 'package:rbwa/src/rust/api.dart' as rust;
 import 'package:rbwa/src/rust/models/annotation.dart';
 import 'package:rbwa/src/rust/ocr.dart' show OcrLine;
 import 'package:rbwa/src/rust/pdf/types.dart' show CharBox;
@@ -310,7 +309,7 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
           widget.bookId,
           widget.page,
           mode,
-          [rust.OcrLineEdit(lineIndex: index, text: newText.trim())],
+          [(lineIndex: index, text: newText.trim())],
         );
     if (!mounted || updated == null) return;
     // Refresh the invisible text layer and the low-confidence markers.

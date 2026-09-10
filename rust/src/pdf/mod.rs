@@ -21,8 +21,6 @@ mod pdfium;
 #[cfg(feature = "pdf")]
 mod image_book;
 
-pub use types::{CharBox, OutlineEntry, PageBitmap};
-
 #[cfg(feature = "pdf")]
 pub use pdfium::{
     close, extract_document_text, extract_text, open, outline, page_has_text, render_page,

@@ -181,19 +181,25 @@ class ReaderRepository {
       rust.scanPage(bookId: bookId, page: page, mode: mode);
 
   /// Apply manual corrections to a page's cached OCR result (7.1.7): each
-  /// [edits] entry replaces the text of one recognized line; the updated
-  /// result is persisted and re-indexed for full-text search.
+  /// entry replaces the text of one recognized line (`lineIndex`, `text`);
+  /// the updated result is persisted and re-indexed for full-text search.
+  ///
+  /// Takes plain Dart records so UI callers never construct an FRB type
+  /// (this repository is the only layer that touches `lib/src/rust/*`).
   Future<OcrResult?> updatePageOcrLines(
     int bookId,
     int page,
     rust.OcrMode mode,
-    List<rust.OcrLineEdit> edits,
+    List<({int lineIndex, String text})> edits,
   ) =>
       rust.updatePageOcrLines(
         bookId: bookId,
         page: page,
         mode: mode,
-        edits: edits,
+        edits: [
+          for (final e in edits)
+            rust.OcrLineEdit(lineIndex: e.lineIndex, text: e.text),
+        ],
       );
 }
 
