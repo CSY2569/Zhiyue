@@ -2028,6 +2028,7 @@ impl SseDecode for crate::models::ai::AiConfig {
         let mut var_enableReasoning = <bool>::sse_decode(deserializer);
         let mut var_reasoningEffort = <String>::sse_decode(deserializer);
         let mut var_temperature = <f64>::sse_decode(deserializer);
+        let mut var_apiProtocol = <String>::sse_decode(deserializer);
         let mut var_promptTemplate = <String>::sse_decode(deserializer);
         let mut var_customPrompt = <String>::sse_decode(deserializer);
         let mut var_customPrompts =
@@ -2051,6 +2052,7 @@ impl SseDecode for crate::models::ai::AiConfig {
             enable_reasoning: var_enableReasoning,
             reasoning_effort: var_reasoningEffort,
             temperature: var_temperature,
+            api_protocol: var_apiProtocol,
             prompt_template: var_promptTemplate,
             custom_prompt: var_customPrompt,
             custom_prompts: var_customPrompts,
@@ -3055,6 +3057,7 @@ impl flutter_rust_bridge::IntoDart for crate::models::ai::AiConfig {
             self.enable_reasoning.into_into_dart().into_dart(),
             self.reasoning_effort.into_into_dart().into_dart(),
             self.temperature.into_into_dart().into_dart(),
+            self.api_protocol.into_into_dart().into_dart(),
             self.prompt_template.into_into_dart().into_dart(),
             self.custom_prompt.into_into_dart().into_dart(),
             self.custom_prompts.into_into_dart().into_dart(),
@@ -3801,6 +3804,7 @@ impl SseEncode for crate::models::ai::AiConfig {
         <bool>::sse_encode(self.enable_reasoning, serializer);
         <String>::sse_encode(self.reasoning_effort, serializer);
         <f64>::sse_encode(self.temperature, serializer);
+        <String>::sse_encode(self.api_protocol, serializer);
         <String>::sse_encode(self.prompt_template, serializer);
         <String>::sse_encode(self.custom_prompt, serializer);
         <Vec<crate::models::ai::CustomPrompt>>::sse_encode(self.custom_prompts, serializer);

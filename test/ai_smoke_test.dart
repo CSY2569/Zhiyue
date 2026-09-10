@@ -114,6 +114,7 @@ AiConfig _cfg({
   bool searchUseBuiltin = false,
   bool includeBookHistory = true,
   String promptTemplate = 'general',
+  String apiProtocol = 'chat_completions',
 }) =>
     AiConfig(
       baseUrl: baseUrl,
@@ -130,6 +131,7 @@ AiConfig _cfg({
       enableReasoning: false,
       reasoningEffort: 'medium',
       temperature: 0.7,
+      apiProtocol: apiProtocol,
       promptTemplate: promptTemplate,
       customPrompt: '',
       customPrompts: const [],
@@ -517,6 +519,54 @@ void main() {
     }
     expect(error, contains('400'));
     expect(error, contains('Model Not Exist'));
+    await mock.stop();
+  }, timeout: const Timeout(Duration(seconds: 30)));
+
+  test('api_protocol=responses routes a chat turn through /responses',
+      () async {
+    final mock = MockOpenAi(chunks: ['要点一', '要点二']);
+    await mock.start();
+    await rust.setAiConfig(config: _cfg(
+      baseUrl: mock.baseUrl,
+      textModel: 'gpt-5',
+      apiProtocol: 'responses',
+    ));
+
+    final out = await collect(rust.streamChat(
+        action: AiActionType.chat, text: '你好', history: const [], isFollowUp: false));
+    expect(out, '要点一要点二');
+
+    // The plain-text Responses call hits /responses but forces no tools.
+    expect(mock.requestPaths.single, '/responses');
+    final req = mock.requests.single;
+    expect(req['instructions'], isNotNull);
+    expect(req.containsKey('tools'), isFalse);
+    await mock.stop();
+  }, timeout: const Timeout(Duration(seconds: 30)));
+
+  test('api_protocol=responses falls back to chat completions on failure',
+      () async {
+    // /responses answers 500; the fallback chat-completions call succeeds.
+    final mock = MockOpenAi(
+      chunks: const ['回退答案'],
+      errorStatus: 500,
+      errorBody: 'responses unavailable',
+      errorPath: '/responses',
+    );
+    await mock.start();
+    await rust.setAiConfig(config: _cfg(
+      baseUrl: mock.baseUrl,
+      textModel: 'gpt-5',
+      apiProtocol: 'responses',
+    ));
+
+    final out = await collect(rust.streamChat(
+        action: AiActionType.chat, text: '你好', history: const [], isFollowUp: false));
+    expect(out, '回退答案');
+
+    // Tried Responses first, then completed via chat completions.
+    expect(mock.requestPaths, contains('/responses'));
+    expect(mock.requestPaths, contains('/v1/chat/completions'));
     await mock.stop();
   }, timeout: const Timeout(Duration(seconds: 30)));
 }

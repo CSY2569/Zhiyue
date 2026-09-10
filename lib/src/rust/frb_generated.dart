@@ -2033,8 +2033,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   AiConfig dco_decode_ai_config(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 20)
-      throw Exception('unexpected arr length: expect 20 but see ${arr.length}');
+    if (arr.length != 21)
+      throw Exception('unexpected arr length: expect 21 but see ${arr.length}');
     return AiConfig(
       baseUrl: dco_decode_String(arr[0]),
       apiKey: dco_decode_String(arr[1]),
@@ -2052,10 +2052,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       enableReasoning: dco_decode_bool(arr[13]),
       reasoningEffort: dco_decode_String(arr[14]),
       temperature: dco_decode_f_64(arr[15]),
-      promptTemplate: dco_decode_String(arr[16]),
-      customPrompt: dco_decode_String(arr[17]),
-      customPrompts: dco_decode_list_custom_prompt(arr[18]),
-      templateOverrides: dco_decode_Map_String_String_None(arr[19]),
+      apiProtocol: dco_decode_String(arr[16]),
+      promptTemplate: dco_decode_String(arr[17]),
+      customPrompt: dco_decode_String(arr[18]),
+      customPrompts: dco_decode_list_custom_prompt(arr[19]),
+      templateOverrides: dco_decode_Map_String_String_None(arr[20]),
     );
   }
 
@@ -2791,6 +2792,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_enableReasoning = sse_decode_bool(deserializer);
     var var_reasoningEffort = sse_decode_String(deserializer);
     var var_temperature = sse_decode_f_64(deserializer);
+    var var_apiProtocol = sse_decode_String(deserializer);
     var var_promptTemplate = sse_decode_String(deserializer);
     var var_customPrompt = sse_decode_String(deserializer);
     var var_customPrompts = sse_decode_list_custom_prompt(deserializer);
@@ -2812,6 +2814,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       enableReasoning: var_enableReasoning,
       reasoningEffort: var_reasoningEffort,
       temperature: var_temperature,
+      apiProtocol: var_apiProtocol,
       promptTemplate: var_promptTemplate,
       customPrompt: var_customPrompt,
       customPrompts: var_customPrompts,
@@ -3716,6 +3719,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.enableReasoning, serializer);
     sse_encode_String(self.reasoningEffort, serializer);
     sse_encode_f_64(self.temperature, serializer);
+    sse_encode_String(self.apiProtocol, serializer);
     sse_encode_String(self.promptTemplate, serializer);
     sse_encode_String(self.customPrompt, serializer);
     sse_encode_list_custom_prompt(self.customPrompts, serializer);

@@ -32,6 +32,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _searchApiKey = TextEditingController();
   bool _webSearch = false;
   bool _searchBuiltin = false;
+  /// Text protocol: 'chat_completions' (default) or 'responses'.
+  String _apiProtocol = 'chat_completions';
   String _ocrMode = 'high_precision';
   bool _includeBookHistory = true;
   bool _enableReasoning = false;
@@ -80,6 +82,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _searchBaseUrl.text = config.searchBaseUrl ?? '';
     _searchApiKey.text = config.searchApiKey ?? '';
     _searchBuiltin = config.searchUseBuiltin;
+    _apiProtocol = config.apiProtocol == 'responses'
+        ? 'responses'
+        : 'chat_completions';
     _webSearch = config.webSearchEnabled;
     _ocrMode = config.ocrMode == 'fast' ? 'fast' : 'high_precision';
     _includeBookHistory = config.includeBookHistory;
@@ -119,6 +124,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           : _searchApiKey.text.trim(),
       searchUseBuiltin: _searchBuiltin,
       webSearchEnabled: _webSearch,
+      apiProtocol: _apiProtocol,
       ocrMode: _ocrMode,
       includeBookHistory: _includeBookHistory,
       enableReasoning: _enableReasoning,
@@ -193,6 +199,29 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             onChanged: (_) => setState(() {}), // re-evaluate save button
           ),
           _Field(controller: _textModel, label: '文本模型', hint: 'gpt-4o-mini'),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('API 协议'),
+            subtitle: Text(_apiProtocol == 'responses'
+                ? 'Responses API：OpenAI 新协议，兼容 o 系列 / GPT-5；识图仍走 Chat Completions，失败会自动回退'
+                : 'Chat Completions：兼容范围最广（默认）'),
+            trailing: SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(
+                    value: 'chat_completions',
+                    label: Text('Chat'),
+                    icon: Icon(Icons.forum_outlined, size: 16)),
+                ButtonSegment(
+                    value: 'responses',
+                    label: Text('Responses'),
+                    icon: Icon(Icons.auto_awesome_outlined, size: 16)),
+              ],
+              selected: {_apiProtocol},
+              showSelectedIcon: false,
+              onSelectionChanged: (s) =>
+                  setState(() => _apiProtocol = s.first),
+            ),
+          ),
           _Field(controller: _targetLang, label: '翻译目标语言', hint: '中文'),
           _SectionTitle('视觉配置（可选，不填回退通用配置）', theme),
           _Field(controller: _visionBaseUrl, label: '视觉 Base URL', hint: '留空 = 使用通用配置'),

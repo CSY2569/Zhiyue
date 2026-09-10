@@ -150,6 +150,11 @@ pub struct AiConfig {
     /// Sampling temperature for text replies (0.0-2.0, OpenAI range).
     #[serde(default = "default_temperature")]
     pub temperature: f64,
+    /// Text protocol: "chat_completions" (default) or "responses". The latter
+    /// routes text actions through the OpenAI Responses API and falls back to
+    /// chat completions when the provider rejects it.
+    #[serde(default = "default_api_protocol")]
+    pub api_protocol: String,
     /// Role template for text replies: "general" | "academic" | "novel" |
     /// "tech" | "language" | "custom" (the role segment is prepended to the
     /// per-action system prompt).
@@ -193,6 +198,10 @@ fn default_temperature() -> f64 {
     0.7
 }
 
+fn default_api_protocol() -> String {
+    "chat_completions".to_string()
+}
+
 fn default_prompt_template() -> String {
     "general".to_string()
 }
@@ -219,6 +228,7 @@ impl Default for AiConfig {
             enable_reasoning: false,
             reasoning_effort: default_reasoning_effort(),
             temperature: default_temperature(),
+            api_protocol: default_api_protocol(),
             prompt_template: default_prompt_template(),
             custom_prompt: String::new(),
             custom_prompts: Vec::new(),
@@ -283,6 +293,7 @@ mod tests {
             enable_reasoning: true,
             reasoning_effort: "high".into(),
             temperature: 0.3,
+            api_protocol: "responses".into(),
             prompt_template: "tech".into(),
             custom_prompt: "自定义角色".into(),
             custom_prompts: vec![
@@ -312,6 +323,7 @@ mod tests {
         assert!(back.enable_reasoning);
         assert_eq!(back.reasoning_effort, "high");
         assert!((back.temperature - 0.3).abs() < 1e-9);
+        assert_eq!(back.api_protocol, "responses");
         assert_eq!(back.prompt_template, "tech");
         assert_eq!(back.custom_prompt, "自定义角色");
         assert_eq!(back.custom_prompts.len(), 1);
@@ -332,6 +344,7 @@ mod tests {
         assert!(!legacy.enable_reasoning);
         assert_eq!(legacy.reasoning_effort, "medium");
         assert!((legacy.temperature - 0.7).abs() < 1e-9);
+        assert_eq!(legacy.api_protocol, "chat_completions");
         assert_eq!(legacy.prompt_template, "general");
         assert!(legacy.custom_prompts.is_empty());
     }

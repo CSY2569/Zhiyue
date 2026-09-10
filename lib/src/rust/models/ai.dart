@@ -61,6 +61,11 @@ class AiConfig {
   /// Sampling temperature for text replies (0.0-2.0, OpenAI range).
   final double temperature;
 
+  /// Text protocol: "chat_completions" (default) or "responses". The latter
+  /// routes text actions through the OpenAI Responses API and falls back to
+  /// chat completions when the provider rejects it.
+  final String apiProtocol;
+
   /// Role template for text replies: "general" | "academic" | "novel" |
   /// "tech" | "language" | "custom" (the role segment is prepended to the
   /// per-action system prompt).
@@ -96,6 +101,7 @@ class AiConfig {
     required this.enableReasoning,
     required this.reasoningEffort,
     required this.temperature,
+    required this.apiProtocol,
     required this.promptTemplate,
     required this.customPrompt,
     required this.customPrompts,
@@ -120,6 +126,7 @@ class AiConfig {
       enableReasoning.hashCode ^
       reasoningEffort.hashCode ^
       temperature.hashCode ^
+      apiProtocol.hashCode ^
       promptTemplate.hashCode ^
       customPrompt.hashCode ^
       customPrompts.hashCode ^
@@ -146,6 +153,7 @@ class AiConfig {
           enableReasoning == other.enableReasoning &&
           reasoningEffort == other.reasoningEffort &&
           temperature == other.temperature &&
+          apiProtocol == other.apiProtocol &&
           promptTemplate == other.promptTemplate &&
           customPrompt == other.customPrompt &&
           customPrompts == other.customPrompts &&

@@ -286,15 +286,17 @@ fn responses_endpoint(base_url: &str) -> String {
     format!("{base}/responses")
 }
 
-/// Responses API body for built-in web search: the first system message
-/// becomes `instructions` (the API's system slot), the rest of the history is
-/// converted to input items, and the `web_search` tool is forced so the
-/// server executes the search and answers from the results.
+/// Responses API body: the first system message becomes `instructions` (the
+/// API's system slot), the rest of the history is converted to input items.
+/// When [web_search] is set the `web_search` tool is forced so the server
+/// runs the search and the model answers from the results; a plain text call
+/// passes `false` and sends no tools.
 fn responses_body(
     model: &str,
     history: &[AiMessage],
     user_input: &str,
     extras: &RequestExtras,
+    web_search: bool,
 ) -> Value {
     let mut instructions = String::new();
     let mut items: Vec<Value> = Vec::new();
@@ -319,10 +321,12 @@ fn responses_body(
         "model": model,
         "instructions": instructions,
         "input": items,
-        "tools": [{"type": "web_search"}],
-        "tool_choice": {"type": "web_search"},
         "stream": true,
     });
+    if web_search {
+        body["tools"] = json!([{"type": "web_search"}]);
+        body["tool_choice"] = json!({"type": "web_search"});
+    }
     if let Some(t) = extras.temperature {
         body["temperature"] = json!(t);
     }
@@ -410,8 +414,31 @@ pub(crate) async fn web_search_builtin(
 ) -> AppResult<ChunkStream> {
     let http = OpenAiClient::http_client()?;
     let url = responses_endpoint(base_url);
-    let body = responses_body(model, history, query, extras);
+    let body = responses_body(model, history, query, extras, true);
     responses_stream_request(http, url, api_key, body).await
+}
+
+/// Plain-text chat through the Responses API (设置 → API 协议 = Responses):
+/// the same endpoint / SSE parsing as the built-in search, but no tools are
+/// sent -- this is a general-purpose conversational call. Used for every text
+/// action (translate / explain / search / chat) when the user picks the
+/// Responses protocol; the caller falls back to chat completions on error.
+pub(crate) async fn responses_chat(
+    config: &AiConfig,
+    history: &[AiMessage],
+    user_input: &str,
+) -> AppResult<ChunkStream> {
+    let http = OpenAiClient::http_client()?;
+    let url = responses_endpoint(&config.base_url);
+    let extras = RequestExtras::from_config(config);
+    let body = responses_body(
+        &config.text_model,
+        history,
+        user_input,
+        &extras,
+        false,
+    );
+    responses_stream_request(http, url, &config.api_key, body).await
 }
 
 /// `web_search` against a specific endpoint (parameterized for tests).
@@ -465,6 +492,20 @@ impl AiClient for OpenAiClient {
         user_input: &str,
     ) -> impl Future<Output = AppResult<ChunkStream>> + Send {
         async move {
+            // 设置 → API 协议: route text through the Responses API when
+            // selected. Providers that do not implement it (or reject the
+            // body) fall back to chat completions below, so the setting can
+            // never make the app unusable.
+            if config.api_protocol == "responses" {
+                match responses_chat(config, history, user_input).await {
+                    Ok(stream) => return Ok(stream),
+                    Err(e) => {
+                        tracing::warn!(
+                            "Responses API failed ({e}); falling back to chat completions"
+                        );
+                    }
+                }
+            }
             let http = Self::http_client()?;
             let messages = text_messages(history, user_input);
             let url = Self::endpoint(&config.base_url);
@@ -628,9 +669,13 @@ mod tests {
                 temperature: None,
                 reasoning_effort: Some("low".into()),
             },
+            false,
         );
         assert_eq!(body["reasoning"]["effort"], "low");
         assert!(body.get("temperature").is_none());
+        // A plain text call sends no tools.
+        assert!(body.get("tools").is_none());
+        assert!(body.get("tool_choice").is_none());
     }
 
     #[test]
@@ -674,7 +719,7 @@ mod tests {
             },
         ];
         let body = responses_body(
-            "deepseek-v4-flash", &history, "量子计算", &RequestExtras::default());
+            "deepseek-v4-flash", &history, "量子计算", &RequestExtras::default(), true);
         assert_eq!(body["model"], "deepseek-v4-flash");
         assert_eq!(body["instructions"], "你正在执行联网搜索。");
         assert_eq!(body["stream"], true);
@@ -748,6 +793,108 @@ data: {"type":"response.completed"}
         assert!(req.contains("\"tools\":[{\"type\":\"web_search\"}]"), "{req}");
         assert!(req.contains("\"tool_choice\":{\"type\":\"web_search\"}"), "{req}");
         assert!(req.contains("\"instructions\":\"你正在执行联网搜索。\""), "{req}");
+    }
+
+    /// Plain-text Responses call (设置 → API 协议 = Responses): streams text
+    /// from /responses but sends no tools, unlike the search variant.
+    #[tokio::test]
+    async fn responses_chat_streams_without_tools() {
+        let events = r#"data: {"type":"response.output_text.delta","delta":"你好"}
+
+data: {"type":"response.output_text.delta","delta":"，世界"}
+
+data: {"type":"response.completed"}
+
+"#;
+        let (base, mut req_rx) = mock_responses_server(events, "200 OK").await;
+        let config = AiConfig {
+            base_url: base.clone(),
+            api_key: "test-key".into(),
+            text_model: "gpt-5".into(),
+            api_protocol: "responses".into(),
+            ..Default::default()
+        };
+        let history = [AiMessage {
+            id: -1,
+            thread_id: -1,
+            role: AiRole::System,
+            content: "你是一个助手。".into(),
+            image_path: None,
+            action_type: None,
+            created_at: String::new(),
+        }];
+        let mut stream = responses_chat(&config, &history, "你好").await.unwrap();
+        let mut out = String::new();
+        while let Some(chunk) = stream.next().await {
+            out.push_str(&chunk.unwrap());
+        }
+        assert_eq!(out, "你好，世界");
+
+        let req = req_rx.recv().await.unwrap();
+        assert!(req.starts_with("POST /responses HTTP/1.1"), "{req}");
+        assert!(req.contains("\"instructions\":\"你是一个助手。\""), "{req}");
+        // A general text call must not force the web_search tool.
+        assert!(!req.contains("web_search"), "{req}");
+    }
+
+    #[tokio::test]
+    async fn stream_chat_falls_back_to_completions_when_responses_fails() {
+        // A Responses-selected config pointed at a host that only serves
+        // chat completions (404 on /responses) must still answer.
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(4);
+        tokio::spawn(async move {
+            // First request: /responses -> 404. Second: /v1/chat/completions
+            // -> a normal chat SSE stream.
+            for _ in 0..2 {
+                let (mut sock, _) = listener.accept().await.unwrap();
+                let req = read_request(&mut sock).await;
+                let is_responses = req.starts_with("POST /responses ");
+                let _ = tx.send(req).await;
+                let resp = if is_responses {
+                    "HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\n\
+                     Content-Length: 23\r\nConnection: close\r\n\r\n\
+                     {\"error\":\"not found\"}"
+                        .to_string()
+                } else {
+                    let events = "data: {\"choices\":[{\"delta\":{\"content\":\"回退成功\"}}]}\n\n\
+                                  data: [DONE]\n\n";
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\
+                         Content-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        events.len(),
+                        events
+                    )
+                };
+                let _ = sock.write_all(resp.as_bytes()).await;
+            }
+        });
+
+        let config = AiConfig {
+            base_url: format!("http://127.0.0.1:{port}/v1"),
+            api_key: "k".into(),
+            text_model: "m".into(),
+            api_protocol: "responses".into(),
+            ..Default::default()
+        };
+        let mut stream = OpenAiClient
+            .stream_chat(&config, &[], "hi")
+            .await
+            .unwrap();
+        let mut out = String::new();
+        while let Some(chunk) = stream.next().await {
+            out.push_str(&chunk.unwrap());
+        }
+        assert_eq!(out, "回退成功");
+
+        let first = rx.recv().await.unwrap();
+        let second = rx.recv().await.unwrap();
+        assert!(first.starts_with("POST /responses "), "{first}");
+        assert!(
+            second.starts_with("POST /v1/chat/completions "),
+            "fallback must hit chat completions: {second}"
+        );
     }
 
     #[tokio::test]

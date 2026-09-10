@@ -43,6 +43,7 @@ class FakeAiRepo extends AiRepository {
         enableReasoning: false,
         reasoningEffort: 'medium',
         temperature: 0.7,
+        apiProtocol: 'chat_completions',
         promptTemplate: 'general',
         customPrompt: '',
         customPrompts: const [],

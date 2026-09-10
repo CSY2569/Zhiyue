@@ -67,7 +67,34 @@ void main() {
     expect(repo.saved!.reasoningEffort, 'medium');
     expect(repo.saved!.temperature, 0.7);
     expect(repo.saved!.promptTemplate, 'general');
+    // Protocol defaults to Chat Completions when untouched.
+    expect(repo.saved!.apiProtocol, 'chat_completions');
     expect(find.text('AI 配置已保存'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('settings page switches the API protocol to Responses',
+      (tester) async {
+    final repo = FakeAiRepo();
+    await tester.pumpWidget(_scope(const SettingsPage(), repo));
+    await tester.pumpAndSettle();
+
+    // The API 协议 control sits next to the text model.
+    final responses = find.widgetWithText(SegmentedButton<String>, 'Responses');
+    await tester.ensureVisible(responses);
+    await tester.pump();
+    await tester.tap(find.text('Responses'));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('保存 AI 配置'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.widgetWithText(FilledButton, '保存 AI 配置'));
+    await tester.pumpAndSettle();
+
+    expect(repo.saved!.apiProtocol, 'responses');
     expect(tester.takeException(), isNull);
   });
 
