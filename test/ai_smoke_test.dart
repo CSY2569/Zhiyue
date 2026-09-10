@@ -124,6 +124,8 @@ AiConfig _cfg({
       visionBaseUrl: null,
       visionApiKey: null,
       translateTargetLang: '中文',
+      translateCustomLangs: const [],
+      modelSupportsVision: false,
       webSearchEnabled: webSearchEnabled,
       searchUseBuiltin: searchUseBuiltin,
       ocrMode: 'high_precision',
@@ -136,6 +138,13 @@ AiConfig _cfg({
       customPrompt: '',
       customPrompts: const [],
       templateOverrides: const {},
+      embeddingEnabled: false,
+      embeddingBaseUrl: null,
+      embeddingApiKey: null,
+      embeddingModel: '',
+      vectorDbUrl: null,
+      vectorDbApiKey: null,
+      vectorDbCollection: '',
     );
 
 /// Drain a stream until it closes; returns the chunks joined. Errors abort

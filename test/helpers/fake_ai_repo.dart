@@ -36,6 +36,8 @@ class FakeAiRepo extends AiRepository {
         visionBaseUrl: null,
         visionApiKey: null,
         translateTargetLang: '中文',
+        translateCustomLangs: const [],
+        modelSupportsVision: false,
         webSearchEnabled: true,
         searchUseBuiltin: false,
         ocrMode: ocrMode,
@@ -48,6 +50,13 @@ class FakeAiRepo extends AiRepository {
         customPrompt: '',
         customPrompts: const [],
         templateOverrides: const {},
+        embeddingEnabled: false,
+        embeddingBaseUrl: null,
+        embeddingApiKey: null,
+        embeddingModel: '',
+        vectorDbUrl: null,
+        vectorDbApiKey: null,
+        vectorDbCollection: '',
       );
 
   @override

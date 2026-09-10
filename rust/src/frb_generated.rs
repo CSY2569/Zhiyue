@@ -2022,6 +2022,8 @@ impl SseDecode for crate::models::ai::AiConfig {
         let mut var_searchBaseUrl = <Option<String>>::sse_decode(deserializer);
         let mut var_searchApiKey = <Option<String>>::sse_decode(deserializer);
         let mut var_translateTargetLang = <String>::sse_decode(deserializer);
+        let mut var_translateCustomLangs = <Vec<String>>::sse_decode(deserializer);
+        let mut var_modelSupportsVision = <bool>::sse_decode(deserializer);
         let mut var_webSearchEnabled = <bool>::sse_decode(deserializer);
         let mut var_ocrMode = <String>::sse_decode(deserializer);
         let mut var_includeBookHistory = <bool>::sse_decode(deserializer);
@@ -2035,6 +2037,13 @@ impl SseDecode for crate::models::ai::AiConfig {
             <Vec<crate::models::ai::CustomPrompt>>::sse_decode(deserializer);
         let mut var_templateOverrides =
             <std::collections::HashMap<String, String>>::sse_decode(deserializer);
+        let mut var_embeddingEnabled = <bool>::sse_decode(deserializer);
+        let mut var_embeddingBaseUrl = <Option<String>>::sse_decode(deserializer);
+        let mut var_embeddingApiKey = <Option<String>>::sse_decode(deserializer);
+        let mut var_embeddingModel = <String>::sse_decode(deserializer);
+        let mut var_vectorDbUrl = <Option<String>>::sse_decode(deserializer);
+        let mut var_vectorDbApiKey = <Option<String>>::sse_decode(deserializer);
+        let mut var_vectorDbCollection = <String>::sse_decode(deserializer);
         return crate::models::ai::AiConfig {
             base_url: var_baseUrl,
             api_key: var_apiKey,
@@ -2046,6 +2055,8 @@ impl SseDecode for crate::models::ai::AiConfig {
             search_base_url: var_searchBaseUrl,
             search_api_key: var_searchApiKey,
             translate_target_lang: var_translateTargetLang,
+            translate_custom_langs: var_translateCustomLangs,
+            model_supports_vision: var_modelSupportsVision,
             web_search_enabled: var_webSearchEnabled,
             ocr_mode: var_ocrMode,
             include_book_history: var_includeBookHistory,
@@ -2057,6 +2068,13 @@ impl SseDecode for crate::models::ai::AiConfig {
             custom_prompt: var_customPrompt,
             custom_prompts: var_customPrompts,
             template_overrides: var_templateOverrides,
+            embedding_enabled: var_embeddingEnabled,
+            embedding_base_url: var_embeddingBaseUrl,
+            embedding_api_key: var_embeddingApiKey,
+            embedding_model: var_embeddingModel,
+            vector_db_url: var_vectorDbUrl,
+            vector_db_api_key: var_vectorDbApiKey,
+            vector_db_collection: var_vectorDbCollection,
         };
     }
 }
@@ -2374,6 +2392,18 @@ impl SseDecode for crate::api::InitResult {
             schema_version: var_schemaVersion,
             error: var_error,
         };
+    }
+}
+
+impl SseDecode for Vec<String> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<String>::sse_decode(deserializer));
+        }
+        return ans_;
     }
 }
 
@@ -3051,6 +3081,8 @@ impl flutter_rust_bridge::IntoDart for crate::models::ai::AiConfig {
             self.search_base_url.into_into_dart().into_dart(),
             self.search_api_key.into_into_dart().into_dart(),
             self.translate_target_lang.into_into_dart().into_dart(),
+            self.translate_custom_langs.into_into_dart().into_dart(),
+            self.model_supports_vision.into_into_dart().into_dart(),
             self.web_search_enabled.into_into_dart().into_dart(),
             self.ocr_mode.into_into_dart().into_dart(),
             self.include_book_history.into_into_dart().into_dart(),
@@ -3062,6 +3094,13 @@ impl flutter_rust_bridge::IntoDart for crate::models::ai::AiConfig {
             self.custom_prompt.into_into_dart().into_dart(),
             self.custom_prompts.into_into_dart().into_dart(),
             self.template_overrides.into_into_dart().into_dart(),
+            self.embedding_enabled.into_into_dart().into_dart(),
+            self.embedding_base_url.into_into_dart().into_dart(),
+            self.embedding_api_key.into_into_dart().into_dart(),
+            self.embedding_model.into_into_dart().into_dart(),
+            self.vector_db_url.into_into_dart().into_dart(),
+            self.vector_db_api_key.into_into_dart().into_dart(),
+            self.vector_db_collection.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -3798,6 +3837,8 @@ impl SseEncode for crate::models::ai::AiConfig {
         <Option<String>>::sse_encode(self.search_base_url, serializer);
         <Option<String>>::sse_encode(self.search_api_key, serializer);
         <String>::sse_encode(self.translate_target_lang, serializer);
+        <Vec<String>>::sse_encode(self.translate_custom_langs, serializer);
+        <bool>::sse_encode(self.model_supports_vision, serializer);
         <bool>::sse_encode(self.web_search_enabled, serializer);
         <String>::sse_encode(self.ocr_mode, serializer);
         <bool>::sse_encode(self.include_book_history, serializer);
@@ -3812,6 +3853,13 @@ impl SseEncode for crate::models::ai::AiConfig {
             self.template_overrides,
             serializer,
         );
+        <bool>::sse_encode(self.embedding_enabled, serializer);
+        <Option<String>>::sse_encode(self.embedding_base_url, serializer);
+        <Option<String>>::sse_encode(self.embedding_api_key, serializer);
+        <String>::sse_encode(self.embedding_model, serializer);
+        <Option<String>>::sse_encode(self.vector_db_url, serializer);
+        <Option<String>>::sse_encode(self.vector_db_api_key, serializer);
+        <String>::sse_encode(self.vector_db_collection, serializer);
     }
 }
 
@@ -4046,6 +4094,16 @@ impl SseEncode for crate::api::InitResult {
         <String>::sse_encode(self.db_path, serializer);
         <u32>::sse_encode(self.schema_version, serializer);
         <Option<String>>::sse_encode(self.error, serializer);
+    }
+}
+
+impl SseEncode for Vec<String> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <String>::sse_encode(item, serializer);
+        }
     }
 }
 
