@@ -63,11 +63,15 @@ class LatexElementBuilder extends MarkdownElementBuilder {
 /// Recognizes the four LaTeX delimiter styles inside Markdown text.
 ///
 /// Alternation order matters: `$$` must be tried before `$`, otherwise
-/// display math would be eaten as two inline formulas. The inline `$...$`
-/// branch guards against currency false positives (`价格 $100 和 $200` /
-/// `价格$100，总计$200`): the char before the opening `$` must not be a word
-/// char or `$`, the content must not start/end with whitespace, span lines,
-/// or contain `$`, and the closing `$` must not be followed by a digit.
+/// display math would be eaten as two inline formulas.
+///
+/// Inline `$...$` tolerates spaces just inside the delimiters (`$ x + 1 $`),
+/// which models commonly emit -- the strict "no whitespace after the opening
+/// `$`" rule silently dropped those formulas into plain text. Currency
+/// (`价格 $100 和 $200`) is instead rejected during matching: the closing `$`
+/// may not be followed by a digit, and [LatexInlineSyntax._looksLikeCurrency]
+/// drops digit-bearing bodies that carry no LaTeX / math / letter signal
+/// (covers the spaced form `$ 100 和 $ 200`). Inline bodies stay single-line.
 class LatexInlineSyntax extends md.InlineSyntax {
   LatexInlineSyntax() : super(_pattern);
 
@@ -75,15 +79,25 @@ class LatexInlineSyntax extends md.InlineSyntax {
       r'\$\$([\s\S]+?)\$\$'
       r'|\\\(([\s\S]+?)\\\)'
       r'|\\\[([\s\S]+?)\\\]'
-      r'|(?<![\w$])\$(?![\s$])([^$\n]+?)(?<!\s)\$(?!\d)';
+      r'|(?<![\w$])\$[ \t]*([^$\n]*?\S)[ \t]*\$(?!\d)';
+
+  /// Any LaTeX command, operator, grouping or ASCII letter marks the body as
+  /// real math rather than a currency amount.
+  static final RegExp _mathSignal = RegExp(r'[\\^_{}=+\-*/<>|]|[A-Za-z]');
+  static final RegExp _digit = RegExp(r'\d');
+
+  /// True for a digit-bearing body with no math signal (e.g. `100 和` from
+  /// `$ 100 和 $ 200`) -- treated as currency, never as a formula.
+  static bool _looksLikeCurrency(String tex) =>
+      _digit.hasMatch(tex) && !_mathSignal.hasMatch(tex);
 
   @override
   bool onMatch(md.InlineParser parser, Match match) {
     // Groups 1/3 are display math ($$..$$ / \[..\]), 2/4 inline.
     final display = match[1] != null || match[3] != null;
     final tex = (match[1] ?? match[2] ?? match[3] ?? match[4] ?? '').trim();
-    if (tex.isEmpty) {
-      // Whitespace-only body (e.g. "$$ $$"): keep the raw text.
+    if (tex.isEmpty || (!display && _looksLikeCurrency(tex))) {
+      // Whitespace-only body (`$$ $$`) or a currency amount: keep raw text.
       parser.addNode(md.Text(match[0]!));
       return true;
     }

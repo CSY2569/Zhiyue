@@ -85,6 +85,23 @@ void main() {
     expect(find.byType(Math), findsNothing);
     await pumpBubble(tester, r'单价$100，总价$200，不空格也是货币。');
     expect(find.byType(Math), findsNothing);
+    // Spaced currency form: `$ 100 和 $ 200`.
+    await pumpBubble(tester, r'$ 100 和 $ 200 之间');
+    expect(find.byType(Math), findsNothing);
+    await pumpBubble(tester, r'花费 $5。');
+    expect(find.byType(Math), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('spaces just inside \$...\$ still render (models emit this)',
+      (tester) async {
+    // Regression: models often write `$ 公式 $` with padding spaces; the old
+    // "no whitespace after the opening $" guard dropped these to plain text.
+    await pumpBubble(
+        tester, r'IDF 定义为 $ \text{IDF}(q_i) = \ln\left(N\right) $ 结束。');
+    expect(find.byType(Math), findsOneWidget);
+    expect(find.textContaining(r'\text'), findsNothing);
+    expect(find.textContaining('IDF 定义为'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
