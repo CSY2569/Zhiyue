@@ -173,7 +173,7 @@ void main() {
 
   setUpAll(() async {
     await initIsolatedCore();
-    File('/tmp/test.pdf').writeAsStringSync(
+    File(tmpFile('test.pdf')).writeAsStringSync(
         buildMinimalPdf('Dummy PDF for RBWA AI tests'));
   });
 

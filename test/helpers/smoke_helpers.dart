@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 
 import 'package:rbwa/src/rust/api.dart' as rust;
 import 'package:rbwa/src/rust/frb_generated.dart';
@@ -33,6 +34,14 @@ String buildMinimalPdf(String text) {
       'startxref\n$xrefPos\n%%EOF\n');
   return sb.toString();
 }
+
+/// Isolated test database under the system temp (`/tmp` on Linux,
+/// `%TEMP%` on Windows), so the smoke tests never touch the user's data.
+final String testTmpDir = p.join(Directory.systemTemp.path, 'rbwa-test');
+final String testDbPath = p.join(testTmpDir, 'rbwa.db');
+
+/// Absolute path of a scratch file directly under the system temp.
+String tmpFile(String name) => p.join(Directory.systemTemp.path, name);
 
 /// Builds a minimal single-page PDF carrying a two-level outline tree:
 ///
@@ -84,14 +93,11 @@ String buildPdfWithOutline() {
   return sb.toString();
 }
 
-/// Path of the isolated test database (under /tmp).
-const testDbPath = '/tmp/rbwa-test/rbwa.db';
-
 /// Init RustLib + a fresh isolated test DB: every run starts clean, so the
 /// integration smoke tests never touch the user's real data.
 Future<void> initIsolatedCore() async {
   await RustLib.init();
-  final dir = Directory('/tmp/rbwa-test');
+  final dir = Directory(testTmpDir);
   if (dir.existsSync()) dir.deleteSync(recursive: true);
   dir.createSync(recursive: true);
   final init = await rust.initCoreWithDbPath(dbPath: testDbPath);

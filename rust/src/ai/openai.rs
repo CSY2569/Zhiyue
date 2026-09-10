@@ -481,6 +481,9 @@ async fn web_search_at(
 }
 
 impl AiClient for OpenAiClient {
+    // The trait spells out `impl Future + Send`; rewriting as `async fn`
+    // would force an async-trait rework of AiClient, so silence the lint.
+    #[allow(clippy::manual_async_fn)]
     fn stream_chat(
         &self,
         config: &AiConfig,
@@ -511,6 +514,7 @@ impl AiClient for OpenAiClient {
         }
     }
 
+    #[allow(clippy::manual_async_fn)]
     fn stream_vision(
         &self,
         config: &AiConfig,
