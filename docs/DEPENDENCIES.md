@@ -90,7 +90,8 @@ Flutter Linux 桌面构建链需要以下系统库/工具。本机已有：clang
 | `file_picker` | 文件对话框 |
 | `super_clipboard` | 剪贴板 |
 | `flutter_markdown` | Markdown（GFM）渲染 |
-| `flutter_math_fork` | LaTeX 公式渲染 |
+| `markdown` | Markdown 解析（自定义 LaTeX 行内语法扩展） |
+| `flutter_math_fork` | LaTeX 公式渲染（AI 回答，纯 Dart、离线） |
 | `shared_preferences` | 配置持久化（骨架阶段过渡用） |
 
 ## 7. 运行时资源（不在骨架阶段下载）

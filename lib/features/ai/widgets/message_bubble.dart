@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
 import 'package:rbwa/features/ai/widgets/ai_utils.dart';
+import 'package:rbwa/features/ai/widgets/latex.dart';
 import 'package:rbwa/src/rust/models/ai.dart';
 
 /// One AI conversation message bubble: user turns right-aligned, AI answers
@@ -194,6 +195,12 @@ class AiMessageBubble extends StatelessWidget {
                     MarkdownBody(
                       // GFM is the default extension set.
                       data: streaming ? '$content\n\n▍' : content,
+                      // $...$ / $$...$$ / \(...\) / \[...\] render as real
+                      // equations (flutter_math_fork), all three AI surfaces
+                      // (side panel / result card / history page) share this
+                      // bubble.
+                      inlineSyntaxes: latexInlineSyntaxes,
+                      builders: latexBuilders,
                       styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
                         p: theme.textTheme.bodySmall,
                         codeblockDecoration: BoxDecoration(
