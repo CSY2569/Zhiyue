@@ -129,6 +129,35 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _templateEdits
       ..clear()
       ..addAll(config.templateOverrides);
+    // Populate the edit box with the selected built-in template's prompt.
+    // Without this the box stays empty on first entry and only fills in
+    // after the user re-clicks the chip. Deferred past the build phase so we
+    // do not mutate the controller while the tree is building.
+    final initialTemplate = _promptTemplate;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadTemplateText(initialTemplate);
+    });
+  }
+
+  /// Fill the template edit box for [id]: the user's override wins, else the
+  /// cached built-in text, else it is fetched from Rust (async). Only applies
+  /// when [id] is still the selected template.
+  Future<void> _loadTemplateText(String id) async {
+    if (id == 'custom') return;
+    final override = _templateEdits[id];
+    if (override != null) {
+      _templateEdit.text = override;
+      return;
+    }
+    final cached = _templateDefaults[id];
+    if (cached != null) {
+      if (_promptTemplate == id) _templateEdit.text = cached;
+      return;
+    }
+    final text = await ref.read(aiRepositoryProvider).templateDefaultText(id);
+    if (!mounted || _promptTemplate != id) return;
+    _templateDefaults[id] = text;
+    _templateEdit.text = _templateEdits[id] ?? text;
   }
 
   Future<void> _save() async {
@@ -713,17 +742,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _templateEdit.text =
           _templateEdits[id] ?? _templateDefaults[id] ?? '';
     });
-    if (id == 'custom') return;
-    if (_templateEdits.containsKey(id) || _templateDefaults.containsKey(id)) {
-      return;
-    }
-    ref.read(aiRepositoryProvider).templateDefaultText(id).then((t) {
-      if (!mounted || _promptTemplate != id) return;
-      setState(() {
-        _templateDefaults[id] = t;
-        _templateEdit.text = t;
-      });
-    });
+    _loadTemplateText(id);
   }
 
   /// Drop the user edit of the current template (back to the built-in).
@@ -733,6 +752,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _templateEdits.remove(id);
       _templateEdit.text = _templateDefaults[id] ?? '';
     });
+    _loadTemplateText(id);
   }
 
   /// Save the current custom prompt as a named template (同名覆盖).

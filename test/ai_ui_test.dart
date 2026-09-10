@@ -406,6 +406,81 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('settings: the selected template prompt shows on first entry',
+      (tester) async {
+    // Regression: the template edit box was empty on first entry -- the
+    // selected template's prompt only appeared after re-clicking its chip.
+    final repo = FakeAiRepo();
+    await tester.pumpWidget(_scope(const SettingsPage(), repo));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('提示词模板'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    // The default config selects "general"; its prompt must be pre-filled.
+    final field = tester.widget<TextField>(
+      find.widgetWithText(TextField, '模板提示词（可修改，保存后生效）'),
+    );
+    expect(field.controller!.text, '默认通用文本');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('settings: an overridden template shows the user text on entry',
+      (tester) async {
+    final repo = FakeAiRepo();
+    repo.configOverride = AiConfig(
+      baseUrl: 'http://mock/v1',
+      apiKey: 'mock-key',
+      textModel: 'mock-text',
+      visionModel: 'mock-vision',
+      visionBaseUrl: null,
+      visionApiKey: null,
+      translateTargetLang: '中文',
+      translateCustomLangs: const [],
+      modelSupportsVision: false,
+      webSearchEnabled: false,
+      searchUseBuiltin: false,
+      ocrMode: 'high_precision',
+      includeBookHistory: true,
+      enableReasoning: false,
+      reasoningEffort: 'medium',
+      temperature: 0.7,
+      apiProtocol: 'chat_completions',
+      promptTemplate: 'academic',
+      customPrompt: '不该出现的自定义提示',
+      customPrompts: const [],
+      templateOverrides: const {'academic': '我改过的学术提示'},
+      embeddingEnabled: false,
+      embeddingBaseUrl: null,
+      embeddingApiKey: null,
+      embeddingModel: '',
+      vectorDbUrl: null,
+      vectorDbApiKey: null,
+      vectorDbCollection: '',
+    );
+
+    await tester.pumpWidget(_scope(const SettingsPage(), repo));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('提示词模板'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    final field = tester.widget<TextField>(
+      find.widgetWithText(TextField, '模板提示词（可修改，保存后生效）'),
+    );
+    // The user's override wins; the custom prompt must NOT leak in here.
+    expect(field.controller!.text, '我改过的学术提示');
+    expect(field.controller!.text, isNot(contains('不该出现')));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('floating toolbar translate button starts an AI action',
       (tester) async {
     final repo = FakeAiRepo();
