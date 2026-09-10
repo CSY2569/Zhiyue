@@ -265,10 +265,22 @@ class _ChatView extends StatelessWidget {
         builder: (context, constraints) {
           final bubbleMax =
               (constraints.maxWidth - 20).clamp(120.0, double.infinity);
+          // reverse: the newest message sits at the bottom and the list opens
+          // there, so a long history does not show its oldest turn first (the
+          // result card uses the same idiom). Children are laid out
+          // bottom-up, hence the reversed iteration.
           return ListView(
+            reverse: true,
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             children: [
-              for (final m in messages)
+              if (streamingText != null)
+                AiMessageBubble(
+                  role: AiRole.assistant,
+                  content: streamingText!,
+                  streaming: true,
+                  maxWidth: bubbleMax,
+                ),
+              for (final m in messages.reversed)
                 AiMessageBubble(
                   role: m.role,
                   content: m.content,
@@ -276,13 +288,6 @@ class _ChatView extends StatelessWidget {
                   imagePath: m.imagePath,
                   actionType: m.actionType,
                   createdAt: m.createdAt,
-                  maxWidth: bubbleMax,
-                ),
-              if (streamingText != null)
-                AiMessageBubble(
-                  role: AiRole.assistant,
-                  content: streamingText!,
-                  streaming: true,
                   maxWidth: bubbleMax,
                 ),
             ],
