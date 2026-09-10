@@ -92,7 +92,7 @@ build\windows\x64\runner\Release\
 ### 方式 A：绿色免安装版（最快）
 
 ```powershell
-Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath ZhiYue-0.1.0-win-x64.zip
+Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath ZhiYue-1.0.0-win-x64.zip
 ```
 
 用户解压后直接运行 `ZhiYue.exe`（首次运行时 Windows SmartScreen 可能提示，选择"仍要运行"）。
@@ -102,7 +102,7 @@ Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath ZhiYu
 1. 安装 [Inno Setup](https://jrsoftware.org/isinfo.php)（免费）
 2. 仓库已附示例脚本 `packaging\rbwa.iss`（AppName=智阅、装到 Program Files、
    创建开始菜单/桌面快捷方式、卸载入口齐全）
-3. 编译：右键 `packaging\rbwa.iss` → Compile，产物 `dist\ZhiYue-0.1.0-win-x64-setup.exe`
+3. 编译：右键 `packaging\rbwa.iss` → Compile，产物 `dist\ZhiYue-1.0.0-win-x64-setup.exe`
    （安装向导为简体中文，语言文件 `packaging\ChineseSimplified.isl` 随脚本携带；
    安装向导与卸载图标使用 `packaging\icon\setup.ico`）
 
@@ -158,7 +158,7 @@ flutter build windows --release        # 增量，约 1-3 分钟
 > 版本号统一维护：`pubspec.yaml`（Flutter）→ 打包时同步 `rbwa.iss` 的
 > AppVersion 与产物文件名。
 
-## 附：当前产物清单（0.1.0）
+## 附：当前产物清单（1.0.0）
 
 | 产物 | 大小（约） |
 |------|-----------|

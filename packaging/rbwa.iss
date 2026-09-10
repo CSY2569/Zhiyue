@@ -7,13 +7,13 @@
 
 [Setup]
 AppName=智阅
-AppVersion=0.1.0
+AppVersion=1.0.0
 AppPublisher=ZhiYue
 AppPublisherURL=https://github.com/CSY2569/Zhiyue
 DefaultDirName={autopf}\ZhiYue
 DefaultGroupName=智阅
 OutputDir=..\dist
-OutputBaseFilename=ZhiYue-0.1.0-win-x64-setup
+OutputBaseFilename=ZhiYue-1.0.0-win-x64-setup
 SetupIconFile=icon\setup.ico
 Compression=lzma2
 SolidCompression=yes
