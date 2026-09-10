@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:rbwa/core/theme/theme_controller.dart';
 import 'package:rbwa/data/repositories/ai_repository.dart';
 import 'package:rbwa/features/ai/providers/ai_config_provider.dart';
+import 'package:rbwa/features/reader/providers/outline_settings.dart';
 import 'package:rbwa/src/rust/models/ai.dart';
 
 /// Settings page (FEATURES §6.1, §8.2).
@@ -171,6 +172,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   ? null
                   : ref.read(themeControllerProvider.notifier).set(m),
             ),
+          ),
+          const Divider(),
+          _SectionTitle('阅读器', theme),
+          SwitchListTile(
+            title: const Text('目录默认全展开'),
+            subtitle: const Text('开启后打开目录时展开全部子章节；关闭则只显示主章节，需手动展开'),
+            value: ref.watch(outlineExpandAllProvider),
+            onChanged: (v) =>
+                ref.read(outlineExpandAllProvider.notifier).set(v),
           ),
           const Divider(),
           _SectionTitle('文本与翻译配置（BYOK，兼容 OpenAI / DeepSeek / Kimi / 通义）', theme),
