@@ -15,7 +15,7 @@
 ### Debian / Ubuntu（.deb）
 
 ```bash
-sudo apt install ./zhiyue_0.1.0_amd64.deb
+sudo apt install ./zhiyue_1.0.0_amd64.deb
 # 依赖自动安装（libgtk-3-0、libglib2.0-0 等，apt 会处理）
 ```
 
@@ -24,7 +24,7 @@ sudo apt install ./zhiyue_0.1.0_amd64.deb
 ### Fedora / RHEL（.rpm）
 
 ```bash
-sudo dnf install ./ZhiYue-0.1.0-1.x86_64.rpm
+sudo dnf install ./ZhiYue-1.0.0-1.x86_64.rpm
 # 依赖自动安装（gtk3、glib2 等，dnf 会处理）
 ```
 

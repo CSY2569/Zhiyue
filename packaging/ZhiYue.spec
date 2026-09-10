@@ -12,7 +12,7 @@
 %global __requires_exclude_from ^%{_libdir}/zhiyue/lib/.*$
 
 Name:           ZhiYue
-Version:        0.1.0
+Version:        1.0.0
 Release:        1%{?dist}
 Summary:        智阅 - AI-powered local PDF/image reader
 License:        GPL-3.0-only
@@ -75,5 +75,8 @@ install -m 644 %{_sourcedir}/LICENSE %{buildroot}%{_datadir}/licenses/zhiyue/LIC
 %{_datadir}/icons/hicolor/512x512/apps/zhiyue.png
 
 %changelog
+* Thu Sep 10 2026 ZhiYue <zhiyue@localhost> - 1.0.0-1
+- First stable release.
+
 * Mon Aug 10 2026 ZhiYue <zhiyue@localhost> - 0.1.0-1
 - Initial package.
