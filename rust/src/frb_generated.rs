@@ -1663,6 +1663,7 @@ fn wire__crate__api__stream_chat_impl(
             let api_action = <crate::models::ai::AiActionType>::sse_decode(&mut deserializer);
             let api_text = <String>::sse_decode(&mut deserializer);
             let api_history = <Vec<crate::models::ai::AiMessage>>::sse_decode(&mut deserializer);
+            let api_is_follow_up = <bool>::sse_decode(&mut deserializer);
             let api_sink =
                 <StreamSink<String, flutter_rust_bridge::for_generated::SseCodec>>::sse_decode(
                     &mut deserializer,
@@ -1672,8 +1673,14 @@ fn wire__crate__api__stream_chat_impl(
                 transform_result_sse::<_, ()>(
                     (move || async move {
                         let output_ok = Result::<_, ()>::Ok({
-                            crate::api::stream_chat(api_action, api_text, api_history, api_sink)
-                                .await;
+                            crate::api::stream_chat(
+                                api_action,
+                                api_text,
+                                api_history,
+                                api_is_follow_up,
+                                api_sink,
+                            )
+                            .await;
                         })?;
                         Ok(output_ok)
                     })()

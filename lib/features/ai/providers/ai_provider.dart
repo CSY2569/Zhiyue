@@ -199,7 +199,8 @@ class AiNotifier extends Notifier<AiState> {
         text,
         bookId: bookId,
         bookTitle: bookTitle,
-        startStream: (window) => _stream(window, action, text),
+        startStream: (window) =>
+            _stream(window, action, text, isFollowUp: false),
       );
 
   /// Multi-turn follow-up (FEATURES 6.5.2): the thread's full history is sent
@@ -231,7 +232,11 @@ class AiNotifier extends Notifier<AiState> {
       showingThreadList: false,
     );
     _persistMessage(thread, AiRole.user, text, action: action);
-    _stream(thread, action, text);
+    // isFollowUp: a typed follow-up is the user's own words (not selected
+    // page text), so the Rust side must not wrap it in <text> tags -- e.g.
+    // "详细解释/展开" after an explain answer is a directive, not text to
+    // explain. This mirrors the translate-downgrade rationale below.
+    _stream(thread, action, text, isFollowUp: true);
   }
 
   /// Send a typed question from any input surface (panel / card): routes to
@@ -337,7 +342,12 @@ class AiNotifier extends Notifier<AiState> {
   /// translation context (they bias the model toward explaining). The
   /// translation result is still persisted to this thread by [_finishStream],
   /// so it shows up in the conversation list like any other turn.
-  void _stream(AiThreadState thread, AiActionType action, String text) {
+  void _stream(
+    AiThreadState thread,
+    AiActionType action,
+    String text, {
+    required bool isFollowUp,
+  }) {
     final history = action == AiActionType.translate
         ? <AiMessage>[] // translate: independent, no mixed context
         : thread.messages
@@ -354,7 +364,12 @@ class AiNotifier extends Notifier<AiState> {
             .toList();
     _startStream(
       thread,
-      _repo.streamChat(action: action, text: text, history: history),
+      _repo.streamChat(
+        action: action,
+        text: text,
+        history: history,
+        isFollowUp: isFollowUp,
+      ),
     );
   }
 

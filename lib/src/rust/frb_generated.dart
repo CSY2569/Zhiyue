@@ -252,6 +252,7 @@ abstract class RustLibApi extends BaseApi {
     required AiActionType action,
     required String text,
     required List<AiMessage> history,
+    required bool isFollowUp,
   });
 
   Stream<String> crateApiStreamVisionPng({required List<int> png});
@@ -1705,6 +1706,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required AiActionType action,
     required String text,
     required List<AiMessage> history,
+    required bool isFollowUp,
   }) {
     final sink = RustStreamSink<String>();
     unawaited(
@@ -1715,6 +1717,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             sse_encode_ai_action_type(action, serializer);
             sse_encode_String(text, serializer);
             sse_encode_list_ai_message(history, serializer);
+            sse_encode_bool(isFollowUp, serializer);
             sse_encode_StreamSink_String_Sse(sink, serializer);
             pdeCallFfi(
               generalizedFrbRustBinding,
@@ -1728,7 +1731,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             decodeErrorData: null,
           ),
           constMeta: kCrateApiStreamChatConstMeta,
-          argValues: [action, text, history, sink],
+          argValues: [action, text, history, isFollowUp, sink],
           apiImpl: this,
         ),
       ),
@@ -1738,7 +1741,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiStreamChatConstMeta => const TaskConstMeta(
     debugName: "stream_chat",
-    argNames: ["action", "text", "history", "sink"],
+    argNames: ["action", "text", "history", "isFollowUp", "sink"],
   );
 
   @override

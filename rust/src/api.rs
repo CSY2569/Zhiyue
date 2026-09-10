@@ -1183,6 +1183,18 @@ fn wrap_untrusted_input(action: AiActionType, text: &str) -> String {
     }
 }
 
+/// Frame the incoming user text for [stream_chat] / [builtin_search_stream].
+/// A follow-up (6.5.2) is user-typed -- a directive such as "详细解释/展开"
+/// -- so it passes verbatim like chat; a fresh selection is untrusted page
+/// text and is wrapped by [wrap_untrusted_input].
+fn wrap_input(action: AiActionType, text: &str, is_follow_up: bool) -> String {
+    if is_follow_up {
+        text.to_string()
+    } else {
+        wrap_untrusted_input(action, text)
+    }
+}
+
 /// 6.2). `history` carries the thread's prior turns (6.5.2); the action's
 /// system prompt is prepended here. Emits SSE chunks; errors (including
 /// "not configured", 10.4) arrive on the stream's error channel.
@@ -1190,6 +1202,7 @@ pub async fn stream_chat(
     action: AiActionType,
     text: String,
     history: Vec<AiMessage>,
+    is_follow_up: bool,
     sink: StreamSink<String>,
 ) {
     let config = get_ai_config();
@@ -1200,7 +1213,7 @@ pub async fn stream_chat(
     // Built-in web search (Responses API, 6.2.3): a different streaming
     // protocol with server-side search, handled directly.
     if action == AiActionType::Search && config.web_search_enabled && config.search_use_builtin {
-        return builtin_search_stream(&config, &text, &history, sink).await;
+        return builtin_search_stream(&config, &text, &history, is_follow_up, sink).await;
     }
 
     let client = ai_client();
@@ -1221,9 +1234,10 @@ pub async fn stream_chat(
     };
     // Wrap untrusted input (selected page text the reader may not understand)
     // in <text> tags so the model treats it as data, not instructions (indirect
-    // prompt-injection defense). Chat passes the text verbatim -- the user
-    // typed it themselves and can read it.
-    let user_input = wrap_untrusted_input(action, &text);
+    // prompt-injection defense). A follow-up is different: the user typed it
+    // themselves (e.g. "详细解释/展开"), so it is a directive, not page text --
+    // like chat, it is not wrapped (see wrap_input / wrap_untrusted_input).
+    let user_input = wrap_input(action, &text, is_follow_up);
     match client.stream_chat(&config, &messages, &user_input).await {
         Ok(stream) => drain_stream(stream, sink).await,
         Err(e) => {
@@ -1285,6 +1299,7 @@ async fn builtin_search_stream(
     config: &AiConfig,
     query: &str,
     history: &[AiMessage],
+    is_follow_up: bool,
     sink: StreamSink<String>,
 ) {
     // The history carries the thread's prior turns (设置 → AI 回复:
@@ -1308,8 +1323,13 @@ async fn builtin_search_stream(
     messages.insert(0, system_message(compose(ai::prompts::search_system(true))));
     let extras = ai::RequestExtras::from_config(config);
     // Wrap the query in <text> tags (indirect prompt-injection defense:
-    // the query is selected page text the reader may not understand).
-    let wrapped_query = format!("<text>{query}</text>");
+    // the query is selected page text the reader may not understand). A
+    // follow-up is user-typed, so it is passed verbatim like chat.
+    let wrapped_query = if is_follow_up {
+        query.to_string()
+    } else {
+        format!("<text>{query}</text>")
+    };
     match ai::web_search_builtin(
         &config.base_url,
         &config.api_key,
@@ -1341,6 +1361,7 @@ async fn builtin_search_stream(
     _config: &AiConfig,
     _query: &str,
     _history: &[AiMessage],
+    _is_follow_up: bool,
     sink: StreamSink<String>,
 ) {
     let _ = sink.add_error("AI support not compiled in (feature 'ai' disabled)".to_string());
@@ -1674,5 +1695,23 @@ mod tests {
         }
         // Chat: verbatim (the user typed it themselves and can read it).
         assert_eq!(wrap_untrusted_input(AiActionType::Chat, payload), payload);
+    }
+
+    /// A follow-up (6.5.2, e.g. the user typing "详细解释/展开" after an
+    /// explain answer) is user-typed, NOT selected page text, so it must NOT
+    /// be wrapped in <text> tags -- otherwise the explain/search system prompt
+    /// would treat the directive itself as the text to process. Fresh
+    /// selections still wrap (injection defense).
+    #[test]
+    fn followup_input_is_not_wrapped() {
+        let typed = "详细解释";
+        for action in [AiActionType::Explain, AiActionType::Search] {
+            // Fresh selection -> wrapped.
+            assert!(wrap_input(action, typed, false).starts_with("<text>"));
+            // Typed follow-up -> verbatim (no tags).
+            assert_eq!(wrap_input(action, typed, true), typed);
+        }
+        // Chat is already verbatim regardless of the flag.
+        assert_eq!(wrap_input(AiActionType::Chat, typed, false), typed);
     }
 }

@@ -174,6 +174,7 @@ void main() {
     await collect(rust.streamChat(
       action: AiActionType.chat,
       text: 'q2',
+      isFollowUp: false,
       history: [
         AiMessage(
             id: -1, threadId: -1, role: AiRole.user, content: 'q1', createdAt: ''),
@@ -202,6 +203,7 @@ void main() {
     await collect(rust.streamChat(
       action: AiActionType.explain,
       text: 'hi',
+      isFollowUp: false,
       history: const [],
     ));
 
@@ -221,6 +223,7 @@ void main() {
     await collect(rust.streamChat(
       action: AiActionType.translate,
       text: 'hi',
+      isFollowUp: false,
       history: const [],
     ));
     messages =
@@ -240,6 +243,7 @@ void main() {
     final out = await collect(rust.streamChat(
       action: AiActionType.chat,
       text: '你好，世界',
+      isFollowUp: false,
       history: const [],
     ));
     expect(out, '你好，世界');
@@ -255,6 +259,41 @@ void main() {
     expect(messages.last['role'], 'user');
     expect(messages.last['content'], '你好，世界');
     await mock.stop();
+  }, timeout: const Timeout(Duration(seconds: 30)));
+
+  test('explain wraps fresh selections but not typed follow-ups', () async {
+    // Fresh selection (untrusted page text) is wrapped in <text> ...
+    // </text> so the model treats it as data, not instructions.
+    final mock1 = MockOpenAi(chunks: ['答']);
+    await mock1.start();
+    await rust.setAiConfig(config: _cfg(baseUrl: mock1.baseUrl));
+    await collect(rust.streamChat(
+      action: AiActionType.explain,
+      text: 'selected text',
+      isFollowUp: false,
+      history: const [],
+    ));
+    var messages =
+        (mock1.requests.single['messages'] as List).cast<Map<String, dynamic>>();
+    expect(messages.last['content'], '<text>selected text</text>');
+    await mock1.stop();
+
+    // Typed follow-up ("详细解释") is the user's own directive, not page
+    // text: it must NOT be wrapped, or the model would explain that phrase
+    // itself instead of expanding the previous topic.
+    final mock2 = MockOpenAi(chunks: ['（展开）']);
+    await mock2.start();
+    await rust.setAiConfig(config: _cfg(baseUrl: mock2.baseUrl));
+    await collect(rust.streamChat(
+      action: AiActionType.explain,
+      text: '详细解释',
+      isFollowUp: true,
+      history: const [],
+    ));
+    messages =
+        (mock2.requests.single['messages'] as List).cast<Map<String, dynamic>>();
+    expect(messages.last['content'], '详细解释');
+    await mock2.stop();
   }, timeout: const Timeout(Duration(seconds: 30)));
 
   test('stream_vision_png streams chunks and sends the PNG as a data URL',
@@ -382,7 +421,7 @@ void main() {
     await rust.setAiConfig(config: _cfg(baseUrl: mock.baseUrl, textModel: 'mock-model', webSearchEnabled: true, searchUseBuiltin: false, includeBookHistory: true, promptTemplate: 'general'));
 
     final out = await collect(rust.streamChat(
-        action: AiActionType.search, text: '量子计算', history: const []));
+        action: AiActionType.search, text: '量子计算', history: const [], isFollowUp: false));
     expect(out, '（要点）');
 
     // The system prompt says the search key is missing (knowledge answer),
@@ -407,7 +446,7 @@ void main() {
     ));
 
     final out = await collect(rust.streamChat(
-        action: AiActionType.search, text: '量子计算', history: const []));
+        action: AiActionType.search, text: '量子计算', history: const [], isFollowUp: false));
     expect(out, '要点一要点二');
 
     // Hit /responses (the /v1 suffix is stripped) with the web_search tool
@@ -438,7 +477,7 @@ void main() {
     ));
 
     final out = await collect(rust.streamChat(
-        action: AiActionType.search, text: '量子', history: const []));
+        action: AiActionType.search, text: '量子', history: const [], isFollowUp: false));
     expect(out, '（知识回答）');
 
     // The failed search degraded to a knowledge answer whose system prompt
@@ -472,7 +511,7 @@ void main() {
     String? error;
     try {
       await collect(rust.streamChat(
-          action: AiActionType.chat, text: 'hi', history: const []));
+          action: AiActionType.chat, text: 'hi', history: const [], isFollowUp: false));
     } catch (e) {
       error = e.toString();
     }

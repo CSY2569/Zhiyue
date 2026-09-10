@@ -24,14 +24,23 @@ class AiRepository {
       rust.templateDefaultText(templateId: templateId);
 
   /// Streaming text action (translate / explain / search / chat, 6.2).
-  /// [history] carries the thread's prior turns (6.5.2). Cancelling the
-  /// returned subscription aborts the request (6.3.2).
+  /// [history] carries the thread's prior turns (6.5.2); [isFollowUp] marks a
+  /// typed follow-up so the Rust side skips the `<text>` untrusted-input
+  /// wrapping (a follow-up directive like "详细解释/展开" is user-typed, not
+  /// selected page text). Cancelling the returned subscription aborts the
+  /// request (6.3.2).
   Stream<String> streamChat({
     required AiActionType action,
     required String text,
     required List<AiMessage> history,
+    required bool isFollowUp,
   }) =>
-      rust.streamChat(action: action, text: text, history: history);
+      rust.streamChat(
+        action: action,
+        text: text,
+        history: history,
+        isFollowUp: isFollowUp,
+      );
 
   /// Streaming vision analysis of a captured region screenshot (识图,
   /// FEATURES 6.6.2 / 7.2): the PNG goes to the vision model; chunks stream

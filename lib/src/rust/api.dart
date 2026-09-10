@@ -12,7 +12,7 @@ import 'ocr.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'pdf/types.dart';
 
-// These functions are ignored because they are not marked as `pub`: `ai_client`, `builtin_search_stream`, `current_bitmap`, `current_boxes`, `current_page_has_text`, `current_thumbnail`, `drain_stream`, `ensure_api_key`, `err`, `import_book_inner`, `init_result`, `ok`, `open_error`, `page_render_result`, `resolve_ai_image_path`, `save_ai_image`, `save_cover_thumbnail`, `save_rgba_as_png`, `search_system_prompt`, `system_message`, `system_prompt_for`, `try_init_at`, `try_init`, `wrap_untrusted_input`
+// These functions are ignored because they are not marked as `pub`: `ai_client`, `builtin_search_stream`, `current_bitmap`, `current_boxes`, `current_page_has_text`, `current_thumbnail`, `drain_stream`, `ensure_api_key`, `err`, `import_book_inner`, `init_result`, `ok`, `open_error`, `page_render_result`, `resolve_ai_image_path`, `save_ai_image`, `save_cover_thumbnail`, `save_rgba_as_png`, `search_system_prompt`, `system_message`, `system_prompt_for`, `try_init_at`, `try_init`, `wrap_input`, `wrap_untrusted_input`
 
 /// Crate version, surfaced in the About / settings UI.
 Future<String> appVersion() => RustLib.instance.api.crateApiAppVersion();
@@ -371,10 +371,12 @@ Stream<String> streamChat({
   required AiActionType action,
   required String text,
   required List<AiMessage> history,
+  required bool isFollowUp,
 }) => RustLib.instance.api.crateApiStreamChat(
   action: action,
   text: text,
   history: history,
+  isFollowUp: isFollowUp,
 );
 
 /// Streaming vision analysis of a captured region screenshot (识图, FEATURES

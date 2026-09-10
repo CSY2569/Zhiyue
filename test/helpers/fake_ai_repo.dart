@@ -139,6 +139,7 @@ class FakeAiRepo extends AiRepository {
     required AiActionType action,
     required String text,
     required List<AiMessage> history,
+    required bool isFollowUp,
   }) {
     sent.add((action, text));
     if (failStream) {
