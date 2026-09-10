@@ -38,14 +38,27 @@ mixin Reloadable<T> on AsyncNotifier<T> {
 class LibraryBooksNotifier extends AsyncNotifier<List<Book>>
     with Reloadable<List<Book>> {
   @override
-  Future<List<Book>> build() {
-    return ref.read(libraryRepositoryProvider).listBooks();
+  Future<List<Book>> build() async {
+    final repo = ref.read(libraryRepositoryProvider);
+    // Heal covers whose file was lost (FEATURES 2.6) before listing, so the
+    // grid shows the restored image without the user opening each book. A
+    // no-op (one existence check per PDF) when every cover is present.
+    try {
+      await repo.repairCovers();
+    } catch (_) {
+      // Repair is best-effort; listing must still succeed.
+    }
+    return repo.listBooks();
   }
 
   /// Force a full reload from the DB.
-  Future<void> refresh() => reload(
-        () => ref.read(libraryRepositoryProvider).listBooks(),
-      );
+  Future<void> refresh() => reload(() async {
+        final repo = ref.read(libraryRepositoryProvider);
+        try {
+          await repo.repairCovers();
+        } catch (_) {}
+        return repo.listBooks();
+      });
 
   /// Import a batch of files (FEATURES 2.1). Returns a summary so the caller
   /// can show a SnackBar (e.g. "导入 2 本，已存在 1 本").

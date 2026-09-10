@@ -266,6 +266,22 @@ pub fn close() {
     *DOC_PATH.lock().unwrap() = None;
 }
 
+/// Render page [page] of the PDF at [path] to a thumbnail through an
+/// INDEPENDENT document ([extract_document_text] does the same for text), so
+/// rebuilding a missing cover never disturbs the reader's open document.
+pub fn render_thumbnail_file(path: &str, page: i64, max_size: u32) -> AppResult<PageBitmap> {
+    let pdfium = pdfium()?;
+    let doc = pdfium.load_pdf_from_file(path, None)?;
+    let pg = doc.pages().get(page as PdfPageIndex)?;
+    let config = PdfRenderConfig::new().thumbnail(max_size as i32);
+    let bitmap = pg.render_with_config(&config)?;
+    Ok(PageBitmap {
+        width: bitmap.width() as u32,
+        height: bitmap.height() as u32,
+        rgba: bitmap.as_rgba_bytes(),
+    })
+}
+
 /// Plain text of every page of [path] via an INDEPENDENT document (M6: the
 /// search-index builder uses this so it never touches the reader's open
 /// document -- pdfium keeps one global document and swapping it would
