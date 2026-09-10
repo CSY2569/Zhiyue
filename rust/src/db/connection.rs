@@ -23,6 +23,17 @@ use crate::error::AppResult;
 /// by [`init_database_at`], read by subsystems via [`db`].
 static DB: OnceLock<Mutex<Connection>> = OnceLock::new();
 
+/// Override for the application data directory, set by [`init_database_at`]
+/// to the database file's parent.
+///
+/// Production resolves it from the OS (`~/.local/share/RBWA`), and the DB
+/// lives inside it, so the override matches the default. Tests instead point
+/// the DB at a scratch dir (`init_core_with_db_path`): without this, every
+/// *other* app-data path (covers/, documents/, ai_images/, models/) would
+/// still resolve to the user's real directory -- so a test that deletes a
+/// book also deleted the user's `covers/{id}.png` whenever the ids lined up.
+static DATA_DIR_OVERRIDE: OnceLock<PathBuf> = OnceLock::new();
+
 /// Guard holding the DB lock; returned by [`db`] and dropped by the caller.
 type DbGuard<'a> = std::sync::MutexGuard<'a, Connection>;
 
@@ -37,9 +48,18 @@ pub fn db() -> DbGuard<'static> {
 
 /// Resolve the application data directory.
 ///
-/// Linux: `$XDG_DATA_HOME/RBWA` or `~/.local/share/RBWA`.
+/// Production: `$XDG_DATA_HOME/RBWA` or `~/.local/share/RBWA`.
 /// Created if missing. Falls back to `./RBWA_data` if `dirs` cannot resolve.
+///
+/// Once [`init_database_at`] has run, the initialized database's parent
+/// directory wins (see [`DATA_DIR_OVERRIDE`]) -- so an isolated test DB keeps
+/// covers / documents / screenshots / models inside the same scratch dir and
+/// never touches the user's real data.
 pub fn app_data_dir() -> AppResult<PathBuf> {
+    if let Some(dir) = DATA_DIR_OVERRIDE.get() {
+        std::fs::create_dir_all(dir)?;
+        return Ok(dir.clone());
+    }
     let base = dirs::data_dir().unwrap_or_else(|| PathBuf::from("./RBWA_data"));
     let dir = base.join("RBWA");
     std::fs::create_dir_all(&dir)?;
@@ -59,6 +79,13 @@ pub fn db_path() -> AppResult<PathBuf> {
 /// Returns the resolved DB path (for display in the UI / logs).
 pub fn init_database_at(path: &Path) -> AppResult<PathBuf> {
     tracing::info!(?path, "opening SQLite database");
+
+    // Pin the app data dir to the database's parent so every sibling path
+    // (covers / documents / ai_images / models) stays next to this DB --
+    // that is what keeps a test-scoped DB from touching the user's real data.
+    if let Some(parent) = path.parent() {
+        let _ = DATA_DIR_OVERRIDE.set(parent.to_path_buf());
+    }
 
     let conn = Connection::open(path)?;
 

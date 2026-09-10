@@ -197,6 +197,43 @@ pub fn get_book(id: i64) -> Option<Book> {
     book_repo::get(&conn, id).ok().flatten()
 }
 
+/// Rebuild covers whose file is missing (FEATURES 2.6). Returns the number
+/// of covers restored. PDF books whose `covers/{id}.png` disappeared are
+/// re-rendered from their stored copy through an independent pdfium document;
+/// image books already use the stored file itself, so they need nothing.
+///
+/// Called by the library screen after loading, so a lost cover heals without
+/// the user having to open each book (and without any user-visible action).
+pub fn repair_covers() -> i32 {
+    let books = {
+        let conn = db::db();
+        book_repo::list(&conn).unwrap_or_default()
+    };
+    let mut repaired = 0;
+    for b in books {
+        if b.file_type != BookType::Pdf {
+            continue;
+        }
+        let missing = b
+            .cover_path
+            .as_deref()
+            .map(|p| !std::path::Path::new(p).is_file())
+            .unwrap_or(true);
+        if !missing {
+            continue;
+        }
+        if let Some(cover) = rebuild_cover_file(b.id, &b.stored_path) {
+            let conn = db::db();
+            let _ = book_repo::update_cover(&conn, b.id, Some(cover));
+            repaired += 1;
+        }
+    }
+    if repaired > 0 {
+        tracing::info!(repaired, "rebuilt missing covers");
+    }
+    repaired
+}
+
 /// Import a single file into the library (FEATURES 2.1).
 ///
 /// Steps: validate path → infer type → de-dup by `original_path` → copy file
@@ -478,16 +515,25 @@ pub async fn open_book(stored_path: String) -> OpenBookResult {
         match pdf::open(&stored_path) {
             Ok(count) => {
                 let has_outline = pdf::outline().map(|e| !e.is_empty()).unwrap_or(false);
-                // Legacy books imported while pdfium was unavailable have no
-                // cover (and a stale page count of 0); heal both now that the
-                // document is open (FEATURES 2.6).
+                // Heal a missing cover: legacy books have no cover_path, and
+                // books whose cover file was lost still point at the deleted
+                // path -- both render a blank tile, so rebuild either way
+                // (FEATURES 2.6).
                 if let Ok(Some(b)) = &book {
-                    let conn = db::db();
-                    if b.cover_path.is_none() {
+                    let cover_missing = b
+                        .cover_path
+                        .as_deref()
+                        .map(|p| !std::path::Path::new(p).is_file())
+                        .unwrap_or(true);
+                    if cover_missing {
                         let cover = save_cover_thumbnail(b.id);
-                        let _ = book_repo::update_cover(&conn, b.id, cover);
+                        if cover.is_some() {
+                            let conn = db::db();
+                            let _ = book_repo::update_cover(&conn, b.id, cover);
+                        }
                     }
                     if b.page_count == 0 {
+                        let conn = db::db();
                         let _ = book_repo::update_page_count(&conn, b.id, count);
                     }
                 }
@@ -654,6 +700,30 @@ fn save_cover_thumbnail(book_id: i64) -> Option<String> {
         }
         Err(e) => {
             tracing::warn!(error = %e, "cover render failed");
+            None
+        }
+    }
+}
+
+/// Render book [book_id]'s cover from its stored PDF through an INDEPENDENT
+/// document and write `covers/{id}.png`. Used to restore covers whose file
+/// went missing while the DB row still points at it; unlike
+/// [save_cover_thumbnail] this does not need the book to be open, so it is
+/// safe to run for the whole library.
+fn rebuild_cover_file(book_id: i64, stored_path: &str) -> Option<String> {
+    let dir = db::app_data_dir().ok()?.join("covers");
+    std::fs::create_dir_all(&dir).ok()?;
+    let p = dir.join(format!("{book_id}.png"));
+    match pdf::render_thumbnail_file(stored_path, 0, 400) {
+        Ok(bmp) => match save_rgba_as_png(bmp, &p) {
+            Ok(()) => Some(p.to_string_lossy().to_string()),
+            Err(e) => {
+                tracing::warn!(id = book_id, error = %e, "cover save failed");
+                None
+            }
+        },
+        Err(e) => {
+            tracing::warn!(id = book_id, error = %e, "cover rebuild render failed");
             None
         }
     }

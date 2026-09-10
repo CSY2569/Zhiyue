@@ -21,6 +21,14 @@ pub fn thumbnail(_page: i64, _max_size: u32) -> AppResult<PageBitmap> {
     Err(AppError::Pdf(NOT_BUILT.into()))
 }
 
+pub fn render_thumbnail_file(
+    _path: &str,
+    _page: i64,
+    _max_size: u32,
+) -> AppResult<PageBitmap> {
+    Err(AppError::Pdf(NOT_BUILT.into()))
+}
+
 pub fn extract_text(_page: i64) -> AppResult<Vec<CharBox>> {
     Err(AppError::Pdf(NOT_BUILT.into()))
 }

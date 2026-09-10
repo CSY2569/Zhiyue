@@ -26,6 +26,10 @@ class LibraryRepository {
   /// Fetch a single book by id. Returns null if not found.
   Future<Book?> getBook(int id) => rust.getBook(id: id);
 
+  /// Rebuild PDF covers whose file went missing (FEATURES 2.6). Returns the
+  /// number restored. Cheap when nothing is missing (one stat per PDF).
+  Future<int> repairCovers() => rust.repairCovers();
+
   /// Import a single file (FEATURES 2.1). De-dup by `original_path` happens
   /// in Rust; the result distinguishes new imports from existing records.
   Future<rust.ImportResult> importBook(String path) =>

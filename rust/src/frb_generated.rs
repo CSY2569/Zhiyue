@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 320604452;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1977932488;
 
 // Section: executor
 
@@ -1416,6 +1416,38 @@ fn wire__crate__api__render_thumbnail_impl(
                     })()
                     .await,
                 )
+            }
+        },
+    )
+}
+fn wire__crate__api__repair_covers_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "repair_covers",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(crate::api::repair_covers())?;
+                    Ok(output_ok)
+                })())
             }
         },
     )
@@ -3011,20 +3043,21 @@ fn pde_ffi_dispatcher_primary_impl(
         36 => wire__crate__api__rename_category_impl(port, ptr, rust_vec_len, data_len),
         37 => wire__crate__api__render_page_impl(port, ptr, rust_vec_len, data_len),
         38 => wire__crate__api__render_thumbnail_impl(port, ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__save_progress_impl(port, ptr, rust_vec_len, data_len),
-        40 => wire__crate__api__scan_page_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__search_books_impl(port, ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__search_index_status_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__set_ai_config_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__set_setting_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__stream_chat_impl(port, ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__stream_vision_png_impl(port, ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__template_default_text_impl(port, ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__toggle_favorite_impl(port, ptr, rust_vec_len, data_len),
-        49 => wire__crate__api__touch_last_opened_impl(port, ptr, rust_vec_len, data_len),
-        50 => wire__crate__api__update_annotation_content_impl(port, ptr, rust_vec_len, data_len),
-        51 => wire__crate__api__update_image_annotation_impl(port, ptr, rust_vec_len, data_len),
-        52 => wire__crate__api__update_page_ocr_lines_impl(port, ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__repair_covers_impl(port, ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__save_progress_impl(port, ptr, rust_vec_len, data_len),
+        41 => wire__crate__api__scan_page_impl(port, ptr, rust_vec_len, data_len),
+        42 => wire__crate__api__search_books_impl(port, ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__search_index_status_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__set_ai_config_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__set_setting_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__stream_chat_impl(port, ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__stream_vision_png_impl(port, ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__template_default_text_impl(port, ptr, rust_vec_len, data_len),
+        49 => wire__crate__api__toggle_favorite_impl(port, ptr, rust_vec_len, data_len),
+        50 => wire__crate__api__touch_last_opened_impl(port, ptr, rust_vec_len, data_len),
+        51 => wire__crate__api__update_annotation_content_impl(port, ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__update_image_annotation_impl(port, ptr, rust_vec_len, data_len),
+        53 => wire__crate__api__update_page_ocr_lines_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
