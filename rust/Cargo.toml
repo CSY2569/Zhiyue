@@ -1,6 +1,6 @@
 [package]
 name = "rbwa_core"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 description = "RBWA Rust core layer - PDF/OCR/AI/DB heavy lifting for the Flutter UI"
 license = "GPL-3.0"
