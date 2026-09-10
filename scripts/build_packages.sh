@@ -55,6 +55,9 @@ rm -rf "$RPMBUILD_DIR/SOURCES/bundle"
 cp -r "$BUNDLE" "$RPMBUILD_DIR/SOURCES/bundle"
 cp -r "$PROJECT_ROOT/packaging" "$RPMBUILD_DIR/SOURCES/"
 cp "$PROJECT_ROOT/LICENSE" "$RPMBUILD_DIR/SOURCES/"
+# Clear previous RPMS so a stale build (e.g. an older version) is not picked
+# up by the glob below and copied into dist/ alongside the fresh one.
+rm -f "$RPMBUILD_DIR"/RPMS/x86_64/ZhiYue-*.x86_64.rpm
 rpmbuild -bb "$RPMBUILD_DIR/SOURCES/packaging/ZhiYue.spec" >/dev/null
 cp "$RPMBUILD_DIR"/RPMS/x86_64/ZhiYue-*.x86_64.rpm "$DIST/"
 
