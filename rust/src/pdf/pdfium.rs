@@ -35,13 +35,18 @@ fn pdfium() -> AppResult<&'static Pdfium> {
     // Candidate locations for libpdfium.so, tried in order:
     //   1. the executable's directory            (dev: .so next to the binary)
     //   2. the executable's `lib/` subdirectory  (bundled app: bundle/lib/)
-    //   3. a system-installed library            (e.g. distro package)
+    //   3. the working dir's `rust/libpdfium/`   (`flutter test` from the repo
+    //      root: fetch_pdfium.sh places the lib there, flutter_tester's own
+    //      dir does not contain it)
+    //   4. the working directory
+    //   5. a system-installed library            (e.g. distro package)
     let mut candidates: Vec<PathBuf> = Vec::new();
     if let Some(dir) = exe_dir() {
         candidates.push(dir.clone());
         candidates.push(dir.join("lib"));
     }
     if let Ok(cwd) = std::env::current_dir() {
+        candidates.push(cwd.join("rust").join("libpdfium"));
         candidates.push(cwd);
     }
 
