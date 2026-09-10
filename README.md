@@ -10,13 +10,13 @@
 ┌────────────────────────────────────────────────┐
 │ Flutter Desktop（UI 层，Dart）                  │
 │  书库  阅读区  标记层  侧边栏  AI 面板  设置      │
-│  状态管理：Riverpod   模型：freezed             │
+│  状态管理：Riverpod   路由：go_router           │
 └───────────────────┬────────────────────────────┘
                     │ flutter_rust_bridge v2（类型安全 FFI）
 ┌───────────────────┴────────────────────────────┐
 │ Rust 核心层（无 UI，全部重活）                    │
 │  PDF（pdfium-render）  OCR（rapidocr-core）      │
-│  AI（async-openai）    SQLite + FTS5 + jieba    │
+│  AI（reqwest SSE 流式）SQLite + FTS5 + jieba    │
 │  数据模型 / 命令接口（FRB 导出）                 │
 └────────────────────────────────────────────────┘
 ```
@@ -32,7 +32,7 @@
 ## 目录结构
 
 ```
-RBWA/
+ZhiYue/
 ├── docs/                 # 需求与技术文档
 │   ├── FEATURES.md               # 需求规格
 │   ├── TECH_ROADMAP.md           # 技术路线
@@ -42,34 +42,39 @@ RBWA/
 │   ├── LINUX_PACKAGES.md         # Linux 分发包（deb/rpm/AppImage）
 │   └── FLUTTER_UI_MIGRATION.md   # Flutter UI 迁移说明
 ├── scripts/              # 构建与安装脚本
-│   ├── setup.sh                  # 工具链安装（cmake/ninja/Flutter/FRB codegen）
-│   ├── download_ocr_models.sh    # 下载 OCR 模型（内置进安装包）
-│   ├── fetch_pdfium.sh           # 获取 pdfium 二进制
-│   └── build_packages.sh         # 构建 deb/rpm/AppImage（含 build_deb.sh）
+│   ├── setup.sh                  # 工具链安装（pacman 依赖 / FRB codegen）
+│   ├── fetch_pdfium.sh           # 获取 pdfium 动态库（构建前置）
+│   ├── download_ocr_models.sh    # 下载 OCR 模型（运行时 / 打包内置）
+│   ├── build_packages.sh         # 构建 deb/rpm/AppImage
+│   └── build_deb.sh              # 单独构建 deb（被 build_packages.sh 调用）
 ├── rust/                 # Rust 核心 lib crate（rbwa_core）
 │   ├── Cargo.toml
+│   ├── libpdfium/                # pdfium 动态库（fetch_pdfium.sh 下载）
 │   └── src/
 │       ├── api.rs        # FRB 导出层（Flutter->Rust 唯一入口）
 │       ├── models/       # 共享数据模型（跨 FFI）
 │       ├── db/           # SQLite 连接 + schema + FTS5 索引
 │       ├── pdf/          # PDF 渲染与文本提取（pdfium-render）
 │       ├── ocr/          # OCR 引擎（rapidocr-core，懒加载）
-│       ├── ai/           # AI 客户端（async-openai，流式）
+│       ├── ai/           # AI 客户端（手写 reqwest SSE 流式）+ 系统提示词
 │       ├── search/       # 全文搜索（FTS5 + jieba 分词）
 │       ├── export.rs     # 标注导出（Markdown/JSON）
-│       └── error.rs      # 统一错误类型
+│       ├── error.rs      # 统一错误类型
+│       └── frb_generated.rs  # FRB 生成的 Rust 侧绑定（勿手改）
 ├── lib/                  # Flutter Dart 代码
 │   ├── main.dart         # 启动初始化（窗口+FRB+SQLite）
 │   ├── app.dart          # 根 widget（标题栏+主题+路由）
 │   ├── router/           # go_router 配置
-│   ├── core/             # 主题 / 常量 / 通用组件
+│   ├── core/             # 主题 / 通用组件
 │   ├── features/         # 功能模块（library/reader/annotation/ai/search/screenshot/settings/shell）
 │   ├── data/             # 数据层（repositories，桥接 FRB）
-│   ├── shared/           # 共享组件
 │   └── src/rust/         # FRB 生成的 Dart 绑定（勿手改）
-├── packaging/            # Linux 打包资源（desktop 文件 / 图标 / rpm spec）
-├── assets/               # 图标、字体、占位图
-├── dist/                 # 构建产物（deb/rpm/AppImage）
+├── linux/                # Flutter Linux 桌面 runner（CMake：cargo 编译 + .so/pdfium 打包进 bundle）
+├── test/                 # 单元 / 组件 / 冒烟测试（flutter test）
+├── integration_test/     # 集成测试（flutter test integration_test）
+├── packaging/            # Linux 打包资源（ZhiYue.desktop / ZhiYue.spec / 图标）
+├── assets/               # 应用图标（ZhiYue.png）
+├── dist/                 # 分发包产物（deb/rpm/AppImage，构建时生成）
 └── pubspec.yaml
 ```
 
@@ -81,25 +86,44 @@ RBWA/
 sudo bash scripts/setup.sh
 ```
 
-脚本会安装 cmake / ninja（pacman）、Flutter SDK、`flutter_rust_bridge_codegen`，并下载 pdfium 与 OCR 模型。详见 [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md)。
+脚本会安装 cmake / ninja 等系统依赖（pacman）与 `flutter_rust_bridge_codegen`。Flutter SDK 需自行安装（脚本会检测并提示；默认路径 `~/develop/flutter`，解压后把 `bin` 加入 PATH）。详见 [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md)。
 
 ### 2. 构建与运行
 
 ```bash
+# 获取 pdfium 动态库（构建前置，Rust 核心的 PDF 渲染依赖它）
+bash scripts/fetch_pdfium.sh
+
 # 重新生成 FRB 绑定（修改 rust/src/api.rs 后执行）
 flutter_rust_bridge_codegen generate
 
-# 构建（debug）-- 会自动编译 Rust crate 并打包 .so
-flutter build linux --debug
+# 构建（debug 或 release）-- CMake 会自动 cargo 编译 Rust 并把 .so 打进 bundle
+flutter build linux --release
 
-# 运行
-./build/linux/x64/debug/bundle/rbwa
+# 运行（可执行文件名为 ZhiYue）
+./build/linux/x64/release/bundle/ZhiYue
 
 # 或直接热重载开发
 flutter run -d linux
 ```
 
-### 3. 安装包
+OCR 模型不参与构建，运行时整页 OCR 功能需要（开发模式下载到 `~/.local/share/RBWA/models`）：
+
+```bash
+bash scripts/download_ocr_models.sh --all
+```
+
+### 3. 测试
+
+```bash
+# Rust 单元测试（系统提示词 / 数据层 / 注入防御等）
+cargo test --manifest-path rust/Cargo.toml
+
+# Dart 测试（AI 冒烟等需先 cargo build --release 生成 librbwa_core.so 供加载）
+flutter test
+```
+
+### 4. 安装包
 
 一键构建 deb / rpm / AppImage 分发包（内置 OCR 模型，约 250MB）：
 
@@ -109,7 +133,7 @@ bash scripts/build_packages.sh
 
 安装与使用方式见 [`docs/LINUX_PACKAGES.md`](docs/LINUX_PACKAGES.md)。
 
-### 4. 验证功能
+### 5. 验证功能
 
 应用启动后：
 
