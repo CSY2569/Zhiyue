@@ -614,29 +614,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ),
             ],
           ],
-          const Divider(),
-          _SectionTitle('OCR 整页扫描（本地离线，模型已随应用内置）', theme),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('识别模式'),
-            trailing: SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(
-                  value: 'high_precision',
-                  label: Text('高精度'),
-                  icon: Icon(Icons.high_quality_outlined, size: 16),
-                ),
-                ButtonSegment(
-                  value: 'fast',
-                  label: Text('快速'),
-                  icon: Icon(Icons.bolt_outlined, size: 16),
-                ),
-              ],
-              selected: {_ocrMode},
-              showSelectedIcon: false,
-              onSelectionChanged: (s) => setState(() => _ocrMode = s.first),
-            ),
-          ),
           const SizedBox(height: 12),
           FilledButton.icon(
             onPressed: canSave ? _save : null,

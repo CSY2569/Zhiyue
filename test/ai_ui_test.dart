@@ -221,7 +221,14 @@ void main() {
     await tester.tap(find.text('保存为模板'));
     await tester.pumpAndSettle();
     // The saved list shows the named template (its delete button), and
-    // the template picker gains a chip for it.
+    // the template picker gains a chip for it. The saved row sits below the
+    // fold on a shorter list, so scroll it into view first.
+    await tester.scrollUntilVisible(
+      find.byTooltip('删除模板'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
     expect(find.byTooltip('删除模板'), findsOneWidget);
     expect(find.widgetWithText(ChoiceChip, '诗人'), findsOneWidget);
 
