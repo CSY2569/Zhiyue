@@ -1,4 +1,4 @@
-# RPM spec for RBWA (Read Book With AI) -- x86_64.
+# RPM spec for ZhiYue (智阅) -- x86_64.
 #
 # Requires the release bundle to be built first:
 #   flutter build linux --release
@@ -15,7 +15,7 @@ Name:           ZhiYue
 Version:        0.1.0
 Release:        1%{?dist}
 Summary:        智阅 - AI-powered local PDF/image reader
-License:        MIT OR Apache-2.0
+License:        GPL-3.0-only
 URL:            https://github.com/CSY2569/Zhiyue
 BuildArch:      x86_64
 
