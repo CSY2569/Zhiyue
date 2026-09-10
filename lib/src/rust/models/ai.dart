@@ -38,6 +38,14 @@ class AiConfig {
   /// Translation target language, default "中文" (6.1.3).
   final String translateTargetLang;
 
+  /// Extra target languages the user added (设置 → AI 设置 → 翻译): shown as
+  /// chips next to the built-in 中文 / 英文 / 中英互译 options.
+  final List<String> translateCustomLangs;
+
+  /// Whether the general model accepts images (多模态). When false the UI
+  /// shows a separate vision config (URL / key / model) instead.
+  final bool modelSupportsVision;
+
   /// Web search toggle (6.1.4).
   final bool webSearchEnabled;
 
@@ -61,6 +69,11 @@ class AiConfig {
   /// Sampling temperature for text replies (0.0-2.0, OpenAI range).
   final double temperature;
 
+  /// Text protocol: "chat_completions" (default) or "responses". The latter
+  /// routes text actions through the OpenAI Responses API and falls back to
+  /// chat completions when the provider rejects it.
+  final String apiProtocol;
+
   /// Role template for text replies: "general" | "academic" | "novel" |
   /// "tech" | "language" | "custom" (the role segment is prepended to the
   /// per-action system prompt).
@@ -79,6 +92,17 @@ class AiConfig {
   /// AI 回复: selecting a template shows its text, editable).
   final Map<String, String> templateOverrides;
 
+  /// Embedded (semantic) search toggle and its config (设置 → AI 设置 →
+  /// 嵌入搜索). Reserved: the settings UI persists these today; the
+  /// indexing / retrieval pipeline is not implemented yet.
+  final bool embeddingEnabled;
+  final String? embeddingBaseUrl;
+  final String? embeddingApiKey;
+  final String embeddingModel;
+  final String? vectorDbUrl;
+  final String? vectorDbApiKey;
+  final String vectorDbCollection;
+
   const AiConfig({
     required this.baseUrl,
     required this.apiKey,
@@ -90,16 +114,26 @@ class AiConfig {
     this.searchBaseUrl,
     this.searchApiKey,
     required this.translateTargetLang,
+    required this.translateCustomLangs,
+    required this.modelSupportsVision,
     required this.webSearchEnabled,
     required this.ocrMode,
     required this.includeBookHistory,
     required this.enableReasoning,
     required this.reasoningEffort,
     required this.temperature,
+    required this.apiProtocol,
     required this.promptTemplate,
     required this.customPrompt,
     required this.customPrompts,
     required this.templateOverrides,
+    required this.embeddingEnabled,
+    this.embeddingBaseUrl,
+    this.embeddingApiKey,
+    required this.embeddingModel,
+    this.vectorDbUrl,
+    this.vectorDbApiKey,
+    required this.vectorDbCollection,
   });
 
   @override
@@ -114,16 +148,26 @@ class AiConfig {
       searchBaseUrl.hashCode ^
       searchApiKey.hashCode ^
       translateTargetLang.hashCode ^
+      translateCustomLangs.hashCode ^
+      modelSupportsVision.hashCode ^
       webSearchEnabled.hashCode ^
       ocrMode.hashCode ^
       includeBookHistory.hashCode ^
       enableReasoning.hashCode ^
       reasoningEffort.hashCode ^
       temperature.hashCode ^
+      apiProtocol.hashCode ^
       promptTemplate.hashCode ^
       customPrompt.hashCode ^
       customPrompts.hashCode ^
-      templateOverrides.hashCode;
+      templateOverrides.hashCode ^
+      embeddingEnabled.hashCode ^
+      embeddingBaseUrl.hashCode ^
+      embeddingApiKey.hashCode ^
+      embeddingModel.hashCode ^
+      vectorDbUrl.hashCode ^
+      vectorDbApiKey.hashCode ^
+      vectorDbCollection.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -140,16 +184,26 @@ class AiConfig {
           searchBaseUrl == other.searchBaseUrl &&
           searchApiKey == other.searchApiKey &&
           translateTargetLang == other.translateTargetLang &&
+          translateCustomLangs == other.translateCustomLangs &&
+          modelSupportsVision == other.modelSupportsVision &&
           webSearchEnabled == other.webSearchEnabled &&
           ocrMode == other.ocrMode &&
           includeBookHistory == other.includeBookHistory &&
           enableReasoning == other.enableReasoning &&
           reasoningEffort == other.reasoningEffort &&
           temperature == other.temperature &&
+          apiProtocol == other.apiProtocol &&
           promptTemplate == other.promptTemplate &&
           customPrompt == other.customPrompt &&
           customPrompts == other.customPrompts &&
-          templateOverrides == other.templateOverrides;
+          templateOverrides == other.templateOverrides &&
+          embeddingEnabled == other.embeddingEnabled &&
+          embeddingBaseUrl == other.embeddingBaseUrl &&
+          embeddingApiKey == other.embeddingApiKey &&
+          embeddingModel == other.embeddingModel &&
+          vectorDbUrl == other.vectorDbUrl &&
+          vectorDbApiKey == other.vectorDbApiKey &&
+          vectorDbCollection == other.vectorDbCollection;
 }
 
 /// A single message in a thread (table: ai_messages).

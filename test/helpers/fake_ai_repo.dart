@@ -17,6 +17,10 @@ class FakeAiRepo extends AiRepository {
   /// verify the scan pipeline follows the setting.
   String ocrMode = 'high_precision';
 
+  /// When set, returned by [getAiConfig] instead of the built-in default --
+  /// lets a test seed a specific saved config (e.g. a template override).
+  AiConfig? configOverride;
+
   /// In-memory "database": thread id -> (title, messages).
   final savedThreads = <int, String>{};
   final savedBookIds = <int, int?>{};
@@ -28,7 +32,7 @@ class FakeAiRepo extends AiRepository {
   final savedImages = <int, List<Uint8List>>{};
 
   @override
-  Future<AiConfig> getAiConfig() async => AiConfig(
+  Future<AiConfig> getAiConfig() async => configOverride ?? AiConfig(
         baseUrl: 'http://mock/v1',
         apiKey: 'mock-key',
         textModel: 'mock-text',
@@ -36,6 +40,8 @@ class FakeAiRepo extends AiRepository {
         visionBaseUrl: null,
         visionApiKey: null,
         translateTargetLang: '中文',
+        translateCustomLangs: const [],
+        modelSupportsVision: false,
         webSearchEnabled: true,
         searchUseBuiltin: false,
         ocrMode: ocrMode,
@@ -43,10 +49,18 @@ class FakeAiRepo extends AiRepository {
         enableReasoning: false,
         reasoningEffort: 'medium',
         temperature: 0.7,
+        apiProtocol: 'chat_completions',
         promptTemplate: 'general',
         customPrompt: '',
         customPrompts: const [],
         templateOverrides: const {},
+        embeddingEnabled: false,
+        embeddingBaseUrl: null,
+        embeddingApiKey: null,
+        embeddingModel: '',
+        vectorDbUrl: null,
+        vectorDbApiKey: null,
+        vectorDbCollection: '',
       );
 
   @override
@@ -56,8 +70,11 @@ class FakeAiRepo extends AiRepository {
   }
 
   @override
-  Future<String> templateDefaultText(String templateId) async =>
-      templateId == 'academic' ? '默认学术文本' : '';
+  Future<String> templateDefaultText(String templateId) async => switch (templateId) {
+        'academic' => '默认学术文本',
+        'general' => '默认通用文本',
+        _ => '',
+      };
 
   @override
   Future<List<AiThread>> listAiThreads() async => [
@@ -139,6 +156,7 @@ class FakeAiRepo extends AiRepository {
     required AiActionType action,
     required String text,
     required List<AiMessage> history,
+    required bool isFollowUp,
   }) {
     sent.add((action, text));
     if (failStream) {

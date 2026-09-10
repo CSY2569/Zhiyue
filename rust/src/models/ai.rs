@@ -128,6 +128,14 @@ pub struct AiConfig {
     pub search_api_key: Option<String>,
     /// Translation target language, default "中文" (6.1.3).
     pub translate_target_lang: String,
+    /// Extra target languages the user added (设置 → AI 设置 → 翻译): shown as
+    /// chips next to the built-in 中文 / 英文 / 中英互译 options.
+    #[serde(default)]
+    pub translate_custom_langs: Vec<String>,
+    /// Whether the general model accepts images (多模态). When false the UI
+    /// shows a separate vision config (URL / key / model) instead.
+    #[serde(default)]
+    pub model_supports_vision: bool,
     /// Web search toggle (6.1.4).
     pub web_search_enabled: bool,
     /// Full-page OCR model set (7.1.9): "high_precision" (server models,
@@ -150,6 +158,11 @@ pub struct AiConfig {
     /// Sampling temperature for text replies (0.0-2.0, OpenAI range).
     #[serde(default = "default_temperature")]
     pub temperature: f64,
+    /// Text protocol: "chat_completions" (default) or "responses". The latter
+    /// routes text actions through the OpenAI Responses API and falls back to
+    /// chat completions when the provider rejects it.
+    #[serde(default = "default_api_protocol")]
+    pub api_protocol: String,
     /// Role template for text replies: "general" | "academic" | "novel" |
     /// "tech" | "language" | "custom" (the role segment is prepended to the
     /// per-action system prompt).
@@ -168,6 +181,23 @@ pub struct AiConfig {
     /// AI 回复: selecting a template shows its text, editable).
     #[serde(default)]
     pub template_overrides: std::collections::HashMap<String, String>,
+    /// Embedded (semantic) search toggle and its config (设置 → AI 设置 →
+    /// 嵌入搜索). Reserved: the settings UI persists these today; the
+    /// indexing / retrieval pipeline is not implemented yet.
+    #[serde(default)]
+    pub embedding_enabled: bool,
+    #[serde(default)]
+    pub embedding_base_url: Option<String>,
+    #[serde(default)]
+    pub embedding_api_key: Option<String>,
+    #[serde(default)]
+    pub embedding_model: String,
+    #[serde(default)]
+    pub vector_db_url: Option<String>,
+    #[serde(default)]
+    pub vector_db_api_key: Option<String>,
+    #[serde(default)]
+    pub vector_db_collection: String,
 }
 
 /// One user-saved custom prompt template (name + text).
@@ -193,6 +223,10 @@ fn default_temperature() -> f64 {
     0.7
 }
 
+fn default_api_protocol() -> String {
+    "chat_completions".to_string()
+}
+
 fn default_prompt_template() -> String {
     "general".to_string()
 }
@@ -213,16 +247,26 @@ impl Default for AiConfig {
             search_base_url: None,
             search_api_key: None,
             translate_target_lang: "中文".to_string(),
+            translate_custom_langs: Vec::new(),
+            model_supports_vision: false,
             web_search_enabled: false,
             ocr_mode: default_ocr_mode(),
             include_book_history: default_true(),
             enable_reasoning: false,
             reasoning_effort: default_reasoning_effort(),
             temperature: default_temperature(),
+            api_protocol: default_api_protocol(),
             prompt_template: default_prompt_template(),
             custom_prompt: String::new(),
             custom_prompts: Vec::new(),
             template_overrides: std::collections::HashMap::new(),
+            embedding_enabled: false,
+            embedding_base_url: None,
+            embedding_api_key: None,
+            embedding_model: String::new(),
+            vector_db_url: None,
+            vector_db_api_key: None,
+            vector_db_collection: String::new(),
         }
     }
 }
@@ -277,12 +321,15 @@ mod tests {
             search_base_url: Some("https://s.example/search".into()),
             search_api_key: Some("sk-s".into()),
             translate_target_lang: "中文".into(),
+            translate_custom_langs: vec!["日文".into(), "法文".into()],
+            model_supports_vision: true,
             web_search_enabled: true,
             ocr_mode: "fast".into(),
             include_book_history: false,
             enable_reasoning: true,
             reasoning_effort: "high".into(),
             temperature: 0.3,
+            api_protocol: "responses".into(),
             prompt_template: "tech".into(),
             custom_prompt: "自定义角色".into(),
             custom_prompts: vec![
@@ -294,6 +341,13 @@ mod tests {
             template_overrides: std::collections::HashMap::from([
                 ("academic".to_string(), "你是一位物理学家。".to_string()),
             ]),
+            embedding_enabled: true,
+            embedding_base_url: Some("https://emb.example/v1".into()),
+            embedding_api_key: Some("sk-emb".into()),
+            embedding_model: "text-embedding-3-small".into(),
+            vector_db_url: Some("https://vdb.example".into()),
+            vector_db_api_key: Some("sk-vdb".into()),
+            vector_db_collection: "zhiyue".into(),
         };
         let back: AiConfig = serde_json::from_str(&serde_json::to_string(&cfg).unwrap()).unwrap();
         assert_eq!(back.base_url, cfg.base_url);
@@ -312,6 +366,7 @@ mod tests {
         assert!(back.enable_reasoning);
         assert_eq!(back.reasoning_effort, "high");
         assert!((back.temperature - 0.3).abs() < 1e-9);
+        assert_eq!(back.api_protocol, "responses");
         assert_eq!(back.prompt_template, "tech");
         assert_eq!(back.custom_prompt, "自定义角色");
         assert_eq!(back.custom_prompts.len(), 1);
@@ -321,6 +376,15 @@ mod tests {
             back.template_overrides.get("academic").map(String::as_str),
             Some("你是一位物理学家。")
         );
+        assert_eq!(back.translate_custom_langs, vec!["日文", "法文"]);
+        assert!(back.model_supports_vision);
+        assert!(back.embedding_enabled);
+        assert_eq!(back.embedding_base_url.as_deref(), Some("https://emb.example/v1"));
+        assert_eq!(back.embedding_api_key.as_deref(), Some("sk-emb"));
+        assert_eq!(back.embedding_model, "text-embedding-3-small");
+        assert_eq!(back.vector_db_url.as_deref(), Some("https://vdb.example"));
+        assert_eq!(back.vector_db_api_key.as_deref(), Some("sk-vdb"));
+        assert_eq!(back.vector_db_collection, "zhiyue");
 
         // A config saved by an older build (no ocr_mode) still loads: the
         // serde default kicks in.
@@ -332,7 +396,15 @@ mod tests {
         assert!(!legacy.enable_reasoning);
         assert_eq!(legacy.reasoning_effort, "medium");
         assert!((legacy.temperature - 0.7).abs() < 1e-9);
+        assert_eq!(legacy.api_protocol, "chat_completions");
         assert_eq!(legacy.prompt_template, "general");
         assert!(legacy.custom_prompts.is_empty());
+        // Newer reserved fields default cleanly too.
+        assert!(legacy.translate_custom_langs.is_empty());
+        assert!(!legacy.model_supports_vision);
+        assert!(!legacy.embedding_enabled);
+        assert!(legacy.embedding_base_url.is_none());
+        assert!(legacy.vector_db_url.is_none());
+        assert!(legacy.vector_db_collection.is_empty());
     }
 }

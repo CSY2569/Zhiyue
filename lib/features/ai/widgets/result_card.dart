@@ -6,6 +6,7 @@ import 'package:rbwa/features/ai/providers/ai_provider.dart';
 import 'package:rbwa/features/ai/widgets/ai_utils.dart';
 import 'package:rbwa/features/ai/widgets/message_bubble.dart'
     show AiMessageBubble;
+import 'package:rbwa/features/reader/providers/panel_layout.dart';
 import 'package:rbwa/src/rust/models/ai.dart' show AiActionType, AiRole;
 
 /// Floating AI result card (FEATURES 6.4): shows the active thread's full
@@ -26,9 +27,6 @@ class ResultCard extends ConsumerWidget {
   final int? bookId;
   final String? bookTitle;
 
-  static const double _cardWidth = 440;
-  static const double _cardHeight = 360;
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(aiProvider);
@@ -38,6 +36,8 @@ class ResultCard extends ConsumerWidget {
 
     final theme = Theme.of(context);
     final screen = MediaQuery.sizeOf(context);
+    final cardSize =
+        ref.watch(panelLayoutProvider.select((p) => p.cardSize));
     final pos = state.cardPos;
     final thread = state.threadOf(state.activeThreadId);
     final messages = thread?.messages ?? const <AiChatMessage>[];
@@ -48,103 +48,149 @@ class ResultCard extends ConsumerWidget {
     final tail = streamingHere ? state.streamingText : null;
     final conversation =
         _conversationText(messages, streamingTail: tail);
+    // Bubbles reflow with the card width (was a hardcoded 380).
+    final bubbleMax = (cardSize.width - 24).clamp(200.0, 1000.0);
+    // Keep the card on screen; the lower bound guards against a card wider
+    // than the window (clamp would otherwise get lower > upper).
+    final maxLeft =
+        (screen.width - cardSize.width - 8).clamp(8.0, double.infinity);
+    final maxTop =
+        (screen.height - cardSize.height - 8).clamp(8.0, double.infinity);
 
     return Positioned(
-      left: pos.dx.clamp(8.0, screen.width - _cardWidth - 8),
-      top: pos.dy.clamp(8.0, screen.height - _cardHeight - 8),
+      left: pos.dx.clamp(8.0, maxLeft),
+      top: pos.dy.clamp(8.0, maxTop),
       child: Material(
         elevation: 4,
         borderRadius: BorderRadius.circular(8),
         color: theme.colorScheme.surfaceContainerHigh,
         child: SizedBox(
-          width: _cardWidth,
-          height: _cardHeight,
-          child: Column(
+          width: cardSize.width,
+          height: cardSize.height,
+          child: Stack(
             children: [
-              // Title bar: the drag handle (FEATURES 8.4) -- kept off the
-              // content area so the input field / messages stay gesture-clean.
-              GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onPanUpdate: (d) =>
-                    ref.read(aiProvider.notifier).moveCard(d.delta),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 4, 4, 0),
-                  child: Row(
-                    children: [
-                      Icon(Icons.auto_awesome,
-                          size: 16, color: theme.colorScheme.primary),
-                      const SizedBox(width: 6),
-                      Text('AI 结果', style: theme.textTheme.titleSmall),
-                      const Spacer(),
-                      // Stop (while streaming) / copy / expand / close (6.4.1).
-                      if (streamingHere)
-                        ToolbarIconButton(
-                          icon: Icons.stop_circle_outlined,
-                          tooltip: '停止生成',
-                          onTap: () =>
-                              ref.read(aiProvider.notifier).cancelStreaming(),
+              Column(
+                children: [
+                  // Title bar: the drag handle (FEATURES 8.4) -- kept off the
+                  // content area so the input field / messages stay
+                  // gesture-clean.
+                  GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onPanUpdate: (d) =>
+                        ref.read(aiProvider.notifier).moveCard(d.delta),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 4, 4, 0),
+                      child: Row(
+                        children: [
+                          Icon(Icons.auto_awesome,
+                              size: 16, color: theme.colorScheme.primary),
+                          const SizedBox(width: 6),
+                          Text('AI 结果', style: theme.textTheme.titleSmall),
+                          const Spacer(),
+                          // Stop (while streaming) / copy / expand / close
+                          // (6.4.1).
+                          if (streamingHere)
+                            ToolbarIconButton(
+                              icon: Icons.stop_circle_outlined,
+                              tooltip: '停止生成',
+                              onTap: () => ref
+                                  .read(aiProvider.notifier)
+                                  .cancelStreaming(),
+                            ),
+                          ToolbarIconButton(
+                            icon: Icons.copy_outlined,
+                            tooltip: '复制对话',
+                            onTap: () => copyTextWithSnack(
+                                context, conversation,
+                                okLabel: '已复制对话'),
+                          ),
+                          ToolbarIconButton(
+                            icon: Icons.open_in_full_outlined,
+                            tooltip: '展开到侧栏',
+                            onTap: () => ref
+                                .read(aiProvider.notifier)
+                                .moveCardToPanel(),
+                          ),
+                          ToolbarIconButton(
+                            icon: Icons.close,
+                            tooltip: '关闭',
+                            onTap: () =>
+                                ref.read(aiProvider.notifier).closeCard(),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 8),
+                  Expanded(
+                    // reverse: the newest message sits at the bottom and the
+                    // list stays pinned to it while content streams in.
+                    child: ListView(
+                      reverse: true,
+                      padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+                      children: [
+                        if (tail != null)
+                          tail.isEmpty
+                              ? const _StreamingCursor()
+                              : AiMessageBubble(
+                                  role: AiRole.assistant,
+                                  content: tail,
+                                  streaming: true,
+                                  maxWidth: bubbleMax,
+                                  aiColor: theme
+                                      .colorScheme.surfaceContainerHighest,
+                                ),
+                        ...messages.reversed.map(
+                          (m) => AiMessageBubble(
+                            role: m.role,
+                            content: m.content,
+                            imagePng: m.imagePng,
+                            imagePath: m.imagePath,
+                            actionType: m.actionType,
+                            createdAt: m.createdAt,
+                            maxWidth: bubbleMax,
+                            aiColor:
+                                theme.colorScheme.surfaceContainerHighest,
+                          ),
                         ),
-                      ToolbarIconButton(
-                        icon: Icons.copy_outlined,
-                        tooltip: '复制对话',
-                        onTap: () => copyTextWithSnack(context, conversation,
-                            okLabel: '已复制对话'),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 8),
+                  _CardInput(
+                    streaming: streamingHere,
+                    bookId: bookId,
+                    bookTitle: bookTitle,
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+              // Bottom-right resize grip (FEATURES 6.4): drag to change the
+              // card's width and height; the content reflows, and the size is
+              // persisted when the drag ends.
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.resizeDownRight,
+                  child: GestureDetector(
+                    key: const Key('card-resize-handle'),
+                    behavior: HitTestBehavior.opaque,
+                    onPanUpdate: (d) =>
+                        ref.read(panelLayoutProvider.notifier).resizeCard(d.delta),
+                    onPanEnd: (_) =>
+                        ref.read(panelLayoutProvider.notifier).commit(),
+                    child: Padding(
+                      padding: const EdgeInsets.all(2),
+                      child: Icon(
+                        Icons.drag_handle,
+                        size: 14,
+                        color: theme.colorScheme.outline,
                       ),
-                      ToolbarIconButton(
-                        icon: Icons.open_in_full_outlined,
-                        tooltip: '展开到侧栏',
-                        onTap: () =>
-                            ref.read(aiProvider.notifier).moveCardToPanel(),
-                      ),
-                      ToolbarIconButton(
-                        icon: Icons.close,
-                        tooltip: '关闭',
-                        onTap: () => ref.read(aiProvider.notifier).closeCard(),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
-              const Divider(height: 8),
-              Expanded(
-                // reverse: the newest message sits at the bottom and the
-                // list stays pinned to it while content streams in.
-                child: ListView(
-                  reverse: true,
-                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-                  children: [
-                    if (tail != null)
-                      tail.isEmpty
-                          ? const _StreamingCursor()
-                          : AiMessageBubble(
-                              role: AiRole.assistant,
-                              content: tail,
-                              streaming: true,
-                              maxWidth: 380,
-                              aiColor: theme.colorScheme.surfaceContainerHighest,
-                            ),
-                    ...messages.reversed.map(
-                      (m) => AiMessageBubble(
-                        role: m.role,
-                        content: m.content,
-                        imagePng: m.imagePng,
-                        imagePath: m.imagePath,
-                        actionType: m.actionType,
-                        createdAt: m.createdAt,
-                        maxWidth: 380,
-                        aiColor: theme.colorScheme.surfaceContainerHighest,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 8),
-              _CardInput(
-                streaming: streamingHere,
-                bookId: bookId,
-                bookTitle: bookTitle,
-              ),
-              const SizedBox(height: 8),
             ],
           ),
         ),

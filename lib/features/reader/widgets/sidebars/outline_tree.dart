@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:rbwa/data/repositories/reader_repository.dart';
+import 'package:rbwa/features/reader/providers/outline_settings.dart';
+import 'package:rbwa/features/reader/providers/panel_layout.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
 import 'package:rbwa/src/rust/pdf/types.dart';
 
@@ -55,8 +57,10 @@ class _OutlineTreeState extends ConsumerState<OutlineTree> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final width =
+        ref.watch(panelLayoutProvider.select((p) => p.outlineWidth));
     return SizedBox(
-      width: 240,
+      width: width,
       child: Material(
         color: theme.colorScheme.surfaceContainerLow,
         child: _buildBody(theme),
@@ -94,11 +98,16 @@ class _OutlineTreeState extends ConsumerState<OutlineTree> {
         ),
       );
     }
+    // 设置 → 阅读器: whether every level starts expanded. Toggling it re-keys
+    // the list below so the nodes pick up the new default immediately.
+    final expandAll = ref.watch(outlineExpandAllProvider);
     return ListView(
+      key: ValueKey(expandAll),
       padding: const EdgeInsets.symmetric(vertical: 8),
       children: entries.map((e) => _OutlineNode(
         entry: e,
         depth: 0,
+        defaultExpanded: expandAll,
         onJump: (page) => widget.onJump(page),
       )).toList(),
     );
@@ -110,11 +119,16 @@ class _OutlineNode extends StatefulWidget {
   const _OutlineNode({
     required this.entry,
     required this.depth,
+    required this.defaultExpanded,
     required this.onJump,
   });
 
   final OutlineEntry entry;
   final int depth;
+
+  /// Whether this node's children start expanded (设置 → 阅读器, inherited by
+  /// every descendant so "expand all" reaches the whole tree).
+  final bool defaultExpanded;
   final void Function(int page) onJump;
 
   @override
@@ -122,7 +136,13 @@ class _OutlineNode extends StatefulWidget {
 }
 
 class _OutlineNodeState extends State<_OutlineNode> {
-  bool _expanded = false;
+  late bool _expanded;
+
+  @override
+  void initState() {
+    super.initState();
+    _expanded = widget.defaultExpanded;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -183,6 +203,7 @@ class _OutlineNodeState extends State<_OutlineNode> {
           ...widget.entry.children.map((child) => _OutlineNode(
                 entry: child,
                 depth: widget.depth + 1,
+                defaultExpanded: widget.defaultExpanded,
                 onJump: widget.onJump,
               )),
       ],

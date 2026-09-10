@@ -4,9 +4,9 @@
 
 | 包 | 大小 | 适用发行版 |
 |----|------|-----------|
-| `rbwa_<ver>_amd64.deb` | ~250M | Debian / Ubuntu / Linux Mint 等 |
-| `rbwa-<ver>-1.x86_64.rpm` | ~250M | Fedora / RHEL / Rocky / OpenSUSE 等 |
-| `rbwa-x86_64.AppImage` | ~250M | 任意发行版（免安装） |
+| `zhiyue_<ver>_amd64.deb` | ~250M | Debian / Ubuntu / Linux Mint 等 |
+| `ZhiYue-<ver>-1.x86_64.rpm` | ~250M | Fedora / RHEL / Rocky / OpenSUSE 等 |
+| `ZhiYue-x86_64.AppImage` | ~250M | 任意发行版（免安装） |
 
 体积含内置 OCR 模型（高精度 + 快速两套，~210MB）。
 
@@ -15,26 +15,26 @@
 ### Debian / Ubuntu（.deb）
 
 ```bash
-sudo apt install ./rbwa_0.1.0_amd64.deb
+sudo apt install ./zhiyue_0.1.0_amd64.deb
 # 依赖自动安装（libgtk-3-0、libglib2.0-0 等，apt 会处理）
 ```
 
-卸载：`sudo apt remove rbwa`
+卸载：`sudo apt remove zhiyue`
 
 ### Fedora / RHEL（.rpm）
 
 ```bash
-sudo dnf install ./rbwa-0.1.0-1.x86_64.rpm
+sudo dnf install ./ZhiYue-0.1.0-1.x86_64.rpm
 # 依赖自动安装（gtk3、glib2 等，dnf 会处理）
 ```
 
-卸载：`sudo dnf remove rbwa`
+卸载：`sudo dnf remove ZhiYue`
 
 ### 任意发行版（AppImage）
 
 ```bash
-chmod +x rbwa-x86_64.AppImage
-./rbwa-x86_64.AppImage          # 直接运行
+chmod +x ZhiYue-x86_64.AppImage
+./ZhiYue-x86_64.AppImage          # 直接运行
 # 或放到 ~/Applications 并加入 PATH
 ```
 
@@ -57,7 +57,7 @@ AppImage 不声明依赖——它使用宿主系统的 GTK 等库（主流桌面
 
 ## OCR 模型（已内置）
 
-PP-OCRv4 两套模型（高精度 server ~200MB + 快速 mobile ~16MB）**已随包内置**，安装后直接可用，无需任何下载。安装位置：`/usr/lib/rbwa/models/`（AppImage 在应用目录内 `models/`）。
+PP-OCRv4 两套模型（高精度 server ~200MB + 快速 mobile ~16MB）**已随包内置**，安装后直接可用，无需任何下载。安装位置：`/usr/lib/zhiyue/models/`（AppImage 在应用目录内 `models/`）。
 
 > 仅开发环境（未打包运行时）需要 `scripts/download_ocr_models.sh` 手动下载到 `~/.local/share/RBWA/models/`。
 
@@ -76,7 +76,7 @@ PP-OCRv4 两套模型（高精度 server ~200MB + 快速 mobile ~16MB）**已随
 ```bash
 bash scripts/build_packages.sh          # 一次构建三种包
 bash scripts/build_deb.sh               # 只构建 deb
-rpmbuild -bb packaging/rbwa.spec        # 只构建 rpm（需先把 bundle 放 SOURCES）
+rpmbuild -bb packaging/ZhiYue.spec        # 只构建 rpm（需先把 bundle 放 SOURCES）
 ```
 
 ## 最低配置

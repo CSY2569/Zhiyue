@@ -11,7 +11,7 @@
 - **数据**：SQLite（WAL）+ FTS5 全文索引 + jieba 中文分词
 - **OCR**：rapidocr-core（PP-OCRv4 det/cls/rec，ONNX Runtime 静态链接，完全离线）
 - **AI**：OpenAI 兼容协议（BYOK，可配 DeepSeek/Kimi/通义等），多模态识图
-- **目标平台**：Linux 首发（Windows/macOS 可移植）
+- **目标平台**：Linux 桌面
 - **开发模式**：单人开发，里程碑制，零参考重写
 
 ## 2. 里程碑实施进度
@@ -67,7 +67,6 @@
 - **OCR 排队与取消**：多页扫描任务队列、可取消（rapidocr 支持取消令牌）
 - **AI 对话体验**：上下文管理（滑动窗口 / 手动清空）、回答流式渲染优化
 - **导出增强**：标注拼合 PDF、导出格式扩展（HTML/EPUB）
-- **Windows / macOS 移植**：file_picker、window_manager 已有跨平台基础
 
 ### 4.3 远期（新能力）
 

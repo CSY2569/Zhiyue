@@ -52,6 +52,20 @@ static void my_application_activate(GApplication* application) {
     gtk_window_set_title(window, "智阅");
   }
 
+  // Window icon: load the bundle asset next to the executable (assets/ is
+  // declared in pubspec.yaml, so ZhiYue.png ships inside flutter_assets).
+  // Resolve via /proc/self/exe so it works regardless of the cwd.
+  gchar* exe_path = g_file_read_link("/proc/self/exe", nullptr);
+  if (exe_path != nullptr) {
+    gchar* exe_dir = g_path_get_dirname(exe_path);
+    gchar* icon_path = g_build_filename(
+        exe_dir, "data", "flutter_assets", "assets", "ZhiYue.png", nullptr);
+    gtk_window_set_icon_from_file(window, icon_path, nullptr);
+    g_free(icon_path);
+    g_free(exe_dir);
+    g_free(exe_path);
+  }
+
   gtk_window_set_default_size(window, 1280, 720);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();

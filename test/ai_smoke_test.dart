@@ -114,6 +114,7 @@ AiConfig _cfg({
   bool searchUseBuiltin = false,
   bool includeBookHistory = true,
   String promptTemplate = 'general',
+  String apiProtocol = 'chat_completions',
 }) =>
     AiConfig(
       baseUrl: baseUrl,
@@ -123,6 +124,8 @@ AiConfig _cfg({
       visionBaseUrl: null,
       visionApiKey: null,
       translateTargetLang: '中文',
+      translateCustomLangs: const [],
+      modelSupportsVision: false,
       webSearchEnabled: webSearchEnabled,
       searchUseBuiltin: searchUseBuiltin,
       ocrMode: 'high_precision',
@@ -130,10 +133,18 @@ AiConfig _cfg({
       enableReasoning: false,
       reasoningEffort: 'medium',
       temperature: 0.7,
+      apiProtocol: apiProtocol,
       promptTemplate: promptTemplate,
       customPrompt: '',
       customPrompts: const [],
       templateOverrides: const {},
+      embeddingEnabled: false,
+      embeddingBaseUrl: null,
+      embeddingApiKey: null,
+      embeddingModel: '',
+      vectorDbUrl: null,
+      vectorDbApiKey: null,
+      vectorDbCollection: '',
     );
 
 /// Drain a stream until it closes; returns the chunks joined. Errors abort
@@ -174,6 +185,7 @@ void main() {
     await collect(rust.streamChat(
       action: AiActionType.chat,
       text: 'q2',
+      isFollowUp: false,
       history: [
         AiMessage(
             id: -1, threadId: -1, role: AiRole.user, content: 'q1', createdAt: ''),
@@ -202,6 +214,7 @@ void main() {
     await collect(rust.streamChat(
       action: AiActionType.explain,
       text: 'hi',
+      isFollowUp: false,
       history: const [],
     ));
 
@@ -221,6 +234,7 @@ void main() {
     await collect(rust.streamChat(
       action: AiActionType.translate,
       text: 'hi',
+      isFollowUp: false,
       history: const [],
     ));
     messages =
@@ -240,6 +254,7 @@ void main() {
     final out = await collect(rust.streamChat(
       action: AiActionType.chat,
       text: '你好，世界',
+      isFollowUp: false,
       history: const [],
     ));
     expect(out, '你好，世界');
@@ -255,6 +270,41 @@ void main() {
     expect(messages.last['role'], 'user');
     expect(messages.last['content'], '你好，世界');
     await mock.stop();
+  }, timeout: const Timeout(Duration(seconds: 30)));
+
+  test('explain wraps fresh selections but not typed follow-ups', () async {
+    // Fresh selection (untrusted page text) is wrapped in <text> ...
+    // </text> so the model treats it as data, not instructions.
+    final mock1 = MockOpenAi(chunks: ['答']);
+    await mock1.start();
+    await rust.setAiConfig(config: _cfg(baseUrl: mock1.baseUrl));
+    await collect(rust.streamChat(
+      action: AiActionType.explain,
+      text: 'selected text',
+      isFollowUp: false,
+      history: const [],
+    ));
+    var messages =
+        (mock1.requests.single['messages'] as List).cast<Map<String, dynamic>>();
+    expect(messages.last['content'], '<text>selected text</text>');
+    await mock1.stop();
+
+    // Typed follow-up ("详细解释") is the user's own directive, not page
+    // text: it must NOT be wrapped, or the model would explain that phrase
+    // itself instead of expanding the previous topic.
+    final mock2 = MockOpenAi(chunks: ['（展开）']);
+    await mock2.start();
+    await rust.setAiConfig(config: _cfg(baseUrl: mock2.baseUrl));
+    await collect(rust.streamChat(
+      action: AiActionType.explain,
+      text: '详细解释',
+      isFollowUp: true,
+      history: const [],
+    ));
+    messages =
+        (mock2.requests.single['messages'] as List).cast<Map<String, dynamic>>();
+    expect(messages.last['content'], '详细解释');
+    await mock2.stop();
   }, timeout: const Timeout(Duration(seconds: 30)));
 
   test('stream_vision_png streams chunks and sends the PNG as a data URL',
@@ -382,7 +432,7 @@ void main() {
     await rust.setAiConfig(config: _cfg(baseUrl: mock.baseUrl, textModel: 'mock-model', webSearchEnabled: true, searchUseBuiltin: false, includeBookHistory: true, promptTemplate: 'general'));
 
     final out = await collect(rust.streamChat(
-        action: AiActionType.search, text: '量子计算', history: const []));
+        action: AiActionType.search, text: '量子计算', history: const [], isFollowUp: false));
     expect(out, '（要点）');
 
     // The system prompt says the search key is missing (knowledge answer),
@@ -407,7 +457,7 @@ void main() {
     ));
 
     final out = await collect(rust.streamChat(
-        action: AiActionType.search, text: '量子计算', history: const []));
+        action: AiActionType.search, text: '量子计算', history: const [], isFollowUp: false));
     expect(out, '要点一要点二');
 
     // Hit /responses (the /v1 suffix is stripped) with the web_search tool
@@ -438,7 +488,7 @@ void main() {
     ));
 
     final out = await collect(rust.streamChat(
-        action: AiActionType.search, text: '量子', history: const []));
+        action: AiActionType.search, text: '量子', history: const [], isFollowUp: false));
     expect(out, '（知识回答）');
 
     // The failed search degraded to a knowledge answer whose system prompt
@@ -472,12 +522,60 @@ void main() {
     String? error;
     try {
       await collect(rust.streamChat(
-          action: AiActionType.chat, text: 'hi', history: const []));
+          action: AiActionType.chat, text: 'hi', history: const [], isFollowUp: false));
     } catch (e) {
       error = e.toString();
     }
     expect(error, contains('400'));
     expect(error, contains('Model Not Exist'));
+    await mock.stop();
+  }, timeout: const Timeout(Duration(seconds: 30)));
+
+  test('api_protocol=responses routes a chat turn through /responses',
+      () async {
+    final mock = MockOpenAi(chunks: ['要点一', '要点二']);
+    await mock.start();
+    await rust.setAiConfig(config: _cfg(
+      baseUrl: mock.baseUrl,
+      textModel: 'gpt-5',
+      apiProtocol: 'responses',
+    ));
+
+    final out = await collect(rust.streamChat(
+        action: AiActionType.chat, text: '你好', history: const [], isFollowUp: false));
+    expect(out, '要点一要点二');
+
+    // The plain-text Responses call hits /responses but forces no tools.
+    expect(mock.requestPaths.single, '/responses');
+    final req = mock.requests.single;
+    expect(req['instructions'], isNotNull);
+    expect(req.containsKey('tools'), isFalse);
+    await mock.stop();
+  }, timeout: const Timeout(Duration(seconds: 30)));
+
+  test('api_protocol=responses falls back to chat completions on failure',
+      () async {
+    // /responses answers 500; the fallback chat-completions call succeeds.
+    final mock = MockOpenAi(
+      chunks: const ['回退答案'],
+      errorStatus: 500,
+      errorBody: 'responses unavailable',
+      errorPath: '/responses',
+    );
+    await mock.start();
+    await rust.setAiConfig(config: _cfg(
+      baseUrl: mock.baseUrl,
+      textModel: 'gpt-5',
+      apiProtocol: 'responses',
+    ));
+
+    final out = await collect(rust.streamChat(
+        action: AiActionType.chat, text: '你好', history: const [], isFollowUp: false));
+    expect(out, '回退答案');
+
+    // Tried Responses first, then completed via chat completions.
+    expect(mock.requestPaths, contains('/responses'));
+    expect(mock.requestPaths, contains('/v1/chat/completions'));
     await mock.stop();
   }, timeout: const Timeout(Duration(seconds: 30)));
 }

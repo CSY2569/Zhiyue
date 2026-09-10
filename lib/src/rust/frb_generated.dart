@@ -252,6 +252,7 @@ abstract class RustLibApi extends BaseApi {
     required AiActionType action,
     required String text,
     required List<AiMessage> history,
+    required bool isFollowUp,
   });
 
   Stream<String> crateApiStreamVisionPng({required List<int> png});
@@ -1705,6 +1706,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required AiActionType action,
     required String text,
     required List<AiMessage> history,
+    required bool isFollowUp,
   }) {
     final sink = RustStreamSink<String>();
     unawaited(
@@ -1715,6 +1717,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             sse_encode_ai_action_type(action, serializer);
             sse_encode_String(text, serializer);
             sse_encode_list_ai_message(history, serializer);
+            sse_encode_bool(isFollowUp, serializer);
             sse_encode_StreamSink_String_Sse(sink, serializer);
             pdeCallFfi(
               generalizedFrbRustBinding,
@@ -1728,7 +1731,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             decodeErrorData: null,
           ),
           constMeta: kCrateApiStreamChatConstMeta,
-          argValues: [action, text, history, sink],
+          argValues: [action, text, history, isFollowUp, sink],
           apiImpl: this,
         ),
       ),
@@ -1738,7 +1741,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiStreamChatConstMeta => const TaskConstMeta(
     debugName: "stream_chat",
-    argNames: ["action", "text", "history", "sink"],
+    argNames: ["action", "text", "history", "isFollowUp", "sink"],
   );
 
   @override
@@ -2030,8 +2033,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   AiConfig dco_decode_ai_config(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 20)
-      throw Exception('unexpected arr length: expect 20 but see ${arr.length}');
+    if (arr.length != 30)
+      throw Exception('unexpected arr length: expect 30 but see ${arr.length}');
     return AiConfig(
       baseUrl: dco_decode_String(arr[0]),
       apiKey: dco_decode_String(arr[1]),
@@ -2043,16 +2046,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       searchBaseUrl: dco_decode_opt_String(arr[7]),
       searchApiKey: dco_decode_opt_String(arr[8]),
       translateTargetLang: dco_decode_String(arr[9]),
-      webSearchEnabled: dco_decode_bool(arr[10]),
-      ocrMode: dco_decode_String(arr[11]),
-      includeBookHistory: dco_decode_bool(arr[12]),
-      enableReasoning: dco_decode_bool(arr[13]),
-      reasoningEffort: dco_decode_String(arr[14]),
-      temperature: dco_decode_f_64(arr[15]),
-      promptTemplate: dco_decode_String(arr[16]),
-      customPrompt: dco_decode_String(arr[17]),
-      customPrompts: dco_decode_list_custom_prompt(arr[18]),
-      templateOverrides: dco_decode_Map_String_String_None(arr[19]),
+      translateCustomLangs: dco_decode_list_String(arr[10]),
+      modelSupportsVision: dco_decode_bool(arr[11]),
+      webSearchEnabled: dco_decode_bool(arr[12]),
+      ocrMode: dco_decode_String(arr[13]),
+      includeBookHistory: dco_decode_bool(arr[14]),
+      enableReasoning: dco_decode_bool(arr[15]),
+      reasoningEffort: dco_decode_String(arr[16]),
+      temperature: dco_decode_f_64(arr[17]),
+      apiProtocol: dco_decode_String(arr[18]),
+      promptTemplate: dco_decode_String(arr[19]),
+      customPrompt: dco_decode_String(arr[20]),
+      customPrompts: dco_decode_list_custom_prompt(arr[21]),
+      templateOverrides: dco_decode_Map_String_String_None(arr[22]),
+      embeddingEnabled: dco_decode_bool(arr[23]),
+      embeddingBaseUrl: dco_decode_opt_String(arr[24]),
+      embeddingApiKey: dco_decode_opt_String(arr[25]),
+      embeddingModel: dco_decode_String(arr[26]),
+      vectorDbUrl: dco_decode_opt_String(arr[27]),
+      vectorDbApiKey: dco_decode_opt_String(arr[28]),
+      vectorDbCollection: dco_decode_String(arr[29]),
     );
   }
 
@@ -2354,6 +2367,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       schemaVersion: dco_decode_u_32(arr[2]),
       error: dco_decode_opt_String(arr[3]),
     );
+  }
+
+  @protected
+  List<String> dco_decode_list_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_String).toList();
   }
 
   @protected
@@ -2782,16 +2801,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_searchBaseUrl = sse_decode_opt_String(deserializer);
     var var_searchApiKey = sse_decode_opt_String(deserializer);
     var var_translateTargetLang = sse_decode_String(deserializer);
+    var var_translateCustomLangs = sse_decode_list_String(deserializer);
+    var var_modelSupportsVision = sse_decode_bool(deserializer);
     var var_webSearchEnabled = sse_decode_bool(deserializer);
     var var_ocrMode = sse_decode_String(deserializer);
     var var_includeBookHistory = sse_decode_bool(deserializer);
     var var_enableReasoning = sse_decode_bool(deserializer);
     var var_reasoningEffort = sse_decode_String(deserializer);
     var var_temperature = sse_decode_f_64(deserializer);
+    var var_apiProtocol = sse_decode_String(deserializer);
     var var_promptTemplate = sse_decode_String(deserializer);
     var var_customPrompt = sse_decode_String(deserializer);
     var var_customPrompts = sse_decode_list_custom_prompt(deserializer);
     var var_templateOverrides = sse_decode_Map_String_String_None(deserializer);
+    var var_embeddingEnabled = sse_decode_bool(deserializer);
+    var var_embeddingBaseUrl = sse_decode_opt_String(deserializer);
+    var var_embeddingApiKey = sse_decode_opt_String(deserializer);
+    var var_embeddingModel = sse_decode_String(deserializer);
+    var var_vectorDbUrl = sse_decode_opt_String(deserializer);
+    var var_vectorDbApiKey = sse_decode_opt_String(deserializer);
+    var var_vectorDbCollection = sse_decode_String(deserializer);
     return AiConfig(
       baseUrl: var_baseUrl,
       apiKey: var_apiKey,
@@ -2803,16 +2832,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       searchBaseUrl: var_searchBaseUrl,
       searchApiKey: var_searchApiKey,
       translateTargetLang: var_translateTargetLang,
+      translateCustomLangs: var_translateCustomLangs,
+      modelSupportsVision: var_modelSupportsVision,
       webSearchEnabled: var_webSearchEnabled,
       ocrMode: var_ocrMode,
       includeBookHistory: var_includeBookHistory,
       enableReasoning: var_enableReasoning,
       reasoningEffort: var_reasoningEffort,
       temperature: var_temperature,
+      apiProtocol: var_apiProtocol,
       promptTemplate: var_promptTemplate,
       customPrompt: var_customPrompt,
       customPrompts: var_customPrompts,
       templateOverrides: var_templateOverrides,
+      embeddingEnabled: var_embeddingEnabled,
+      embeddingBaseUrl: var_embeddingBaseUrl,
+      embeddingApiKey: var_embeddingApiKey,
+      embeddingModel: var_embeddingModel,
+      vectorDbUrl: var_vectorDbUrl,
+      vectorDbApiKey: var_vectorDbApiKey,
+      vectorDbCollection: var_vectorDbCollection,
     );
   }
 
@@ -3129,6 +3168,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       schemaVersion: var_schemaVersion,
       error: var_error,
     );
+  }
+
+  @protected
+  List<String> sse_decode_list_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <String>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_String(deserializer));
+    }
+    return ans_;
   }
 
   @protected
@@ -3707,16 +3758,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.searchBaseUrl, serializer);
     sse_encode_opt_String(self.searchApiKey, serializer);
     sse_encode_String(self.translateTargetLang, serializer);
+    sse_encode_list_String(self.translateCustomLangs, serializer);
+    sse_encode_bool(self.modelSupportsVision, serializer);
     sse_encode_bool(self.webSearchEnabled, serializer);
     sse_encode_String(self.ocrMode, serializer);
     sse_encode_bool(self.includeBookHistory, serializer);
     sse_encode_bool(self.enableReasoning, serializer);
     sse_encode_String(self.reasoningEffort, serializer);
     sse_encode_f_64(self.temperature, serializer);
+    sse_encode_String(self.apiProtocol, serializer);
     sse_encode_String(self.promptTemplate, serializer);
     sse_encode_String(self.customPrompt, serializer);
     sse_encode_list_custom_prompt(self.customPrompts, serializer);
     sse_encode_Map_String_String_None(self.templateOverrides, serializer);
+    sse_encode_bool(self.embeddingEnabled, serializer);
+    sse_encode_opt_String(self.embeddingBaseUrl, serializer);
+    sse_encode_opt_String(self.embeddingApiKey, serializer);
+    sse_encode_String(self.embeddingModel, serializer);
+    sse_encode_opt_String(self.vectorDbUrl, serializer);
+    sse_encode_opt_String(self.vectorDbApiKey, serializer);
+    sse_encode_String(self.vectorDbCollection, serializer);
   }
 
   @protected
@@ -3983,6 +4044,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.dbPath, serializer);
     sse_encode_u_32(self.schemaVersion, serializer);
     sse_encode_opt_String(self.error, serializer);
+  }
+
+  @protected
+  void sse_encode_list_String(List<String> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_String(item, serializer);
+    }
   }
 
   @protected

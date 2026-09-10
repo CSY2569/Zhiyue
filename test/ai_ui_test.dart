@@ -39,7 +39,14 @@ void main() {
     await tester.pumpWidget(_scope(const SettingsPage(), repo));
     await tester.pumpAndSettle();
 
-    // Draft hydrated from the persisted config.
+    // Draft hydrated from the persisted config. The fields sit below the
+    // 主题 / 阅读器设置 sections, so scroll them into view first.
+    await tester.scrollUntilVisible(
+      find.widgetWithText(TextField, 'http://mock/v1'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
     expect(find.widgetWithText(TextField, 'http://mock/v1'), findsOneWidget);
     expect(find.widgetWithText(TextField, 'mock-key'), findsOneWidget);
 
@@ -67,7 +74,34 @@ void main() {
     expect(repo.saved!.reasoningEffort, 'medium');
     expect(repo.saved!.temperature, 0.7);
     expect(repo.saved!.promptTemplate, 'general');
+    // Protocol defaults to Chat Completions when untouched.
+    expect(repo.saved!.apiProtocol, 'chat_completions');
     expect(find.text('AI 配置已保存'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('settings page switches the API protocol to Responses',
+      (tester) async {
+    final repo = FakeAiRepo();
+    await tester.pumpWidget(_scope(const SettingsPage(), repo));
+    await tester.pumpAndSettle();
+
+    // The API 协议 control sits next to the text model.
+    final responses = find.widgetWithText(SegmentedButton<String>, 'Responses');
+    await tester.ensureVisible(responses);
+    await tester.pump();
+    await tester.tap(find.text('Responses'));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('保存 AI 配置'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.widgetWithText(FilledButton, '保存 AI 配置'));
+    await tester.pumpAndSettle();
+
+    expect(repo.saved!.apiProtocol, 'responses');
     expect(tester.takeException(), isNull);
   });
 
@@ -187,7 +221,14 @@ void main() {
     await tester.tap(find.text('保存为模板'));
     await tester.pumpAndSettle();
     // The saved list shows the named template (its delete button), and
-    // the template picker gains a chip for it.
+    // the template picker gains a chip for it. The saved row sits below the
+    // fold on a shorter list, so scroll it into view first.
+    await tester.scrollUntilVisible(
+      find.byTooltip('删除模板'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
     expect(find.byTooltip('删除模板'), findsOneWidget);
     expect(find.widgetWithText(ChoiceChip, '诗人'), findsOneWidget);
 
@@ -225,6 +266,218 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byTooltip('删除模板'), findsNothing);
     expect(find.widgetWithText(ChoiceChip, '诗人'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('settings: translation language chips + custom language',
+      (tester) async {
+    final repo = FakeAiRepo();
+    await tester.pumpWidget(_scope(const SettingsPage(), repo));
+    await tester.pumpAndSettle();
+
+    // Built-in target languages are chips; pick 英文.
+    await tester.scrollUntilVisible(
+      find.text('目标语言'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+    expect(find.widgetWithText(ChoiceChip, '中文'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, '英文'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, '中英互译'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ChoiceChip, '英文'));
+    await tester.pumpAndSettle();
+
+    // Add a custom language: it appears as a chip and becomes the selection.
+    await tester.tap(find.widgetWithText(ActionChip, '添加语言'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '语言名称'), '日文');
+    await tester.tap(find.text('添加'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(ChoiceChip, '日文'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('保存 AI 配置'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, '保存 AI 配置'));
+    await tester.pumpAndSettle();
+
+    expect(repo.saved!.translateTargetLang, '日文');
+    expect(repo.saved!.translateCustomLangs, contains('日文'));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('settings: search config hides when built-in search is chosen',
+      (tester) async {
+    final repo = FakeAiRepo();
+    await tester.pumpWidget(_scope(const SettingsPage(), repo));
+    await tester.pumpAndSettle();
+
+    // FakeAiRepo defaults to third-party search -> the API fields show.
+    await tester.scrollUntilVisible(
+      find.text('搜索方式'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+    expect(find.text('搜索 API Key'), findsOneWidget);
+
+    // Built-in search reuses the general Responses config: fields hide.
+    await tester.tap(find.text('内置搜索'));
+    await tester.pumpAndSettle();
+    expect(find.text('搜索 API Key'), findsNothing);
+
+    // Back to third-party -> fields return.
+    await tester.tap(find.text('第三方搜索'));
+    await tester.pumpAndSettle();
+    expect(find.text('搜索 API Key'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('settings: vision config shows only when the model is text-only',
+      (tester) async {
+    final repo = FakeAiRepo();
+    await tester.pumpWidget(_scope(const SettingsPage(), repo));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('模型能力'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+    // Default: text-only -> the vision override is shown.
+    expect(find.text('视觉模型'), findsOneWidget);
+
+    // Ticking 图片 marks the general model multimodal -> hide the override.
+    await tester.tap(find.widgetWithText(FilterChip, '图片'));
+    await tester.pumpAndSettle();
+    expect(find.text('视觉模型'), findsNothing);
+
+    // Untick -> it comes back.
+    await tester.tap(find.widgetWithText(FilterChip, '图片'));
+    await tester.pumpAndSettle();
+    expect(find.text('视觉模型'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('settings: embedding search toggle reveals and persists config',
+      (tester) async {
+    final repo = FakeAiRepo();
+    await tester.pumpWidget(_scope(const SettingsPage(), repo));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('启用嵌入搜索'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+    // Off by default -> the config fields are hidden.
+    expect(find.text('Embedding API Key'), findsNothing);
+
+    await tester.tap(find.text('启用嵌入搜索'));
+    await tester.pumpAndSettle();
+    expect(find.text('Embedding API Key'), findsOneWidget);
+
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Embedding 模型 ID'), 'text-embedding-3-small');
+    await tester.enterText(
+        find.widgetWithText(TextField, '向量数据库 URL'), 'http://localhost:6333');
+    await tester.enterText(
+        find.widgetWithText(TextField, '集合名称'), 'zhiyue');
+
+    await tester.scrollUntilVisible(
+      find.text('保存 AI 配置'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, '保存 AI 配置'));
+    await tester.pumpAndSettle();
+
+    expect(repo.saved!.embeddingEnabled, isTrue);
+    expect(repo.saved!.embeddingModel, 'text-embedding-3-small');
+    expect(repo.saved!.vectorDbUrl, 'http://localhost:6333');
+    expect(repo.saved!.vectorDbCollection, 'zhiyue');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('settings: the selected template prompt shows on first entry',
+      (tester) async {
+    // Regression: the template edit box was empty on first entry -- the
+    // selected template's prompt only appeared after re-clicking its chip.
+    final repo = FakeAiRepo();
+    await tester.pumpWidget(_scope(const SettingsPage(), repo));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('提示词模板'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    // The default config selects "general"; its prompt must be pre-filled.
+    final field = tester.widget<TextField>(
+      find.widgetWithText(TextField, '模板提示词（可修改，保存后生效）'),
+    );
+    expect(field.controller!.text, '默认通用文本');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('settings: an overridden template shows the user text on entry',
+      (tester) async {
+    final repo = FakeAiRepo();
+    repo.configOverride = AiConfig(
+      baseUrl: 'http://mock/v1',
+      apiKey: 'mock-key',
+      textModel: 'mock-text',
+      visionModel: 'mock-vision',
+      visionBaseUrl: null,
+      visionApiKey: null,
+      translateTargetLang: '中文',
+      translateCustomLangs: const [],
+      modelSupportsVision: false,
+      webSearchEnabled: false,
+      searchUseBuiltin: false,
+      ocrMode: 'high_precision',
+      includeBookHistory: true,
+      enableReasoning: false,
+      reasoningEffort: 'medium',
+      temperature: 0.7,
+      apiProtocol: 'chat_completions',
+      promptTemplate: 'academic',
+      customPrompt: '不该出现的自定义提示',
+      customPrompts: const [],
+      templateOverrides: const {'academic': '我改过的学术提示'},
+      embeddingEnabled: false,
+      embeddingBaseUrl: null,
+      embeddingApiKey: null,
+      embeddingModel: '',
+      vectorDbUrl: null,
+      vectorDbApiKey: null,
+      vectorDbCollection: '',
+    );
+
+    await tester.pumpWidget(_scope(const SettingsPage(), repo));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('提示词模板'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    final field = tester.widget<TextField>(
+      find.widgetWithText(TextField, '模板提示词（可修改，保存后生效）'),
+    );
+    // The user's override wins; the custom prompt must NOT leak in here.
+    expect(field.controller!.text, '我改过的学术提示');
+    expect(field.controller!.text, isNot(contains('不该出现')));
     expect(tester.takeException(), isNull);
   });
 

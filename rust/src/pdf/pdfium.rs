@@ -35,7 +35,11 @@ fn pdfium() -> AppResult<&'static Pdfium> {
     // Candidate locations for libpdfium.so, tried in order:
     //   1. the executable's directory            (dev: .so next to the binary)
     //   2. the executable's `lib/` subdirectory  (bundled app: bundle/lib/)
-    //   3. a system-installed library            (e.g. distro package)
+    //   3. the working dir's `rust/libpdfium/`   (`flutter test` from the repo
+    //      root: fetch_pdfium.sh places the lib there, flutter_tester's own
+    //      dir does not contain it)
+    //   4. the working directory
+    //   5. a system-installed library            (e.g. distro package)
     let mut candidates: Vec<PathBuf> = Vec::new();
     if let Some(dir) = exe_dir() {
         candidates.push(dir.clone());
@@ -211,10 +215,21 @@ pub fn page_has_text(page: i64) -> AppResult<bool> {
 /// Recursively walks bookmarks; each entry carries a 0-indexed page or -1.
 pub fn outline() -> AppResult<Vec<OutlineEntry>> {
     with_doc(|doc| {
-        let bookmarks = doc.bookmarks();
         let mut out = Vec::new();
-        for bm in bookmarks.iter() {
-            out.push(bookmark_to_entry(&bm));
+        // Walk only the top-level sibling chain; bookmark_to_entry recurses
+        // into each node's children. Do NOT use `bookmarks().iter()`: pdfium's
+        // iterator is a depth-first walk over the whole tree, so every
+        // descendant would also be pushed as a top-level entry -- duplicating
+        // each section once at the top level and once under its parent.
+        if let Some(root) = doc.bookmarks().root() {
+            let mut current = root;
+            loop {
+                out.push(bookmark_to_entry(&current));
+                match current.next_sibling() {
+                    Some(sibling) => current = sibling,
+                    None => break,
+                }
+            }
         }
         Ok(out)
     })

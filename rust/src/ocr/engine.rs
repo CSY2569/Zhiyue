@@ -161,7 +161,7 @@ impl RapidOcrEngine {
         )
         .ok_or_else(|| AppError::Ocr("页面图像数据无效".into()))?;
         // 7.1.10: adaptive page-quality enhancement (no-op on clean pages).
-        let enhanced = enhance(&rgb);
+        let enhanced = enhance(rgb);
 
         let slot = &ENGINES[Self::slot(mode)];
         let loaded = slot.get_or_init(|| Self::load(mode));
@@ -291,7 +291,10 @@ fn scan_orientation(
 /// Every branch is gated by density-independent statistics (ink luminance /
 /// sharp-edge fraction), so clean pages -- however sparse the text -- are
 /// returned pixel-identical.
-fn enhance(img: &RgbImage) -> RgbImage {
+///
+/// Takes `img` by value: a scan does not need the buffer afterwards, so a
+/// clean page (no branch fires) costs no full-page copy at all.
+fn enhance(mut img: RgbImage) -> RgbImage {
     // A healthy scan has dark ink (median luma well below 80) and sharp
     // edges (a measurable share of samples with |gradient| > 120). A
     // washed-out scan's ink is gray; a blurry scan's edges are soft.
@@ -299,16 +302,15 @@ fn enhance(img: &RgbImage) -> RgbImage {
     const WASHED_SPAN_MIN: f64 = 30.0; // stretchable ink/background range
     const SHARP_EDGE_FRAC: f64 = 1e-4; // below this the page is blurry
 
-    let q = page_quality(img);
-    let mut out = img.clone();
+    let q = page_quality(&img);
     if q.ink_frac > 0.0 && q.ink_median > WASHED_INK_MIN && q.p99 - q.ink_median > WASHED_SPAN_MIN {
-        stretch_contrast(&mut out, q.ink_median, q.p99);
+        stretch_contrast(&mut img, q.ink_median, q.p99);
     }
-    if q.ink_frac > 0.0 && sharp_edge_fraction(&out) < SHARP_EDGE_FRAC {
+    if q.ink_frac > 0.0 && sharp_edge_fraction(&img) < SHARP_EDGE_FRAC {
         // Denoise + sharpen in one pass (unsharpen = blur difference).
-        out = image::imageops::unsharpen(&out, 2.0, 0);
+        img = image::imageops::unsharpen(&img, 2.0, 0);
     }
-    out
+    img
 }
 
 /// Density-independent page statistics from one 4x4-sampled pass. Percentile
@@ -539,7 +541,7 @@ mod tests {
         }
         let q = page_quality(&low);
         assert!(q.ink_median > 80.0 && q.p99 - q.ink_median > 30.0, "gate: {q:?}");
-        let enhanced = enhance(&low);
+        let enhanced = enhance(low);
         // Stretch maps 150 -> 0 and 245 -> 255: the ink is now dark.
         assert_eq!(enhanced.get_pixel(0, 32).0, [0, 0, 0], "ink must be stretched to black");
         assert_eq!(enhanced.get_pixel(0, 0).0, [255, 255, 255], "paper to white");
@@ -549,7 +551,7 @@ mod tests {
         for x in 0..64 {
             clean.put_pixel(x, 32, image::Rgb([0, 0, 0]));
         }
-        let enhanced = enhance(&clean);
+        let enhanced = enhance(clean.clone());
         assert_eq!(enhanced, clean, "clean pages must be pixel-identical");
     }
 
@@ -568,7 +570,7 @@ mod tests {
             "blur must soften edges, got {}",
             sharp_edge_fraction(&blurred)
         );
-        let enhanced = enhance(&blurred);
+        let enhanced = enhance(blurred.clone());
         assert_ne!(enhanced, blurred, "unsharpen must fire on blurry pages");
         // Sharpness = the steepest single-pixel gradient. Unsharp masking
         // steepens edges, so the peak gradient must rise.

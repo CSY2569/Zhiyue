@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Build all Linux distribution packages for RBWA:
-#   - dist/rbwa_<ver>_amd64.deb      (Debian / Ubuntu)
-#   - dist/rbwa-<ver>-1.x86_64.rpm   (Fedora / RHEL / OpenSUSE)
-#   - dist/rbwa-x86_64.AppImage      (any distro, no install needed)
+# Build all Linux distribution packages for 智阅 (ZhiYue):
+#   - dist/zhiyue_<ver>_amd64.deb    (Debian / Ubuntu)
+#   - dist/ZhiYue-<ver>-1.x86_64.rpm (Fedora / RHEL / OpenSUSE)
+#   - dist/ZhiYue-x86_64.AppImage     (any distro, no install needed)
 #
 # Requirements:
 #   - flutter build linux --release works on this machine
@@ -26,8 +26,8 @@ mkdir -p "$DIST" "$TOOLS"
 echo "==> Building Flutter Linux release bundle"
 (cd "$PROJECT_ROOT" && flutter build linux --release)
 
-if [ ! -x "$BUNDLE/rbwa" ]; then
-  echo "bundle missing: $BUNDLE/rbwa" >&2
+if [ ! -x "$BUNDLE/ZhiYue" ]; then
+  echo "bundle missing: $BUNDLE/ZhiYue" >&2
   exit 1
 fi
 
@@ -48,10 +48,15 @@ bash "$SCRIPT_DIR/build_deb.sh" "$VERSION"
 echo "==> .rpm (rpmbuild)"
 RPMBUILD_DIR="${RPMBUILD_DIR:-$HOME/rpmbuild}"
 mkdir -p "$RPMBUILD_DIR"/{SOURCES,BUILD,RPMS}
+# Fresh copy each run: a stale SOURCES/bundle (e.g. from a previous binary
+# name) would otherwise linger or nest (cp -r into an existing dir creates
+# SOURCES/bundle/bundle) and break %{_sourcedir}/bundle lookups.
+rm -rf "$RPMBUILD_DIR/SOURCES/bundle"
 cp -r "$BUNDLE" "$RPMBUILD_DIR/SOURCES/bundle"
 cp -r "$PROJECT_ROOT/packaging" "$RPMBUILD_DIR/SOURCES/"
-rpmbuild -bb "$RPMBUILD_DIR/SOURCES/packaging/rbwa.spec" >/dev/null
-cp "$RPMBUILD_DIR"/RPMS/x86_64/rbwa-*.x86_64.rpm "$DIST/"
+cp "$PROJECT_ROOT/LICENSE" "$RPMBUILD_DIR/SOURCES/"
+rpmbuild -bb "$RPMBUILD_DIR/SOURCES/packaging/ZhiYue.spec" >/dev/null
+cp "$RPMBUILD_DIR"/RPMS/x86_64/ZhiYue-*.x86_64.rpm "$DIST/"
 
 # ---------------------------------------------------------------------------
 echo "==> AppImage (appimagetool)"
@@ -77,18 +82,19 @@ fi
 APPDIR="$PROJECT_ROOT/.packaging/AppDir"
 rm -rf "$APPDIR"
 mkdir -p "$APPDIR"
-cp -r "$BUNDLE/rbwa" "$BUNDLE/lib" "$BUNDLE/data" "$BUNDLE/models" "$APPDIR/"
-cp "$PROJECT_ROOT/packaging/rbwa.desktop" "$APPDIR/"
-cp "$PROJECT_ROOT/packaging/icon/rbwa.png" "$APPDIR/"
+cp -r "$BUNDLE/ZhiYue" "$BUNDLE/lib" "$BUNDLE/data" "$BUNDLE/models" "$APPDIR/"
+cp "$PROJECT_ROOT/packaging/ZhiYue.desktop" "$APPDIR/"
+cp "$PROJECT_ROOT/packaging/icon/zhiyue.png" "$APPDIR/"
+cp "$PROJECT_ROOT/LICENSE" "$APPDIR/"
 cat > "$APPDIR/AppRun" <<'EOF'
 #!/bin/sh
 HERE="$(dirname "$(readlink -f "$0")")"
 export LD_LIBRARY_PATH="$HERE/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-exec "$HERE/rbwa" "$@"
+exec "$HERE/ZhiYue" "$@"
 EOF
 chmod +x "$APPDIR/AppRun"
 
-"$APPIMAGETOOL" --runtime-file "$RUNTIME" "$APPDIR" "$DIST/rbwa-x86_64.AppImage" >/dev/null
+"$APPIMAGETOOL" --runtime-file "$RUNTIME" "$APPDIR" "$DIST/ZhiYue-x86_64.AppImage" >/dev/null
 
 echo
 echo "==> Done. Artifacts in $DIST:"

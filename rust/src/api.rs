@@ -1185,6 +1185,18 @@ fn wrap_untrusted_input(action: AiActionType, text: &str) -> String {
     }
 }
 
+/// Frame the incoming user text for [stream_chat] / [builtin_search_stream].
+/// A follow-up (6.5.2) is user-typed -- a directive such as "详细解释/展开"
+/// -- so it passes verbatim like chat; a fresh selection is untrusted page
+/// text and is wrapped by [wrap_untrusted_input].
+fn wrap_input(action: AiActionType, text: &str, is_follow_up: bool) -> String {
+    if is_follow_up {
+        text.to_string()
+    } else {
+        wrap_untrusted_input(action, text)
+    }
+}
+
 /// 6.2). `history` carries the thread's prior turns (6.5.2); the action's
 /// system prompt is prepended here. Emits SSE chunks; errors (including
 /// "not configured", 10.4) arrive on the stream's error channel.
@@ -1192,6 +1204,7 @@ pub async fn stream_chat(
     action: AiActionType,
     text: String,
     history: Vec<AiMessage>,
+    is_follow_up: bool,
     sink: StreamSink<String>,
 ) {
     let config = get_ai_config();
@@ -1202,7 +1215,7 @@ pub async fn stream_chat(
     // Built-in web search (Responses API, 6.2.3): a different streaming
     // protocol with server-side search, handled directly.
     if action == AiActionType::Search && config.web_search_enabled && config.search_use_builtin {
-        return builtin_search_stream(&config, &text, &history, sink).await;
+        return builtin_search_stream(&config, &text, &history, is_follow_up, sink).await;
     }
 
     let client = ai_client();
@@ -1223,9 +1236,10 @@ pub async fn stream_chat(
     };
     // Wrap untrusted input (selected page text the reader may not understand)
     // in <text> tags so the model treats it as data, not instructions (indirect
-    // prompt-injection defense). Chat passes the text verbatim -- the user
-    // typed it themselves and can read it.
-    let user_input = wrap_untrusted_input(action, &text);
+    // prompt-injection defense). A follow-up is different: the user typed it
+    // themselves (e.g. "详细解释/展开"), so it is a directive, not page text --
+    // like chat, it is not wrapped (see wrap_input / wrap_untrusted_input).
+    let user_input = wrap_input(action, &text, is_follow_up);
     match client.stream_chat(&config, &messages, &user_input).await {
         Ok(stream) => drain_stream(stream, sink).await,
         Err(e) => {
@@ -1287,6 +1301,7 @@ async fn builtin_search_stream(
     config: &AiConfig,
     query: &str,
     history: &[AiMessage],
+    is_follow_up: bool,
     sink: StreamSink<String>,
 ) {
     // The history carries the thread's prior turns (设置 → AI 回复:
@@ -1309,9 +1324,10 @@ async fn builtin_search_stream(
     };
     messages.insert(0, system_message(compose(ai::prompts::search_system(true))));
     let extras = ai::RequestExtras::from_config(config);
-    // Wrap the query in <text> tags (indirect prompt-injection defense:
-    // the query is selected page text the reader may not understand).
-    let wrapped_query = format!("<text>{query}</text>");
+    // Wrap the query in <text> tags (indirect prompt-injection defense: the
+    // query is selected page text the reader may not understand); a typed
+    // follow-up passes verbatim, exactly as the main stream_chat path does.
+    let wrapped_query = wrap_input(AiActionType::Search, query, is_follow_up);
     match ai::web_search_builtin(
         &config.base_url,
         &config.api_key,
@@ -1343,6 +1359,7 @@ async fn builtin_search_stream(
     _config: &AiConfig,
     _query: &str,
     _history: &[AiMessage],
+    _is_follow_up: bool,
     sink: StreamSink<String>,
 ) {
     let _ = sink.add_error("AI support not compiled in (feature 'ai' disabled)".to_string());
@@ -1406,6 +1423,30 @@ pub struct OcrLineEdit {
     pub text: String,
 }
 
+/// Concatenate the recognized lines and (re)index the page for full-text
+/// search. The concatenation matches what the Dart char-box layer builds, so
+/// hit highlighting aligns with the line boxes. Shared by scan_page (fresh
+/// scan) and update_page_ocr_lines (manual correction) so the two never
+/// drift.
+fn index_ocr_result(
+    conn: &rusqlite::Connection,
+    book_id: i64,
+    page: i64,
+    result: &OcrResult,
+) {
+    let original: String = result.lines.iter().map(|l| l.text.as_str()).collect();
+    if !original.trim().is_empty() {
+        let _ = search_repo::index_page(
+            conn,
+            book_id,
+            page,
+            "ocr",
+            &original,
+            &crate::search::tokenize(&original),
+        );
+    }
+}
+
 /// Apply manual corrections to a page's cached OCR result (FEATURES 7.1.7):
 /// replace the text of the edited lines, persist the updated result, and
 /// re-index the page so full-text search sees the corrected text (the same
@@ -1426,18 +1467,7 @@ pub fn update_page_ocr_lines(
         }
     }
     let _ = ocr_repo::save_page_ocr(&conn, book_id, page, mode.as_str(), &result);
-    // Re-index the corrected text (same concatenation as scan_page).
-    let original: String = result.lines.iter().map(|l| l.text.as_str()).collect();
-    if !original.trim().is_empty() {
-        let _ = search_repo::index_page(
-            &conn,
-            book_id,
-            page,
-            "ocr",
-            &original,
-            &crate::search::tokenize(&original),
-        );
-    }
+    index_ocr_result(&conn, book_id, page, &result);
     Some(result)
 }
 
@@ -1502,23 +1532,11 @@ pub async fn scan_page(book_id: i64, page: i64, mode: OcrMode) -> ScanPageResult
         Ok(result) => {
             // Cache before returning so flips back are instant (7.1.4).
             // Incremental search index (M6, 3.5.1): scanned pages become
-            // searchable immediately. The text concatenates the recognized
-            // lines -- the same form the Dart char-box layer produces, so
-            // hit highlighting aligns with the line boxes.
-            let original: String = result.lines.iter().map(|l| l.text.as_str()).collect();
+            // searchable immediately.
             {
                 let conn = db::db();
                 let _ = ocr_repo::save_page_ocr(&conn, book_id, page, &mode_str, &result);
-                if !original.trim().is_empty() {
-                    let _ = search_repo::index_page(
-                        &conn,
-                        book_id,
-                        page,
-                        "ocr",
-                        &original,
-                        &crate::search::tokenize(&original),
-                    );
-                }
+                index_ocr_result(&conn, book_id, page, &result);
             }
             ScanPageResult {
                 lines: result.lines,
@@ -1676,5 +1694,23 @@ mod tests {
         }
         // Chat: verbatim (the user typed it themselves and can read it).
         assert_eq!(wrap_untrusted_input(AiActionType::Chat, payload), payload);
+    }
+
+    /// A follow-up (6.5.2, e.g. the user typing "详细解释/展开" after an
+    /// explain answer) is user-typed, NOT selected page text, so it must NOT
+    /// be wrapped in <text> tags -- otherwise the explain/search system prompt
+    /// would treat the directive itself as the text to process. Fresh
+    /// selections still wrap (injection defense).
+    #[test]
+    fn followup_input_is_not_wrapped() {
+        let typed = "详细解释";
+        for action in [AiActionType::Explain, AiActionType::Search] {
+            // Fresh selection -> wrapped.
+            assert!(wrap_input(action, typed, false).starts_with("<text>"));
+            // Typed follow-up -> verbatim (no tags).
+            assert_eq!(wrap_input(action, typed, true), typed);
+        }
+        // Chat is already verbatim regardless of the flag.
+        assert_eq!(wrap_input(AiActionType::Chat, typed, false), typed);
     }
 }

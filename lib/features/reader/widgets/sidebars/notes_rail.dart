@@ -8,6 +8,7 @@ import 'package:rbwa/features/annotation/export_actions.dart';
 import 'package:rbwa/features/annotation/models/image_mark.dart';
 import 'package:rbwa/features/annotation/providers/annotation_provider.dart';
 import 'package:rbwa/features/annotation/providers/image_mark_provider.dart';
+import 'package:rbwa/features/reader/providers/panel_layout.dart';
 import 'package:rbwa/src/rust/models/annotation.dart';
 
 /// Unified annotations sidebar (FEATURES 3.4.3 / 4.5.1 / 5.5): text-layer
@@ -29,9 +30,11 @@ class NotesRail extends ConsumerWidget {
     final markVisibility = ref.watch(markVisibilityProvider);
     final hasMarks = marks.isNotEmpty;
     final empty = anns.isEmpty && marks.isEmpty;
+    final width = ref.watch(
+        panelLayoutProvider.select((p) => p.annotationsWidth));
 
     return SizedBox(
-      width: 240,
+      width: width,
       child: Material(
         color: Theme.of(context).colorScheme.surfaceContainerLow,
         child: Column(

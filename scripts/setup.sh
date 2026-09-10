@@ -70,7 +70,7 @@ install_pacman() {
 info "=== [1/4] 检查系统依赖 (pacman) ==="
 # Flutter Linux 桌面构建链: clang/cmake/ninja/pkg-config + gtk3/glib2 开发库
 # 本机 clang/llvm/pkg-config/gtk3 已具备, 这里只补 cmake/ninja; 其余用 --needed 兜底.
-install_pacman cmake ninja pkg-config gtk3 glib2
+install_pacman cmake ninja pkg-config gtk3 glib2 noto-fonts-cjk icu sqlite cairo pango harfbuzz freetype2 fontconfig libpng libxml2 dbus
 
 # --- 2. Rust 工具链 ----------------------------------------------------------
 info "=== [2/4] 检查 Rust 工具链 ==="
@@ -102,7 +102,7 @@ else
     warn "未检测到 Flutter SDK."
     warn "请从 https://docs.flutter.dev/get-started/install/linux 下载,"
     warn "解压到 $FLUTTER_DIR 后重新运行本脚本, 或手动安装后设置 PATH."
-    warn "（国内可使用镜像: export FLUTTER_STORAGE_BASE_URL=https://mirror.sjtu.edu.cn/flutter_infra）"
+    warn "（国内可使用镜像: export FLUTTER_STORAGE_BASE_URL=https://mirrors.cloud.tencent.com/flutter）"
     warn "脚本将继续安装 flutter_rust_bridge_codegen; Flutter 装好后再运行 flutter doctor."
     _configure_flutter_path=false
 fi
@@ -129,13 +129,13 @@ if [[ "${_configure_flutter_path:-false}" == "true" ]]; then
     _add_to_rc "$FISH_CONF" "flutter/bin" \
         '# Flutter SDK (added by RBWA setup.sh)
 fish_add_path -g -p "$HOME/develop/flutter/bin"
-set -gx FLUTTER_STORAGE_BASE_URL "https://mirror.sjtu.edu.cn/flutter_infra"
+set -gx FLUTTER_STORAGE_BASE_URL "https://mirrors.cloud.tencent.com/flutter"
 set -gx PUB_HOSTED_URL "https://pub.flutter-io.cn"'
     # zsh / bash (兜底)
     _add_to_rc "$REAL_HOME/.zshrc" "flutter/bin" \
         '# Flutter SDK (added by RBWA setup.sh)
 export PATH="$HOME/develop/flutter/bin:$PATH"
-export FLUTTER_STORAGE_BASE_URL="https://mirror.sjtu.edu.cn/flutter_infra"
+export FLUTTER_STORAGE_BASE_URL="https://mirrors.cloud.tencent.com/flutter"
 export PUB_HOSTED_URL="https://pub.flutter-io.cn"'
     warn "flutter 尚未在当前 shell PATH 中, 请重开终端或 source 对应配置文件."
 fi

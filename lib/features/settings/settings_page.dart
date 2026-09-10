@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:rbwa/core/theme/theme_controller.dart';
 import 'package:rbwa/data/repositories/ai_repository.dart';
 import 'package:rbwa/features/ai/providers/ai_config_provider.dart';
+import 'package:rbwa/features/reader/providers/outline_settings.dart';
 import 'package:rbwa/src/rust/models/ai.dart';
 
 /// Settings page (FEATURES §6.1, §8.2).
@@ -26,11 +27,27 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _visionBaseUrl = TextEditingController();
   final _visionApiKey = TextEditingController();
   final _visionModel = TextEditingController();
-  final _targetLang = TextEditingController();
+  /// Target language for translation (one of the chips; default 中文).
+  String _targetLang = '中文';
+  /// Extra target languages the user added.
+  List<String> _customLangs = [];
   final _searchBaseUrl = TextEditingController();
   final _searchApiKey = TextEditingController();
   bool _webSearch = false;
   bool _searchBuiltin = false;
+  /// Whether the general model accepts images (多模态); false -> a separate
+  /// vision config is shown.
+  bool _supportsVision = false;
+  /// Reserved embedding-search config (设置 → AI 设置 → 嵌入搜索).
+  bool _embeddingEnabled = false;
+  final _embeddingBaseUrl = TextEditingController();
+  final _embeddingApiKey = TextEditingController();
+  final _embeddingModel = TextEditingController();
+  final _vectorDbUrl = TextEditingController();
+  final _vectorDbApiKey = TextEditingController();
+  final _vectorDbCollection = TextEditingController();
+  /// Text protocol: 'chat_completions' (default) or 'responses'.
+  String _apiProtocol = 'chat_completions';
   String _ocrMode = 'high_precision';
   bool _includeBookHistory = true;
   bool _enableReasoning = false;
@@ -56,9 +73,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _visionBaseUrl.dispose();
     _visionApiKey.dispose();
     _visionModel.dispose();
-    _targetLang.dispose();
     _searchBaseUrl.dispose();
     _searchApiKey.dispose();
+    _embeddingBaseUrl.dispose();
+    _embeddingApiKey.dispose();
+    _embeddingModel.dispose();
+    _vectorDbUrl.dispose();
+    _vectorDbApiKey.dispose();
+    _vectorDbCollection.dispose();
     _customPrompt.dispose();
     _customPromptName.dispose();
     _templateEdit.dispose();
@@ -75,10 +97,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _visionBaseUrl.text = config.visionBaseUrl ?? '';
     _visionApiKey.text = config.visionApiKey ?? '';
     _visionModel.text = config.visionModel;
-    _targetLang.text = config.translateTargetLang;
+    _targetLang = config.translateTargetLang.isEmpty
+        ? '中文'
+        : config.translateTargetLang;
+    _customLangs = [...config.translateCustomLangs];
+    _supportsVision = config.modelSupportsVision;
     _searchBaseUrl.text = config.searchBaseUrl ?? '';
     _searchApiKey.text = config.searchApiKey ?? '';
+    _embeddingEnabled = config.embeddingEnabled;
+    _embeddingBaseUrl.text = config.embeddingBaseUrl ?? '';
+    _embeddingApiKey.text = config.embeddingApiKey ?? '';
+    _embeddingModel.text = config.embeddingModel;
+    _vectorDbUrl.text = config.vectorDbUrl ?? '';
+    _vectorDbApiKey.text = config.vectorDbApiKey ?? '';
+    _vectorDbCollection.text = config.vectorDbCollection;
     _searchBuiltin = config.searchUseBuiltin;
+    _apiProtocol = config.apiProtocol == 'responses'
+        ? 'responses'
+        : 'chat_completions';
     _webSearch = config.webSearchEnabled;
     _ocrMode = config.ocrMode == 'fast' ? 'fast' : 'high_precision';
     _includeBookHistory = config.includeBookHistory;
@@ -93,6 +129,35 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _templateEdits
       ..clear()
       ..addAll(config.templateOverrides);
+    // Populate the edit box with the selected built-in template's prompt.
+    // Without this the box stays empty on first entry and only fills in
+    // after the user re-clicks the chip. Deferred past the build phase so we
+    // do not mutate the controller while the tree is building.
+    final initialTemplate = _promptTemplate;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadTemplateText(initialTemplate);
+    });
+  }
+
+  /// Fill the template edit box for [id]: the user's override wins, else the
+  /// cached built-in text, else it is fetched from Rust (async). Only applies
+  /// when [id] is still the selected template.
+  Future<void> _loadTemplateText(String id) async {
+    if (id == 'custom') return;
+    final override = _templateEdits[id];
+    if (override != null) {
+      _templateEdit.text = override;
+      return;
+    }
+    final cached = _templateDefaults[id];
+    if (cached != null) {
+      if (_promptTemplate == id) _templateEdit.text = cached;
+      return;
+    }
+    final text = await ref.read(aiRepositoryProvider).templateDefaultText(id);
+    if (!mounted || _promptTemplate != id) return;
+    _templateDefaults[id] = text;
+    _templateEdit.text = _templateEdits[id] ?? text;
   }
 
   Future<void> _save() async {
@@ -108,8 +173,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       visionApiKey: _visionApiKey.text.trim().isEmpty
           ? null
           : _visionApiKey.text.trim(),
-      translateTargetLang:
-          _targetLang.text.trim().isEmpty ? '中文' : _targetLang.text.trim(),
+      translateTargetLang: _targetLang.trim().isEmpty ? '中文' : _targetLang.trim(),
+      translateCustomLangs: _customLangs,
+      modelSupportsVision: _supportsVision,
       searchBaseUrl: _searchBaseUrl.text.trim().isEmpty
           ? null
           : _searchBaseUrl.text.trim(),
@@ -118,6 +184,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           : _searchApiKey.text.trim(),
       searchUseBuiltin: _searchBuiltin,
       webSearchEnabled: _webSearch,
+      apiProtocol: _apiProtocol,
       ocrMode: _ocrMode,
       includeBookHistory: _includeBookHistory,
       enableReasoning: _enableReasoning,
@@ -127,6 +194,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       customPrompt: _customPrompt.text.trim(),
       customPrompts: _savedTemplates,
       templateOverrides: _templateEdits,
+      embeddingEnabled: _embeddingEnabled,
+      embeddingBaseUrl: _embeddingBaseUrl.text.trim().isEmpty
+          ? null
+          : _embeddingBaseUrl.text.trim(),
+      embeddingApiKey: _embeddingApiKey.text.trim().isEmpty
+          ? null
+          : _embeddingApiKey.text.trim(),
+      embeddingModel: _embeddingModel.text.trim(),
+      vectorDbUrl: _vectorDbUrl.text.trim().isEmpty
+          ? null
+          : _vectorDbUrl.text.trim(),
+      vectorDbApiKey: _vectorDbApiKey.text.trim().isEmpty
+          ? null
+          : _vectorDbApiKey.text.trim(),
+      vectorDbCollection: _vectorDbCollection.text.trim(),
     );
     final ok = await ref.read(aiConfigProvider.notifier).save(config);
     if (!mounted) return;
@@ -173,8 +255,75 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
           ),
           const Divider(),
-          _SectionTitle('文本与翻译配置（BYOK，兼容 OpenAI / DeepSeek / Kimi / 通义）', theme),
-          _Field(controller: _baseUrl, label: 'API Base URL', hint: 'https://api.openai.com/v1'),
+          // ---------------------------------------------------------------
+          // 阅读器设置
+          // ---------------------------------------------------------------
+          _SectionTitle('阅读器设置', theme),
+          SwitchListTile(
+            title: const Text('目录默认全展开'),
+            subtitle: const Text('开启后打开目录时展开全部子章节；关闭则只显示主章节，需手动展开'),
+            value: ref.watch(outlineExpandAllProvider),
+            onChanged: (v) =>
+                ref.read(outlineExpandAllProvider.notifier).set(v),
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('OCR 识别精度'),
+            subtitle: const Text('整页扫描本地离线运行，模型已随应用内置'),
+            trailing: SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(
+                    value: 'high_precision',
+                    label: Text('高精度'),
+                    icon: Icon(Icons.high_quality_outlined, size: 16)),
+                ButtonSegment(
+                    value: 'fast',
+                    label: Text('快速'),
+                    icon: Icon(Icons.bolt_outlined, size: 16)),
+              ],
+              selected: {_ocrMode},
+              showSelectedIcon: false,
+              onSelectionChanged: (s) => setState(() => _ocrMode = s.first),
+            ),
+          ),
+          const Divider(),
+          // ---------------------------------------------------------------
+          // AI 设置
+          // ---------------------------------------------------------------
+          _SectionTitle('AI 设置', theme),
+          // (1) API 协议置顶
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('API 协议'),
+            subtitle: Text(_apiProtocol == 'responses'
+                ? 'Responses API：OpenAI 新协议，兼容 o 系列 / GPT-5；失败会自动回退'
+                : 'Chat Completions：兼容范围最广（默认）'),
+            trailing: SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(
+                    value: 'chat_completions',
+                    label: Text('Chat'),
+                    icon: Icon(Icons.forum_outlined, size: 16)),
+                ButtonSegment(
+                    value: 'responses',
+                    label: Text('Responses'),
+                    icon: Icon(Icons.auto_awesome_outlined, size: 16)),
+              ],
+              selected: {_apiProtocol},
+              showSelectedIcon: false,
+              onSelectionChanged: (s) =>
+                  setState(() => _apiProtocol = s.first),
+            ),
+          ),
+          // (2) 翻译
+          _SubTitle('翻译', theme),
+          _targetLangPicker(theme),
+          // (3) 模型通用配置
+          _SubTitle('模型通用配置', theme),
+          _Field(
+              controller: _baseUrl,
+              label: 'API Base URL',
+              hint: 'https://api.openai.com/v1'),
           _Field(
             controller: _apiKey,
             label: 'API Key',
@@ -182,19 +331,47 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             obscure: true,
             onChanged: (_) => setState(() {}), // re-evaluate save button
           ),
-          _Field(controller: _textModel, label: '文本模型', hint: 'gpt-4o-mini'),
-          _Field(controller: _targetLang, label: '翻译目标语言', hint: '中文'),
-          _SectionTitle('视觉配置（可选，不填回退通用配置）', theme),
-          _Field(controller: _visionBaseUrl, label: '视觉 Base URL', hint: '留空 = 使用通用配置'),
-          _Field(
-            controller: _visionApiKey,
-            label: '视觉 API Key',
-            hint: '留空 = 使用通用 Key',
-            obscure: true,
+          _Field(controller: _textModel, label: '模型 ID', hint: 'gpt-4o-mini'),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('模型能力'),
+            subtitle: const Text('勾选「图片」表示该模型可识图（多模态），否则将单独配置视觉模型'),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FilterChip(
+                  label: const Text('文本'),
+                  selected: true,
+                  onSelected: null, // text support is always required
+                ),
+                const SizedBox(width: 8),
+                FilterChip(
+                  label: const Text('图片'),
+                  selected: _supportsVision,
+                  onSelected: (v) => setState(() => _supportsVision = v),
+                ),
+              ],
+            ),
           ),
-          _Field(controller: _visionModel, label: '视觉模型', hint: 'gpt-4o / qwen-vl-max 等'),
-          const Divider(),
-          _SectionTitle('搜索配置', theme),
+          if (!_supportsVision) ...[
+            _SubTitle('视觉配置（通用模型不支持图片时使用）', theme),
+            _Field(
+                controller: _visionBaseUrl,
+                label: '视觉 Base URL',
+                hint: '留空 = 使用通用配置'),
+            _Field(
+              controller: _visionApiKey,
+              label: '视觉 API Key',
+              hint: '留空 = 使用通用 Key',
+              obscure: true,
+            ),
+            _Field(
+                controller: _visionModel,
+                label: '视觉模型',
+                hint: 'gpt-4o / qwen-vl-max 等'),
+          ],
+          // (4) 搜索方式
+          _SubTitle('搜索方式', theme),
           SwitchListTile(
             title: const Text('联网搜索'),
             subtitle: const Text('开启后搜索动作先联网检索，再让模型基于真实结果作答'),
@@ -205,7 +382,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             contentPadding: EdgeInsets.zero,
             title: const Text('搜索方式'),
             subtitle: Text(_searchBuiltin
-                ? '模型内置搜索：由服务端联网（Responses API，需模型支持，如 DeepSeek）'
+                ? '内置搜索：由服务端联网，走通用配置的 Responses 协议（需模型支持）'
                 : '第三方搜索：使用下方 Base URL + Key'),
             trailing: SegmentedButton<bool>(
               segments: const [
@@ -226,19 +403,63 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   setState(() => _searchBuiltin = s.first),
             ),
           ),
-          _Field(
-            controller: _searchBaseUrl,
-            label: '搜索 API Base URL',
-            hint: '留空 = 博查默认（https://api.bochaai.com/v1/web-search）',
+          if (!_searchBuiltin) ...[
+            _Field(
+              controller: _searchBaseUrl,
+              label: '搜索 API Base URL',
+              hint: '留空 = 博查默认（https://api.bochaai.com/v1/web-search）',
+            ),
+            _Field(
+              controller: _searchApiKey,
+              label: '搜索 API Key',
+              hint: '留空 = 降级为基于已有知识回答',
+              obscure: true,
+            ),
+          ],
+          // (5) 嵌入搜索
+          _SubTitle('嵌入搜索', theme),
+          SwitchListTile(
+            title: const Text('启用嵌入搜索'),
+            subtitle: const Text('使用第三方 embedding 模型将书页向量化并存入向量数据库（语义检索，功能开发中，此处先保存配置）'),
+            value: _embeddingEnabled,
+            onChanged: (v) => setState(() => _embeddingEnabled = v),
           ),
-          _Field(
-            controller: _searchApiKey,
-            label: '搜索 API Key',
-            hint: '留空 = 降级为基于已有知识回答',
-            obscure: true,
-          ),
-          const Divider(),
-          _SectionTitle('AI 回复', theme),
+          if (_embeddingEnabled) ...[
+            _Field(
+              controller: _embeddingBaseUrl,
+              label: 'Embedding Base URL',
+              hint: 'https://api.openai.com/v1',
+            ),
+            _Field(
+              controller: _embeddingApiKey,
+              label: 'Embedding API Key',
+              hint: 'sk-...',
+              obscure: true,
+            ),
+            _Field(
+              controller: _embeddingModel,
+              label: 'Embedding 模型 ID',
+              hint: 'text-embedding-3-small',
+            ),
+            _Field(
+              controller: _vectorDbUrl,
+              label: '向量数据库 URL',
+              hint: '如 https://xxx.qdrant.io 或本地 http://localhost:6333',
+            ),
+            _Field(
+              controller: _vectorDbApiKey,
+              label: '向量数据库 Key',
+              hint: '留空 = 无需鉴权',
+              obscure: true,
+            ),
+            _Field(
+              controller: _vectorDbCollection,
+              label: '集合名称',
+              hint: 'zhiyue',
+            ),
+          ],
+          // (6) AI 回复（逻辑不变）
+          _SubTitle('AI 回复', theme),
           SwitchListTile(
             title: const Text('携带书籍对话上下文'),
             subtitle: const Text('每次回复携带本书与 AI 的全部对话历史（追问从开始到本次）。关闭后每轮独立回答'),
@@ -422,29 +643,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 ),
             ],
           ],
-          const Divider(),
-          _SectionTitle('OCR 整页扫描（本地离线，模型已随应用内置）', theme),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('识别模式'),
-            trailing: SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(
-                  value: 'high_precision',
-                  label: Text('高精度'),
-                  icon: Icon(Icons.high_quality_outlined, size: 16),
-                ),
-                ButtonSegment(
-                  value: 'fast',
-                  label: Text('快速'),
-                  icon: Icon(Icons.bolt_outlined, size: 16),
-                ),
-              ],
-              selected: {_ocrMode},
-              showSelectedIcon: false,
-              onSelectionChanged: (s) => setState(() => _ocrMode = s.first),
-            ),
-          ),
           const SizedBox(height: 12),
           FilledButton.icon(
             onPressed: canSave ? _save : null,
@@ -454,6 +652,55 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ],
       ),
     );
+  }
+
+  /// Translation target language: built-in 中文 / 英文 / 中英互译 chips plus
+  /// any languages the user added, and a "+ 添加语言" entry (设置 → AI 设置 →
+  /// 翻译). Custom languages appear as chips alongside the built-ins.
+  Widget _targetLangPicker(ThemeData theme) {
+    const builtins = ['中文', '英文', '中英互译'];
+    final options = [...builtins, ..._customLangs];
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('目标语言', style: theme.textTheme.bodyMedium),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              for (final lang in options)
+                ChoiceChip(
+                  label: Text(lang),
+                  selected: _targetLang == lang,
+                  onSelected: (_) => setState(() => _targetLang = lang),
+                ),
+              ActionChip(
+                avatar: const Icon(Icons.add, size: 16),
+                label: const Text('添加语言'),
+                onPressed: _addCustomLang,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Prompt for a new target language and select it (设置 → AI 设置 → 翻译).
+  Future<void> _addCustomLang() async {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => const _AddLangDialog(),
+    );
+    if (name == null || name.isEmpty) return;
+    setState(() {
+      if (!_customLangs.contains(name)) _customLangs.add(name);
+      _targetLang = name;
+    });
   }
 
   /// One selectable template chip: a plain GestureDetector + Container --
@@ -495,17 +742,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _templateEdit.text =
           _templateEdits[id] ?? _templateDefaults[id] ?? '';
     });
-    if (id == 'custom') return;
-    if (_templateEdits.containsKey(id) || _templateDefaults.containsKey(id)) {
-      return;
-    }
-    ref.read(aiRepositoryProvider).templateDefaultText(id).then((t) {
-      if (!mounted || _promptTemplate != id) return;
-      setState(() {
-        _templateDefaults[id] = t;
-        _templateEdit.text = t;
-      });
-    });
+    _loadTemplateText(id);
   }
 
   /// Drop the user edit of the current template (back to the built-in).
@@ -515,6 +752,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       _templateEdits.remove(id);
       _templateEdit.text = _templateDefaults[id] ?? '';
     });
+    _loadTemplateText(id);
   }
 
   /// Save the current custom prompt as a named template (同名覆盖).
@@ -558,6 +796,75 @@ class _SectionTitle extends StatelessWidget {
           fontWeight: FontWeight.w600,
         ),
       ),
+    );
+  }
+}
+
+/// A lighter sub-heading inside a section (e.g. the AI section's 翻译 /
+/// 模型通用配置 / 搜索方式 / 嵌入搜索 groups).
+class _SubTitle extends StatelessWidget {
+  const _SubTitle(this.text, this.theme);
+  final String text;
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12, bottom: 2),
+      child: Text(
+        text,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+/// Dialog for adding a custom translation language. Owns its controller so
+/// it is disposed only after the dialog is fully torn down (disposing the
+/// controller right after `showDialog` returns trips "used after disposed"
+/// during the exit animation).
+class _AddLangDialog extends StatefulWidget {
+  const _AddLangDialog();
+
+  @override
+  State<_AddLangDialog> createState() => _AddLangDialogState();
+}
+
+class _AddLangDialogState extends State<_AddLangDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('添加翻译语言'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: const InputDecoration(
+          labelText: '语言名称',
+          hintText: '如 日文 / Français',
+          border: OutlineInputBorder(),
+        ),
+        onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+          child: const Text('添加'),
+        ),
+      ],
     );
   }
 }

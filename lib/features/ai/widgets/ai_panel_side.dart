@@ -6,6 +6,7 @@ import 'package:rbwa/features/ai/providers/ai_provider.dart';
 import 'package:rbwa/features/ai/widgets/ai_utils.dart';
 import 'package:rbwa/features/ai/widgets/message_bubble.dart'
     show AiMessageBubble, aiActionIcon;
+import 'package:rbwa/features/reader/providers/panel_layout.dart';
 import 'package:rbwa/src/rust/models/ai.dart';
 
 /// AI side panel (FEATURES 6.5): three-view state machine -- empty guide,
@@ -65,9 +66,11 @@ class _AiPanelSideState extends ConsumerState<AiPanelSide> {
     final active = state.threadOf(state.activeThreadId);
     // Input is disabled while an answer is streaming (no concurrent sends).
     final inputEnabled = state.streamingThreadId == null;
+    final width =
+        ref.watch(panelLayoutProvider.select((p) => p.aiPanelWidth));
 
     return SizedBox(
-      width: 320,
+      width: width,
       child: Material(
         color: theme.colorScheme.surfaceContainerLow,
         child: Column(
@@ -80,7 +83,17 @@ class _AiPanelSideState extends ConsumerState<AiPanelSide> {
                   Icon(Icons.auto_awesome,
                       size: 16, color: theme.colorScheme.primary),
                   const SizedBox(width: 6),
-                  Text('AI 助手', style: theme.textTheme.titleSmall),
+                  // Shrinkable title: at narrow panel widths the action
+                  // buttons take priority, so the title ellipsizes instead of
+                  // overflowing the row (the panel is user-resizable).
+                  Flexible(
+                    child: Text(
+                      'AI 助手',
+                      style: theme.textTheme.titleSmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                   const Spacer(),
                   // Inside a conversation: back to the window list. Deletion
                   // lives on the 「AI 对话」 page (6.5.3).
@@ -243,26 +256,43 @@ class _ChatView extends StatelessWidget {
     final messages = thread.messages;
     // SelectionArea makes every message text selectable with the mouse
     // (drag + Ctrl+C); right-click on a bubble copies that message.
+    //
+    // LayoutBuilder derives the bubble width from the panel's actual width
+    // (minus the list's horizontal padding) so the content reflows when the
+    // panel is resized -- a fixed maxWidth would leave the bubbles narrow.
     return SelectionArea(
-      child: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        children: [
-          for (final m in messages)
-            AiMessageBubble(
-              role: m.role,
-              content: m.content,
-              imagePng: m.imagePng,
-              imagePath: m.imagePath,
-              actionType: m.actionType,
-              createdAt: m.createdAt,
-            ),
-          if (streamingText != null)
-            AiMessageBubble(
-              role: AiRole.assistant,
-              content: streamingText!,
-              streaming: true,
-            ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final bubbleMax =
+              (constraints.maxWidth - 20).clamp(120.0, double.infinity);
+          // reverse: the newest message sits at the bottom and the list opens
+          // there, so a long history does not show its oldest turn first (the
+          // result card uses the same idiom). Children are laid out
+          // bottom-up, hence the reversed iteration.
+          return ListView(
+            reverse: true,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            children: [
+              if (streamingText != null)
+                AiMessageBubble(
+                  role: AiRole.assistant,
+                  content: streamingText!,
+                  streaming: true,
+                  maxWidth: bubbleMax,
+                ),
+              for (final m in messages.reversed)
+                AiMessageBubble(
+                  role: m.role,
+                  content: m.content,
+                  imagePng: m.imagePng,
+                  imagePath: m.imagePath,
+                  actionType: m.actionType,
+                  createdAt: m.createdAt,
+                  maxWidth: bubbleMax,
+                ),
+            ],
+          );
+        },
       ),
     );
   }
