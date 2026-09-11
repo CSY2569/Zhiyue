@@ -5,6 +5,7 @@ import 'package:rbwa/core/widgets/toolbar_icon_button.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
 import 'package:rbwa/features/annotation/providers/image_mark_provider.dart'
     show MarkTool, markToolProvider;
+import 'package:rbwa/features/bilingual/providers/page_translation_provider.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
 import 'package:rbwa/features/screenshot/screenshot_provider.dart';
 import 'package:rbwa/src/rust/models/progress.dart';
@@ -57,6 +58,15 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
             tooltip: '标注',
             active: state.openSidebar == SidebarType.annotations,
             onTap: () => notifier.toggleSidebar(SidebarType.annotations),
+          ),
+          // 对照阅读 (bilingual reading, M7): independent right-side pane
+          // showing the current page's translation (plan §1).
+          ToolbarIconButton(
+            icon: Icons.translate,
+            tooltip: '对照阅读',
+            active: ref.watch(translationPaneProvider.select((s) => s.open)),
+            onTap: () =>
+                ref.read(translationPaneProvider.notifier).toggle(),
           ),
           const VDivider(),
           // View mode selector (3.1): one popup for the three modes.

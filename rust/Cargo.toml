@@ -32,8 +32,11 @@ futures-util = "0.3"
 # Database - bundled SQLite (WAL) + FTS5
 rusqlite = { version = "0.32", features = ["bundled", "blob"] }
 
-# PDF rendering / text extraction (M2)
-pdfium-render = { version = "0.9", features = ["image_latest", "thread_safe"], optional = true }
+# PDF rendering / text extraction (M2). `paragraph` is kept enabled for the
+# bilingual reading milestone (M7); NOTE: pdfium-render 0.9.3/0.9.4 compiles
+# the module but does not re-export PdfParagraph outside the crate, so the
+# baseline clustering in translate/extract.rs is the primary path.
+pdfium-render = { version = "0.9", features = ["image_latest", "thread_safe", "paragraph"], optional = true }
 
 # AI client - OpenAI-compatible streaming + vision (M4).
 # Transport is a hand-written reqwest SSE client (TECH_ROADMAP fallback:
@@ -54,7 +57,9 @@ serde_json = "1"
 # Base64 for vision screenshots (data URL, M4)
 base64 = "0.22"
 
-# SHA-256 for region OCR cache keys (7.2.3: screenshot content de-dup)
+# SHA-256 for translation source hashes (M7: page freshness guard) and
+# region OCR cache keys (7.2.3: screenshot content de-dup).
+sha2 = "0.10"
 
 # SSE byte stream chunks for the hand-written streaming client (M4)
 bytes = "1"
@@ -79,10 +84,25 @@ uuid = { version = "1", features = ["v4"] }
 rapidocr-core = { version = "0.2.2", default-features = false, optional = true }
 jieba-rs = "0.10.3"
 
+# Bilingual reading translated-PDF writer (M7, plan §6 fallback after the
+# font-subsetting verification): the font is subset at build time to just the
+# glyphs the book uses, and the PDF is assembled with lopdf emitting
+# Identity-H CID text. `subsetter` needs TrueType (glyf) outlines; `ttf-parser`
+# maps unicode -> glyph ids and supplies the original advances.
+lopdf = { version = "0.45", optional = true }
+subsetter = { version = "0.2.6", optional = true }
+ttf-parser = { version = "0.25", optional = true }
+
 [features]
 default = ["pdf", "ai", "ocr"]
 # Opt-in subsystem crates, enabled per milestone to keep the build lean.
-pdf = ["dep:pdfium-render", "dep:image"]
+pdf = [
+    "dep:pdfium-render",
+    "dep:image",
+    "dep:lopdf",
+    "dep:subsetter",
+    "dep:ttf-parser",
+]
 # M4: AI streaming client (hand-written reqwest SSE). Vision screenshots are
 # sent as base64 data URLs, so no image-decoding dependency is needed here.
 ai = ["dep:reqwest"]

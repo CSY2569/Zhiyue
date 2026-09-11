@@ -15,6 +15,9 @@ import 'package:rbwa/features/annotation/widgets/floating_toolbar.dart';
 import 'package:rbwa/features/annotation/widgets/mark_toolbar.dart';
 import 'package:rbwa/features/annotation/widgets/note_composer.dart';
 import 'package:rbwa/features/annotation/widgets/note_popup.dart';
+import 'package:rbwa/features/bilingual/providers/page_translation_provider.dart';
+import 'package:rbwa/features/bilingual/providers/translation_queue_provider.dart';
+import 'package:rbwa/features/bilingual/widgets/translated_pane.dart';
 import 'package:rbwa/features/reader/providers/panel_layout.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
 import 'package:rbwa/features/reader/widgets/pdf_page_scroll.dart';
@@ -23,6 +26,7 @@ import 'package:rbwa/features/reader/widgets/sidebars/notes_rail.dart';
 import 'package:rbwa/features/reader/widgets/sidebars/outline_tree.dart';
 import 'package:rbwa/features/reader/widgets/sidebars/thumbnail_rail.dart';
 import 'package:rbwa/features/search/providers/search_providers.dart';
+import 'package:rbwa/src/rust/models/progress.dart';
 
 /// Reader page (FEATURES §3 + §4 + §6).
 ///
@@ -48,6 +52,16 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   late final ProviderSubscription _selectionSub;
   late final ProviderSubscription _viewerSub;
   late final ProviderSubscription _aiSub;
+  late final ProviderSubscription _aiPanelSub;
+  late final ProviderSubscription _translatePanelSub;
+  late final ProviderSubscription _queueSub;
+
+  /// Right-side panels in the order they were opened; when the panels squeeze
+  /// the reading area below its minimum, the EARLIER-opened one is clamped
+  /// first (plan §1 v4.2 后开启者优先 -- the later keeps its width).
+  final List<String> _rightOrder = [];
+  bool _sidebarCollapseNotified = false;
+  int? _lastQueuedBookId;
 
   @override
   void initState() {
@@ -84,6 +98,22 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       (prev, next) => _setVisible(_aiCardController, next),
     );
 
+    // Track the open order of the two right-side panels (plan §1 v4.2).
+    _aiPanelSub = ref.listenManual(
+      aiProvider.select((s) => s.aiPanelOpen),
+      (prev, next) {
+        if (next && !(prev ?? false)) _rightOrder.add('ai');
+        if (!next) _rightOrder.remove('ai');
+      },
+    );
+    _translatePanelSub = ref.listenManual(
+      translationPaneProvider.select((s) => s.open),
+      (prev, next) {
+        if (next && !(prev ?? false)) _rightOrder.add('translate');
+        if (!next) _rightOrder.remove('translate');
+      },
+    );
+
     // Book / zoom / mode / page changes invalidate the current selection
     // (its screen anchor no longer matches the content). A book change also
     // follows the per-book conversation window in the AI panel (6.5.4).
@@ -99,6 +129,29 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         }
       },
     );
+
+    // Bilingual reading queue (plan §10): 随进度 mode enqueues the visible
+    // page + the next two on every page turn; a re-opened book resumes an
+    // unfinished whole-book run per the background setting (plan §9).
+    _queueSub = ref.listenManual(
+      viewerProvider.select((s) => (s.book?.id, s.mode, s.currentPage)),
+      (prev, next) {
+        final bookId = next.$1;
+        if (bookId == null) return;
+        final queue = ref.read(translationQueueProvider.notifier);
+        final newBook = _lastQueuedBookId != bookId;
+        _lastQueuedBookId = bookId;
+        if (newBook) {
+          queue.resumeIfNeeded(bookId, ref.read(viewerProvider).pageCount);
+        }
+        if (prev != next) {
+          final List<int> visible = next.$2 == ViewMode.single
+              ? [next.$3]
+              : [next.$3, next.$3 + 1];
+          queue.onVisiblePages(bookId, visible);
+        }
+      },
+    );
   }
 
   void _setVisible(OverlayPortalController c, bool show) {
@@ -106,11 +159,76 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (!show && c.isShowing) c.hide();
   }
 
+  /// Clamps the open right-side panels so the reading area keeps at least
+  /// [PanelLayout.minContentWidth] logical pixels (plan §1 v4.2). Panels are
+  /// reduced in REVERSE open order (the earlier-opened one gives way first);
+  /// if even their minimums do not fit, the left sidebar is collapsed with a
+  /// one-time hint.
+  ///
+  /// Runs in a post-frame callback: the widths live in [PanelLayoutNotifier],
+  /// and mutating a provider during build is not allowed.
+  void _enforceContentMinimum(
+    double available, {
+    required bool aiOpen,
+    required bool translateOpen,
+    required bool sidebarOpen,
+    required double sidebarWidth,
+    required BuildContext context,
+  }) {
+    if (available <= 0) return;
+    final layout = ref.read(panelLayoutProvider);
+    final aiW = aiOpen ? layout.aiPanelWidth : 0.0;
+    final trW = translateOpen ? layout.translatedPaneWidth : 0.0;
+    final content = available - sidebarWidth - aiW - trW;
+    if (content >= PanelLayout.minContentWidth) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final notifier = ref.read(panelLayoutProvider.notifier);
+      var deficit = PanelLayout.minContentWidth - content;
+
+      // The later-opened panel keeps its width; reduce earlier ones first.
+      for (final which in _rightOrder.reversed) {
+        if (deficit <= 0) break;
+        final cur = ref.read(panelLayoutProvider);
+        if (which == 'translate' && translateOpen) {
+          final next = (cur.translatedPaneWidth - deficit)
+              .clamp(PanelLayout.minTranslatedPaneWidth, cur.translatedPaneWidth);
+          deficit -= cur.translatedPaneWidth - next;
+          notifier.clampTranslatedPane(next);
+        } else if (which == 'ai' && aiOpen) {
+          final next = (cur.aiPanelWidth - deficit)
+              .clamp(PanelLayout.minAiPanelWidth, cur.aiPanelWidth);
+          deficit -= cur.aiPanelWidth - next;
+          notifier.clampAiPanel(next);
+        }
+      }
+      if (deficit != PanelLayout.minContentWidth - content) notifier.commit();
+
+      // Still not enough room -> collapse the left sidebar (once).
+      if (deficit > 0 && sidebarOpen) {
+        if (!_sidebarCollapseNotified) {
+          _sidebarCollapseNotified = true;
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            const SnackBar(content: Text('阅读区空间不足，已自动收起左侧栏')),
+          );
+        }
+        final side = ref.read(viewerProvider).openSidebar;
+        if (side != null) {
+          ref.read(viewerProvider.notifier).toggleSidebar(side);
+        }
+      }
+    });
+  }
+
   @override
   void dispose() {
     _selectionSub.close();
     _viewerSub.close();
     _aiSub.close();
+    _aiPanelSub.close();
+    _translatePanelSub.close();
+    _queueSub.close();
     // NOTE: cannot call ref.read() here -- Riverpod forbids using `ref` after
     // the widget is disposed. The ViewerNotifier's own dispose() cancels the
     // debounce timer; closing the pdfium document happens lazily when the
@@ -153,6 +271,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(viewerProvider);
     final aiOpen = ref.watch(aiProvider.select((s) => s.aiPanelOpen));
+    final translateOpen =
+        ref.watch(translationPaneProvider.select((s) => s.open));
     // Book snapshot for the AI widgets (per-book conversation windows,
     // 6.5.4); the AI notifier itself never reads the viewer state.
     final book = state.book;
@@ -193,37 +313,73 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               children: [
                 const ReaderToolbar(),
                 Expanded(
-                  child: Row(
-                    children: [
-                      if (state.openSidebar != null) ...[
-                        _buildSidebar(state),
-                        // Drag the sidebar's right edge to resize it (FEATURES
-                        // 3.4.4); the content Expanded reflows automatically.
-                        PanelResizeHandle(
-                          onResize: (dx) => ref
-                              .read(panelLayoutProvider.notifier)
-                              .resizeSidebar(state.openSidebar!, dx),
-                          onResizeEnd: () =>
-                              ref.read(panelLayoutProvider.notifier).commit(),
-                        ),
-                      ],
-                      Expanded(child: _buildContent(context, state)),
-                      if (aiOpen) ...[
-                        // The AI panel is right-aligned: its left-edge handle
-                        // widens it when dragged left, so negate the delta.
-                        PanelResizeHandle(
-                          onResize: (dx) => ref
-                              .read(panelLayoutProvider.notifier)
-                              .resizeAiPanel(-dx),
-                          onResizeEnd: () =>
-                              ref.read(panelLayoutProvider.notifier).commit(),
-                        ),
-                        AiPanelSide(
-                          bookId: book?.id,
-                          bookTitle: book?.title,
-                        ),
-                      ],
-                    ],
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      // Keep the reading area usable when several panels are
+                      // open (plan §1 v4.2): clamp the earlier-opened panel
+                      // first, then any remaining panel.
+                      _enforceContentMinimum(
+                        constraints.maxWidth,
+                        aiOpen: aiOpen,
+                        translateOpen: translateOpen,
+                        sidebarOpen: state.openSidebar != null,
+                        sidebarWidth:
+                            state.openSidebar == null
+                                ? 0
+                                : ref
+                                    .read(panelLayoutProvider)
+                                    .widthFor(state.openSidebar!),
+                        context: context,
+                      );
+                      return Row(
+                        children: [
+                          if (state.openSidebar != null) ...[
+                            _buildSidebar(state),
+                            // Drag the sidebar's right edge to resize it
+                            // (FEATURES 3.4.4); the content Expanded reflows.
+                            PanelResizeHandle(
+                              onResize: (dx) => ref
+                                  .read(panelLayoutProvider.notifier)
+                                  .resizeSidebar(state.openSidebar!, dx),
+                              onResizeEnd: () => ref
+                                  .read(panelLayoutProvider.notifier)
+                                  .commit(),
+                            ),
+                          ],
+                          Expanded(child: _buildContent(context, state)),
+                          if (translateOpen || aiOpen) ...[
+                            // Right-side panels: the translation pane first,
+                            // then the AI panel. Handles are right-aligned, so
+                            // a drag left (negative dx) widens them.
+                            if (translateOpen) ...[
+                              PanelResizeHandle(
+                                onResize: (dx) => ref
+                                    .read(panelLayoutProvider.notifier)
+                                    .resizeTranslatedPane(-dx),
+                                onResizeEnd: () => ref
+                                    .read(panelLayoutProvider.notifier)
+                                    .commit(),
+                              ),
+                              const TranslatedPane(),
+                            ],
+                            if (aiOpen) ...[
+                              PanelResizeHandle(
+                                onResize: (dx) => ref
+                                    .read(panelLayoutProvider.notifier)
+                                    .resizeAiPanel(-dx),
+                                onResizeEnd: () => ref
+                                    .read(panelLayoutProvider.notifier)
+                                    .commit(),
+                              ),
+                              AiPanelSide(
+                                bookId: book?.id,
+                                bookTitle: book?.title,
+                              ),
+                            ],
+                          ],
+                        ],
+                      );
+                    },
                   ),
                 ),
               ],

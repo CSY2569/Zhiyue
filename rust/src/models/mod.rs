@@ -13,3 +13,4 @@ pub mod ai;
 pub mod annotation;
 pub mod book;
 pub mod progress;
+pub mod translate;

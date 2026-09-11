@@ -16,6 +16,17 @@ use crate::pdf::types::{CharBox, OutlineEntry, PageBitmap};
 /// Cached singleton `Pdfium` handle (bound once per process).
 static PDFIUM: OnceLock<Pdfium> = OnceLock::new();
 
+/// Process-wide serialization for ALL pdfium calls.
+///
+/// pdfium is NOT safe for concurrent use, even across separate documents and
+/// even with `pdfium-render`'s `thread_safe` feature (that only makes the Rust
+/// wrapper `Send + Sync`; the C library still has shared global state). Calling
+/// it from several threads at once makes text extraction silently return EMPTY
+/// and rendering fail with `PdfiumLibraryInternalError`. Since bilingual
+/// translation extracts/renders on background workers concurrently with the
+/// reader's own renders, every pdfium entry point must take this lock.
+static PDFIUM_LOCK: Mutex<()> = Mutex::new(());
+
 /// The currently-open document. Only one PDF is open at a time.
 static DOC: Mutex<Option<PdfDocument<'static>>> = Mutex::new(None);
 
@@ -27,8 +38,19 @@ static DOC_PATH: Mutex<Option<String>> = Mutex::new(None);
 // `Send + Sync`. We transmute the borrow to `'static` so it can be stored in
 // the static `DOC`; this is sound because `PDFIUM` is never replaced/dropped.
 
+/// Guards one-time library binding. `Pdfium::new()` panics if called twice
+/// (`assert!(BINDINGS.get().is_none())`), so the check-then-act in [pdfium]
+/// must itself be serialized -- concurrent first calls used to abort the
+/// process with SIGTRAP.
+static PDFIUM_INIT: Mutex<()> = Mutex::new(());
+
 /// Returns the cached `Pdfium` handle, binding the native library on first call.
 fn pdfium() -> AppResult<&'static Pdfium> {
+    if let Some(h) = PDFIUM.get() {
+        return Ok(h);
+    }
+    let _init_guard = PDFIUM_INIT.lock().unwrap_or_else(|e| e.into_inner());
+    // Re-check after taking the init lock: another thread may have bound it.
     if let Some(h) = PDFIUM.get() {
         return Ok(h);
     }
@@ -45,6 +67,13 @@ fn pdfium() -> AppResult<&'static Pdfium> {
         candidates.push(dir.clone());
         candidates.push(dir.join("lib"));
     }
+    // Cargo test/dev: the crate root is `rust/`, so this finds the
+    // `rust/libpdfium/libpdfium.so` that fetch_pdfium.sh installs. On a
+    // packaged build the baked path simply does not exist and is skipped.
+    candidates.push(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("libpdfium"),
+    );
     if let Ok(cwd) = std::env::current_dir() {
         candidates.push(cwd.join("rust").join("libpdfium"));
         candidates.push(cwd);
@@ -70,6 +99,14 @@ fn pdfium() -> AppResult<&'static Pdfium> {
     Ok(PDFIUM.get().expect("pdfium just set"))
 }
 
+/// The shared handle for INDEPENDENT document opens (bilingual reading M7:
+/// paragraph extraction / formula capture, plus thumbnails). Loading another
+/// document through this handle never touches the reader's global [DOC]
+/// lock, so background translation work cannot block page rendering.
+pub fn shared_handle() -> AppResult<&'static Pdfium> {
+    pdfium()
+}
+
 /// Resolves the directory containing the running executable (bundle `lib/`).
 fn exe_dir() -> Option<PathBuf> {
     std::env::current_exe()
@@ -80,6 +117,7 @@ fn exe_dir() -> Option<PathBuf> {
 /// Opens a PDF document and caches it as the active document.
 /// Returns the page count. Re-opening the same path is a no-op.
 pub fn open(path: &str) -> AppResult<i64> {
+    let _pdfium_guard = PDFIUM_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let pdfium = pdfium()?;
 
     // Skip re-opening if the same document is already active.
@@ -102,11 +140,16 @@ pub fn open(path: &str) -> AppResult<i64> {
 }
 
 /// Ensures a document is open, running `f` against it.
+///
+/// Takes the process-wide pdfium lock (pdfium is not thread-safe), then the
+/// document slot. Readers, thumbnails, text extraction and the bilingual
+/// translation path all serialize through this one lock.
 fn with_doc<F, R>(f: F) -> AppResult<R>
 where
     F: FnOnce(&PdfDocument<'_>) -> AppResult<R>,
 {
-    let guard = DOC.lock().unwrap();
+    let _pdfium_guard = PDFIUM_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let guard = DOC.lock().unwrap_or_else(|e| e.into_inner());
     let doc = guard
         .as_ref()
         .ok_or_else(|| AppError::Pdf("no document open -- call open_book first".into()))?;
@@ -258,14 +301,16 @@ fn bookmark_to_entry(bm: &PdfBookmark<'_>) -> OutlineEntry {
 
 /// Closes the active document, releasing its memory.
 pub fn close() {
-    *DOC.lock().unwrap() = None;
-    *DOC_PATH.lock().unwrap() = None;
+    let _guard = PDFIUM_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    *DOC.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    *DOC_PATH.lock().unwrap_or_else(|e| e.into_inner()) = None;
 }
 
 /// Render page [page] of the PDF at [path] to a thumbnail through an
 /// INDEPENDENT document ([extract_document_text] does the same for text), so
 /// rebuilding a missing cover never disturbs the reader's open document.
 pub fn render_thumbnail_file(path: &str, page: i64, max_size: u32) -> AppResult<PageBitmap> {
+    let _guard = PDFIUM_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let pdfium = pdfium()?;
     let doc = pdfium.load_pdf_from_file(path, None)?;
     let pg = doc.pages().get(page as PdfPageIndex)?;
@@ -285,6 +330,7 @@ pub fn render_thumbnail_file(path: &str, page: i64, max_size: u32) -> AppResult<
 /// unicode strings concatenated -- exactly what the char-box layer builds,
 /// so hit highlighting offsets align with CharBox indices.
 pub fn extract_document_text(path: &str) -> AppResult<Vec<String>> {
+    let _guard = PDFIUM_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let pdfium = pdfium()?;
     let doc = pdfium.load_pdf_from_file(path, None)?;
     let count = doc.pages().len();
@@ -300,4 +346,90 @@ pub fn extract_document_text(path: &str) -> AppResult<Vec<String>> {
         out.push(s);
     }
     Ok(out)
+}
+
+/// Runs [f] against an INDEPENDENT document opened from [path] while holding
+/// the process-wide pdfium lock. This is the supported way for the bilingual
+/// translation path to read a book without touching the reader's open
+/// document, and without racing concurrent pdfium calls (which silently
+/// corrupt text extraction).
+pub fn with_document_file<F, R>(path: &str, f: F) -> AppResult<R>
+where
+    F: FnOnce(&PdfDocument<'_>) -> AppResult<R>,
+{
+    let _guard = PDFIUM_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let pdfium = pdfium()?;
+    let doc = pdfium.load_pdf_from_file(path, None)?;
+    f(&doc)
+}
+
+/// Serializes an arbitrary pdfium operation under the process-wide lock. The
+/// translation writer uses this to create/save/render PDFs safely.
+pub fn with_pdfium_lock<F, R>(f: F) -> AppResult<R>
+where
+    F: FnOnce(&'static Pdfium) -> AppResult<R>,
+{
+    let _guard = PDFIUM_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let pdfium = pdfium()?;
+    f(pdfium)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression: concurrent pdfium use must not corrupt results. Before the
+    /// `PDFIUM_LOCK` was added, three threads extracting at once silently got
+    /// ZERO results (pdfium is not thread-safe), which made the bilingual
+    /// translator cache empty pages and never call the API.
+    ///
+    /// Skips when libpdfium is unreachable (run from the repo root).
+    #[test]
+    fn concurrent_text_extraction_is_correct() {
+        let Ok(_) = pdfium() else {
+            eprintln!("skipping: libpdfium not on the search path");
+            return;
+        };
+        // Build a small PDF on disk, then extract from several threads.
+        let path = std::env::temp_dir().join(format!("rbwa_conc_{}.pdf", std::process::id()));
+        {
+            let doc = with_pdfium_lock(|p| {
+                let mut d = p.create_new_pdf()?;
+                let font = d.fonts_mut().helvetica();
+                let mut page = d
+                    .pages_mut()
+                    .create_page_at_end(PdfPagePaperSize::a4())?;
+                let objects = page.objects_mut();
+                objects.create_text_object(
+                    PdfPoints::new(60.0),
+                    PdfPoints::new(700.0),
+                    "Concurrent extraction test line",
+                    font,
+                    PdfPoints::new(12.0),
+                )?;
+                d.save_to_file(&path)?;
+                Ok(d)
+            })
+            .expect("build pdf");
+        }
+
+        let mut handles = Vec::new();
+        for _ in 0..3 {
+            let p = path.clone();
+            handles.push(std::thread::spawn(move || {
+                with_document_file(p.to_str().unwrap(), |doc| {
+                    let text = doc.pages().get(0)?.text()?.all();
+                    Ok(text)
+                })
+            }));
+        }
+        for h in handles {
+            let text = h.join().expect("thread panicked").expect("extract failed");
+            assert!(
+                text.contains("Concurrent extraction"),
+                "concurrent extraction returned wrong/empty text: {text:?}"
+            );
+        }
+        let _ = std::fs::remove_file(&path);
+    }
 }

@@ -24,7 +24,7 @@ mod image_book;
 #[cfg(feature = "pdf")]
 pub use pdfium::{
     close, extract_document_text, extract_text, open, outline, page_has_text, render_page,
-    render_thumbnail_file, thumbnail,
+    render_thumbnail_file, shared_handle, thumbnail, with_document_file, with_pdfium_lock,
 };
 #[cfg(feature = "pdf")]
 pub use image_book::{

@@ -32,6 +32,17 @@ ProviderScope _scope(Widget child, FakeAiRepo repo) => ProviderScope(
       child: MaterialApp(home: Scaffold(body: Stack(children: [child]))),
     );
 
+/// Scrolls the AI save button fully into view, then taps it. The settings
+/// page grew a 「对照阅读」 section below the AI block, so a plain
+/// `scrollUntilVisible` can overshoot and leave the button behind the app
+/// bar; `ensureVisible` re-aligns it before the tap.
+Future<void> tapSaveAiConfig(WidgetTester tester) async {
+  final finder = find.widgetWithText(FilledButton, '保存 AI 配置');
+  await tester.ensureVisible(finder);
+  await tester.pump();
+  await tester.tap(finder);
+}
+
 
 void main() {
   testWidgets('settings page loads and saves AI config (6.1)', (tester) async {
@@ -62,6 +73,8 @@ void main() {
     final saveBtn = find.widgetWithText(FilledButton, '保存 AI 配置');
     expect(tester.widget<FilledButton>(saveBtn).onPressed, isNotNull);
 
+    await tester.ensureVisible(saveBtn);
+    await tester.pump();
     await tester.tap(saveBtn);
     await tester.pumpAndSettle();
 
@@ -98,7 +111,7 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.tap(find.widgetWithText(FilledButton, '保存 AI 配置'));
+    await tapSaveAiConfig(tester);
     await tester.pumpAndSettle();
 
     expect(repo.saved!.apiProtocol, 'responses');
@@ -139,7 +152,7 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, '保存 AI 配置'));
+    await tapSaveAiConfig(tester);
     await tester.pumpAndSettle();
 
     expect(repo.saved!.templateOverrides['academic'], '我修改过的学术提示词');
@@ -187,7 +200,7 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, '保存 AI 配置'));
+    await tapSaveAiConfig(tester);
     await tester.pumpAndSettle();
 
     expect(repo.saved!.enableReasoning, isTrue);
@@ -220,9 +233,21 @@ void main() {
         '你是一位诗人');
     await tester.tap(find.text('保存为模板'));
     await tester.pumpAndSettle();
-    // The saved list shows the named template (its delete button), and
-    // the template picker gains a chip for it. The saved row sits below the
-    // fold on a shorter list, so scroll it into view first.
+    // The template picker gains a chip for it (same Wrap as the "+" we just
+    // tapped, so it is already in view). Tapping the saved chip activates it.
+    expect(find.widgetWithText(ChoiceChip, '诗人'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ChoiceChip, '诗人'));
+    await tester.pumpAndSettle();
+    expect(
+      find.widgetWithText(TextField, '自定义提示词（作为角色设定，动作指令自动保留）'),
+      findsOneWidget,
+    );
+
+    // The saved list below the fold shows the named template (its delete).
+    // Scroll back to the top first so the downward search can reach it
+    // regardless of where the (now longer) page left the viewport.
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 4000));
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.byTooltip('删除模板'),
       200,
@@ -230,15 +255,6 @@ void main() {
     );
     await tester.pump();
     expect(find.byTooltip('删除模板'), findsOneWidget);
-    expect(find.widgetWithText(ChoiceChip, '诗人'), findsOneWidget);
-
-    // Tapping the saved chip activates it (custom section fills).
-    await tester.tap(find.widgetWithText(ChoiceChip, '诗人'));
-    await tester.pumpAndSettle();
-    expect(
-      find.widgetWithText(TextField, '自定义提示词（作为角色设定，动作指令自动保留）'),
-      findsOneWidget,
-    );
 
     // Persist: the named template travels with the config.
     await tester.scrollUntilVisible(
@@ -247,7 +263,7 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, '保存 AI 配置'));
+    await tapSaveAiConfig(tester);
     await tester.pumpAndSettle();
 
     expect(repo.saved!.customPrompts, hasLength(1));
@@ -256,6 +272,10 @@ void main() {
     expect(repo.saved!.customPrompt, '你是一位诗人');
 
     // Deleting the template removes its chip from the picker at once.
+    // The saved row sits ABOVE the save button; reset to the top and search
+    // downward again.
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, 4000));
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.byTooltip('删除模板'),
       200,
@@ -302,7 +322,7 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, '保存 AI 配置'));
+    await tapSaveAiConfig(tester);
     await tester.pumpAndSettle();
 
     expect(repo.saved!.translateTargetLang, '日文');
@@ -396,7 +416,7 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, '保存 AI 配置'));
+    await tapSaveAiConfig(tester);
     await tester.pumpAndSettle();
 
     expect(repo.saved!.embeddingEnabled, isTrue);

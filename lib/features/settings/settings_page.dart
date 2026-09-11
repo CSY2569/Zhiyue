@@ -5,7 +5,9 @@ import 'package:go_router/go_router.dart';
 import 'package:rbwa/core/theme/theme_controller.dart';
 import 'package:rbwa/data/repositories/ai_repository.dart';
 import 'package:rbwa/features/ai/providers/ai_config_provider.dart';
+import 'package:rbwa/features/bilingual/widgets/translation_settings_section.dart';
 import 'package:rbwa/features/reader/providers/outline_settings.dart';
+import 'package:rbwa/features/settings/widgets/settings_widgets.dart';
 import 'package:rbwa/src/rust/models/ai.dart';
 
 /// Settings page (FEATURES §6.1, §8.2).
@@ -234,422 +236,482 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           onPressed: () => context.go('/library'),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _SectionTitle('主题', theme),
-          ListTile(
-            leading: const Icon(Icons.brightness_6_outlined),
-            title: const Text('外观'),
-            trailing: DropdownButton<ThemeMode>(
-              value: themeMode,
-              items: const [
-                DropdownMenuItem(
-                    value: ThemeMode.system, child: Text('跟随系统')),
-                DropdownMenuItem(value: ThemeMode.light, child: Text('亮色')),
-                DropdownMenuItem(value: ThemeMode.dark, child: Text('暗色')),
-              ],
-              onChanged: (m) => m == null
-                  ? null
-                  : ref.read(themeControllerProvider.notifier).set(m),
-            ),
-          ),
-          const Divider(),
-          // ---------------------------------------------------------------
-          // 阅读器设置
-          // ---------------------------------------------------------------
-          _SectionTitle('阅读器设置', theme),
-          SwitchListTile(
-            title: const Text('目录默认全展开'),
-            subtitle: const Text('开启后打开目录时展开全部子章节；关闭则只显示主章节，需手动展开'),
-            value: ref.watch(outlineExpandAllProvider),
-            onChanged: (v) =>
-                ref.read(outlineExpandAllProvider.notifier).set(v),
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('OCR 识别精度'),
-            subtitle: const Text('整页扫描本地离线运行，模型已随应用内置'),
-            trailing: SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(
-                    value: 'high_precision',
-                    label: Text('高精度'),
-                    icon: Icon(Icons.high_quality_outlined, size: 16)),
-                ButtonSegment(
-                    value: 'fast',
-                    label: Text('快速'),
-                    icon: Icon(Icons.bolt_outlined, size: 16)),
-              ],
-              selected: {_ocrMode},
-              showSelectedIcon: false,
-              onSelectionChanged: (s) => setState(() => _ocrMode = s.first),
-            ),
-          ),
-          const Divider(),
-          // ---------------------------------------------------------------
-          // AI 设置
-          // ---------------------------------------------------------------
-          _SectionTitle('AI 设置', theme),
-          // (1) API 协议置顶
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('API 协议'),
-            subtitle: Text(_apiProtocol == 'responses'
-                ? 'Responses API：OpenAI 新协议，兼容 o 系列 / GPT-5；失败会自动回退'
-                : 'Chat Completions：兼容范围最广（默认）'),
-            trailing: SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(
-                    value: 'chat_completions',
-                    label: Text('Chat'),
-                    icon: Icon(Icons.forum_outlined, size: 16)),
-                ButtonSegment(
-                    value: 'responses',
-                    label: Text('Responses'),
-                    icon: Icon(Icons.auto_awesome_outlined, size: 16)),
-              ],
-              selected: {_apiProtocol},
-              showSelectedIcon: false,
-              onSelectionChanged: (s) =>
-                  setState(() => _apiProtocol = s.first),
-            ),
-          ),
-          // (2) 翻译
-          _SubTitle('翻译', theme),
-          _targetLangPicker(theme),
-          // (3) 模型通用配置
-          _SubTitle('模型通用配置', theme),
-          _Field(
-              controller: _baseUrl,
-              label: 'API Base URL',
-              hint: 'https://api.openai.com/v1'),
-          _Field(
-            controller: _apiKey,
-            label: 'API Key',
-            hint: 'sk-...',
-            obscure: true,
-            onChanged: (_) => setState(() {}), // re-evaluate save button
-          ),
-          _Field(controller: _textModel, label: '模型 ID', hint: 'gpt-4o-mini'),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('模型能力'),
-            subtitle: const Text('勾选「图片」表示该模型可识图（多模态），否则将单独配置视觉模型'),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                FilterChip(
-                  label: const Text('文本'),
-                  selected: true,
-                  onSelected: null, // text support is always required
-                ),
-                const SizedBox(width: 8),
-                FilterChip(
-                  label: const Text('图片'),
-                  selected: _supportsVision,
-                  onSelected: (v) => setState(() => _supportsVision = v),
-                ),
-              ],
-            ),
-          ),
-          if (!_supportsVision) ...[
-            _SubTitle('视觉配置（通用模型不支持图片时使用）', theme),
-            _Field(
-                controller: _visionBaseUrl,
-                label: '视觉 Base URL',
-                hint: '留空 = 使用通用配置'),
-            _Field(
-              controller: _visionApiKey,
-              label: '视觉 API Key',
-              hint: '留空 = 使用通用 Key',
-              obscure: true,
-            ),
-            _Field(
-                controller: _visionModel,
-                label: '视觉模型',
-                hint: 'gpt-4o / qwen-vl-max 等'),
-          ],
-          // (4) 搜索方式
-          _SubTitle('搜索方式', theme),
-          SwitchListTile(
-            title: const Text('联网搜索'),
-            subtitle: const Text('开启后搜索动作先联网检索，再让模型基于真实结果作答'),
-            value: _webSearch,
-            onChanged: (v) => setState(() => _webSearch = v),
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('搜索方式'),
-            subtitle: Text(_searchBuiltin
-                ? '内置搜索：由服务端联网，走通用配置的 Responses 协议（需模型支持）'
-                : '第三方搜索：使用下方 Base URL + Key'),
-            trailing: SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment(
-                  value: true,
-                  label: Text('内置搜索'),
-                  icon: Icon(Icons.language, size: 16),
-                ),
-                ButtonSegment(
-                  value: false,
-                  label: Text('第三方搜索'),
-                  icon: Icon(Icons.extension_outlined, size: 16),
-                ),
-              ],
-              selected: {_searchBuiltin},
-              showSelectedIcon: false,
-              onSelectionChanged: (s) =>
-                  setState(() => _searchBuiltin = s.first),
-            ),
-          ),
-          if (!_searchBuiltin) ...[
-            _Field(
-              controller: _searchBaseUrl,
-              label: '搜索 API Base URL',
-              hint: '留空 = 博查默认（https://api.bochaai.com/v1/web-search）',
-            ),
-            _Field(
-              controller: _searchApiKey,
-              label: '搜索 API Key',
-              hint: '留空 = 降级为基于已有知识回答',
-              obscure: true,
-            ),
-          ],
-          // (5) 嵌入搜索
-          _SubTitle('嵌入搜索', theme),
-          SwitchListTile(
-            title: const Text('启用嵌入搜索'),
-            subtitle: const Text('使用第三方 embedding 模型将书页向量化并存入向量数据库（语义检索，功能开发中，此处先保存配置）'),
-            value: _embeddingEnabled,
-            onChanged: (v) => setState(() => _embeddingEnabled = v),
-          ),
-          if (_embeddingEnabled) ...[
-            _Field(
-              controller: _embeddingBaseUrl,
-              label: 'Embedding Base URL',
-              hint: 'https://api.openai.com/v1',
-            ),
-            _Field(
-              controller: _embeddingApiKey,
-              label: 'Embedding API Key',
-              hint: 'sk-...',
-              obscure: true,
-            ),
-            _Field(
-              controller: _embeddingModel,
-              label: 'Embedding 模型 ID',
-              hint: 'text-embedding-3-small',
-            ),
-            _Field(
-              controller: _vectorDbUrl,
-              label: '向量数据库 URL',
-              hint: '如 https://xxx.qdrant.io 或本地 http://localhost:6333',
-            ),
-            _Field(
-              controller: _vectorDbApiKey,
-              label: '向量数据库 Key',
-              hint: '留空 = 无需鉴权',
-              obscure: true,
-            ),
-            _Field(
-              controller: _vectorDbCollection,
-              label: '集合名称',
-              hint: 'zhiyue',
-            ),
-          ],
-          // (6) AI 回复（逻辑不变）
-          _SubTitle('AI 回复', theme),
-          SwitchListTile(
-            title: const Text('携带书籍对话上下文'),
-            subtitle: const Text('每次回复携带本书与 AI 的全部对话历史（追问从开始到本次）。关闭后每轮独立回答'),
-            value: _includeBookHistory,
-            onChanged: (v) => setState(() => _includeBookHistory = v),
-          ),
-          SwitchListTile(
-            title: const Text('思考模式'),
-            subtitle: const Text('开启后按官方 API 发送 reasoning_effort，需使用支持思考的模型（如 o 系列 / GPT-5 / DeepSeek-R1）'),
-            value: _enableReasoning,
-            onChanged: (v) => setState(() => _enableReasoning = v),
-          ),
-          if (_enableReasoning)
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('思考等级'),
-              trailing: SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'low', label: Text('低')),
-                  ButtonSegment(value: 'medium', label: Text('中')),
-                  ButtonSegment(value: 'high', label: Text('高')),
-                ],
-                selected: {_reasoningEffort},
-                showSelectedIcon: false,
-                onSelectionChanged: (s) =>
-                    setState(() => _reasoningEffort = s.first),
-              ),
-            ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('温度'),
-            subtitle: Text('随机性（0.0 确定 – 2.0 发散）：${_temperature.toStringAsFixed(1)}'),
-            trailing: SizedBox(
-              width: 200,
-              child: Slider(
-                value: _temperature,
-                min: 0,
-                max: 2,
-                divisions: 20,
-                label: _temperature.toStringAsFixed(1),
-                onChanged: (v) => setState(() => _temperature = v),
-              ),
-            ),
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('提示词模板'),
-            subtitle: Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 780),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 48),
+            children: [
+              // ---------------------------------------------------------
+              // 外观
+              // ---------------------------------------------------------
+              SettingsSection(
+                title: '外观',
+                icon: Icons.palette_outlined,
                 children: [
-                  // Templates wrap freely; the "+" entry stays pinned to
-                  // the far right of the row.
-                  Expanded(
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
+                  SettingsControlRow(
+                    title: '主题模式',
+                    child: SegmentedButton<ThemeMode>(
+                      segments: const [
+                        ButtonSegment(
+                          value: ThemeMode.system,
+                          label: Text('跟随系统'),
+                          icon: Icon(Icons.brightness_auto_outlined, size: 16),
+                        ),
+                        ButtonSegment(
+                          value: ThemeMode.light,
+                          label: Text('亮色'),
+                          icon: Icon(Icons.light_mode_outlined, size: 16),
+                        ),
+                        ButtonSegment(
+                          value: ThemeMode.dark,
+                          label: Text('暗色'),
+                          icon: Icon(Icons.dark_mode_outlined, size: 16),
+                        ),
+                      ],
+                      selected: {themeMode},
+                      showSelectedIcon: false,
+                      onSelectionChanged: (s) => ref
+                          .read(themeControllerProvider.notifier)
+                          .set(s.first),
+                    ),
+                  ),
+                ],
+              ),
+
+              // ---------------------------------------------------------
+              // 阅读器
+              // ---------------------------------------------------------
+              SettingsSection(
+                title: '阅读器',
+                icon: Icons.menu_book_outlined,
+                children: [
+                  SettingsSwitchRow(
+                    title: '目录默认全展开',
+                    description: '打开目录时展开全部子章节；关闭则只显示主章节，需手动展开',
+                    value: ref.watch(outlineExpandAllProvider),
+                    onChanged: (v) =>
+                        ref.read(outlineExpandAllProvider.notifier).set(v),
+                  ),
+                  SettingsControlRow(
+                    title: 'OCR 识别精度',
+                    description: '整页扫描本地离线运行，模型已随应用内置',
+                    child: SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(
+                            value: 'high_precision',
+                            label: Text('高精度'),
+                            icon: Icon(Icons.high_quality_outlined, size: 16)),
+                        ButtonSegment(
+                            value: 'fast',
+                            label: Text('快速'),
+                            icon: Icon(Icons.bolt_outlined, size: 16)),
+                      ],
+                      selected: {_ocrMode},
+                      showSelectedIcon: false,
+                      onSelectionChanged: (s) =>
+                          setState(() => _ocrMode = s.first),
+                    ),
+                  ),
+                ],
+              ),
+
+              // =========================================================
+              // AI 设置
+              // =========================================================
+              const SettingsGroupLabel('AI 设置'),
+
+              // 服务与模型
+              SettingsSection(
+                title: '服务与模型',
+                icon: Icons.smart_toy_outlined,
+                children: [
+                  SettingsControlRow(
+                    title: 'API 协议',
+                    description: _apiProtocol == 'responses'
+                        ? 'Responses API：OpenAI 新协议，兼容 o 系列 / GPT-5；失败会自动回退'
+                        : 'Chat Completions：兼容范围最广（默认）',
+                    child: SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(
+                            value: 'chat_completions',
+                            label: Text('Chat'),
+                            icon: Icon(Icons.forum_outlined, size: 16)),
+                        ButtonSegment(
+                            value: 'responses',
+                            label: Text('Responses'),
+                            icon: Icon(Icons.auto_awesome_outlined, size: 16)),
+                      ],
+                      selected: {_apiProtocol},
+                      showSelectedIcon: false,
+                      onSelectionChanged: (s) =>
+                          setState(() => _apiProtocol = s.first),
+                    ),
+                  ),
+                  SettingsTextField(
+                    controller: _baseUrl,
+                    label: 'API Base URL',
+                    hint: 'https://api.openai.com/v1',
+                  ),
+                  SettingsTextField(
+                    controller: _apiKey,
+                    label: 'API Key',
+                    hint: 'sk-...',
+                    obscure: true,
+                    onChanged: (_) => setState(() {}), // re-evaluate save
+                  ),
+                  SettingsTextField(
+                    controller: _textModel,
+                    label: '模型 ID',
+                    hint: 'gpt-4o-mini',
+                  ),
+                  SettingsControlRow(
+                    title: '模型能力',
+                    description: '勾选「图片」表示该模型可识图（多模态），否则将单独配置视觉模型',
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        for (final t in _templateOptions)
-                          ChoiceChip(
-                            label: Text(t.label),
-                            selected: _promptTemplate == t.id,
-                            visualDensity: VisualDensity.compact,
-                            onSelected: (_) => _selectTemplate(t.id),
-                          ),
-                        // Saved custom templates appear here too: tap to
-                        // use; deleting them removes the chip at once.
-                        for (final t in _savedTemplates)
-                          ChoiceChip(
-                            label: Text(t.name),
-                            selected: _promptTemplate == 'custom' &&
-                                _customPrompt.text.trim() == t.text,
-                            visualDensity: VisualDensity.compact,
-                            onSelected: (_) => _useSavedTemplate(t),
-                          ),
+                        const FilterChip(
+                          label: Text('文本'),
+                          selected: true,
+                          onSelected: null, // text support is always required
+                        ),
+                        const SizedBox(width: 8),
+                        FilterChip(
+                          label: const Text('图片'),
+                          selected: _supportsVision,
+                          onSelected: (v) =>
+                              setState(() => _supportsVision = v),
+                        ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  // The "+" entry: animation-free, pinned to the far right.
-                  Tooltip(
-                    message: '自定义提示词',
-                    child: _templateChip(
-                      '+',
-                      _promptTemplate == 'custom',
-                      () => _selectTemplate('custom'),
+                  if (!_supportsVision) ...[
+                    const SettingsSubLabel('视觉配置（通用模型不支持图片时使用）'),
+                    SettingsTextField(
+                      controller: _visionBaseUrl,
+                      label: '视觉 Base URL',
+                      hint: '留空 = 使用通用配置',
                     ),
-                  ),
+                    SettingsTextField(
+                      controller: _visionApiKey,
+                      label: '视觉 API Key',
+                      hint: '留空 = 使用通用 Key',
+                      obscure: true,
+                    ),
+                    SettingsTextField(
+                      controller: _visionModel,
+                      label: '视觉模型',
+                      hint: 'gpt-4o / qwen-vl-max 等',
+                    ),
+                  ],
                 ],
               ),
-            ),
-          ),
-          if (_promptTemplate != 'custom') ...[
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: TextField(
-                controller: _templateEdit,
-                minLines: 3,
-                maxLines: 6,
-                decoration: const InputDecoration(
-                  labelText: '模板提示词（可修改，保存后生效）',
-                  border: OutlineInputBorder(),
-                ),
-                onChanged: (v) => _templateEdits[_promptTemplate] = v,
+
+              // 翻译
+              SettingsSection(
+                title: '翻译',
+                icon: Icons.translate,
+                description: '划词翻译与对照阅读共用此目标语言',
+                children: [_targetLangPicker(theme)],
               ),
-            ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: _restoreTemplate,
-                icon: const Icon(Icons.restore, size: 16),
-                label: const Text('恢复默认'),
-                style: TextButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                ),
-              ),
-            ),
-          ],
-          if (_promptTemplate == 'custom') ...[
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: TextField(
-                controller: _customPromptName,
-                decoration: const InputDecoration(
-                  labelText: '模板名称（保存后用于选择）',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _customPrompt,
-              minLines: 3,
-              maxLines: 6,
-              decoration: const InputDecoration(
-                labelText: '自定义提示词（作为角色设定，动作指令自动保留）',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: OutlinedButton.icon(
-                onPressed: _saveTemplate,
-                icon: const Icon(Icons.bookmark_add_outlined, size: 16),
-                label: const Text('保存为模板'),
-                style: OutlinedButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                ),
-              ),
-            ),
-            if (_savedTemplates.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                '已保存模板（点击选用，可删除）',
-                style: theme.textTheme.labelMedium
-                    ?.copyWith(color: theme.colorScheme.primary),
-              ),
-              for (final t in _savedTemplates)
-                ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.description_outlined, size: 18),
-                  title: Text(t.name,
-                      maxLines: 1, overflow: TextOverflow.ellipsis),
-                  subtitle: Text(t.text,
-                      maxLines: 1, overflow: TextOverflow.ellipsis),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline, size: 18),
-                    tooltip: '删除模板',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => setState(() =>
-                        _savedTemplates.removeWhere((x) => x.name == t.name)),
+
+              // 搜索
+              SettingsSection(
+                title: '搜索',
+                icon: Icons.travel_explore_outlined,
+                children: [
+                  SettingsSwitchRow(
+                    title: '联网搜索',
+                    description: '开启后搜索动作先联网检索，再让模型基于真实结果作答',
+                    value: _webSearch,
+                    onChanged: (v) => setState(() => _webSearch = v),
                   ),
-                  onTap: () {
-                    _customPrompt.text = t.text;
-                    setState(() {});
-                  },
+                  SettingsControlRow(
+                    title: '搜索方式',
+                    description: _searchBuiltin
+                        ? '内置搜索：由服务端联网，走通用配置的 Responses 协议（需模型支持）'
+                        : '第三方搜索：使用下方 Base URL + Key',
+                    child: SegmentedButton<bool>(
+                      segments: const [
+                        ButtonSegment(
+                          value: true,
+                          label: Text('内置搜索'),
+                          icon: Icon(Icons.language, size: 16),
+                        ),
+                        ButtonSegment(
+                          value: false,
+                          label: Text('第三方搜索'),
+                          icon: Icon(Icons.extension_outlined, size: 16),
+                        ),
+                      ],
+                      selected: {_searchBuiltin},
+                      showSelectedIcon: false,
+                      onSelectionChanged: (s) =>
+                          setState(() => _searchBuiltin = s.first),
+                    ),
+                  ),
+                  if (!_searchBuiltin) ...[
+                    SettingsTextField(
+                      controller: _searchBaseUrl,
+                      label: '搜索 API Base URL',
+                      hint: '留空 = 博查默认（https://api.bochaai.com/v1/web-search）',
+                    ),
+                    SettingsTextField(
+                      controller: _searchApiKey,
+                      label: '搜索 API Key',
+                      hint: '留空 = 降级为基于已有知识回答',
+                      obscure: true,
+                    ),
+                  ],
+                ],
+              ),
+
+              // 嵌入搜索
+              SettingsSection(
+                title: '嵌入搜索',
+                icon: Icons.hub_outlined,
+                description: '语义检索，功能开发中；此处先保存配置',
+                children: [
+                  SettingsSwitchRow(
+                    title: '启用嵌入搜索',
+                    description: '使用第三方 embedding 模型将书页向量化并存入向量数据库',
+                    value: _embeddingEnabled,
+                    onChanged: (v) => setState(() => _embeddingEnabled = v),
+                  ),
+                  if (_embeddingEnabled) ...[
+                    SettingsTextField(
+                      controller: _embeddingBaseUrl,
+                      label: 'Embedding Base URL',
+                      hint: 'https://api.openai.com/v1',
+                    ),
+                    SettingsTextField(
+                      controller: _embeddingApiKey,
+                      label: 'Embedding API Key',
+                      hint: 'sk-...',
+                      obscure: true,
+                    ),
+                    SettingsTextField(
+                      controller: _embeddingModel,
+                      label: 'Embedding 模型 ID',
+                      hint: 'text-embedding-3-small',
+                    ),
+                    SettingsTextField(
+                      controller: _vectorDbUrl,
+                      label: '向量数据库 URL',
+                      hint: '如 https://xxx.qdrant.io 或本地 http://localhost:6333',
+                    ),
+                    SettingsTextField(
+                      controller: _vectorDbApiKey,
+                      label: '向量数据库 Key',
+                      hint: '留空 = 无需鉴权',
+                      obscure: true,
+                    ),
+                    SettingsTextField(
+                      controller: _vectorDbCollection,
+                      label: '集合名称',
+                      hint: 'zhiyue',
+                    ),
+                  ],
+                ],
+              ),
+
+              // AI 回复
+              SettingsSection(
+                title: 'AI 回复',
+                icon: Icons.chat_bubble_outline,
+                children: [
+                  SettingsSwitchRow(
+                    title: '携带书籍对话上下文',
+                    description:
+                        '每次回复携带本书与 AI 的全部对话历史（追问从开始到本次）。关闭后每轮独立回答',
+                    value: _includeBookHistory,
+                    onChanged: (v) => setState(() => _includeBookHistory = v),
+                  ),
+                  SettingsSwitchRow(
+                    title: '思考模式',
+                    description:
+                        '按官方 API 发送 reasoning_effort，需使用支持思考的模型（如 o 系列 / GPT-5 / DeepSeek-R1）',
+                    value: _enableReasoning,
+                    onChanged: (v) => setState(() => _enableReasoning = v),
+                  ),
+                  if (_enableReasoning)
+                    SettingsControlRow(
+                      title: '思考等级',
+                      child: SegmentedButton<String>(
+                        segments: const [
+                          ButtonSegment(value: 'low', label: Text('低')),
+                          ButtonSegment(value: 'medium', label: Text('中')),
+                          ButtonSegment(value: 'high', label: Text('高')),
+                        ],
+                        selected: {_reasoningEffort},
+                        showSelectedIcon: false,
+                        onSelectionChanged: (s) =>
+                            setState(() => _reasoningEffort = s.first),
+                      ),
+                    ),
+                  SettingsControlRow(
+                    title: '温度',
+                    description:
+                        '随机性（0.0 确定 – 2.0 发散）：${_temperature.toStringAsFixed(1)}',
+                    child: Slider(
+                      value: _temperature,
+                      min: 0,
+                      max: 2,
+                      divisions: 20,
+                      label: _temperature.toStringAsFixed(1),
+                      onChanged: (v) => setState(() => _temperature = v),
+                    ),
+                  ),
+                  SettingsControlRow(
+                    title: '提示词模板',
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              for (final t in _templateOptions)
+                                ChoiceChip(
+                                  label: Text(t.label),
+                                  selected: _promptTemplate == t.id,
+                                  visualDensity: VisualDensity.compact,
+                                  onSelected: (_) => _selectTemplate(t.id),
+                                ),
+                              for (final t in _savedTemplates)
+                                ChoiceChip(
+                                  label: Text(t.name),
+                                  selected: _promptTemplate == 'custom' &&
+                                      _customPrompt.text.trim() == t.text,
+                                  visualDensity: VisualDensity.compact,
+                                  onSelected: (_) => _useSavedTemplate(t),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Tooltip(
+                          message: '自定义提示词',
+                          child: _templateChip(
+                            '+',
+                            _promptTemplate == 'custom',
+                            () => _selectTemplate('custom'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_promptTemplate != 'custom') ...[
+                    SettingsTextField(
+                      controller: _templateEdit,
+                      label: '模板提示词（可修改，保存后生效）',
+                      minLines: 3,
+                      maxLines: 6,
+                      onChanged: (v) => _templateEdits[_promptTemplate] = v,
+                    ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: _restoreTemplate,
+                        icon: const Icon(Icons.restore, size: 16),
+                        label: const Text('恢复默认'),
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (_promptTemplate == 'custom') ...[
+                    SettingsTextField(
+                      controller: _customPromptName,
+                      label: '模板名称（保存后用于选择）',
+                    ),
+                    SettingsTextField(
+                      controller: _customPrompt,
+                      label: '自定义提示词（作为角色设定，动作指令自动保留）',
+                      minLines: 3,
+                      maxLines: 6,
+                    ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        onPressed: _saveTemplate,
+                        icon: const Icon(Icons.bookmark_add_outlined, size: 16),
+                        label: const Text('保存为模板'),
+                        style: OutlinedButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ),
+                    ),
+                    if (_savedTemplates.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        '已保存模板（点击选用，可删除）',
+                        style: theme.textTheme.labelMedium
+                            ?.copyWith(color: theme.colorScheme.primary),
+                      ),
+                      for (final t in _savedTemplates)
+                        ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          leading:
+                              const Icon(Icons.description_outlined, size: 18),
+                          title: Text(t.name,
+                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                          subtitle: Text(t.text,
+                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 18),
+                            tooltip: '删除模板',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => setState(() => _savedTemplates
+                                .removeWhere((x) => x.name == t.name)),
+                          ),
+                          onTap: () {
+                            _customPrompt.text = t.text;
+                            setState(() {});
+                          },
+                        ),
+                    ],
+                  ],
+                ],
+              ),
+
+              // Save AI config
+              Padding(
+                padding: const EdgeInsets.only(top: 4, bottom: 4),
+                child: Column(
+                  children: [
+                    FilledButton.icon(
+                      onPressed: canSave ? _save : null,
+                      icon: const Icon(Icons.save_outlined, size: 18),
+                      label: Text(_saving ? '保存中…' : '保存 AI 配置'),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(44),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      canSave ? '修改后点击保存生效' : '填写 API Key 后可保存',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.outline,
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+
+              // =========================================================
+              // 对照阅读 (M7, plan §8)
+              // =========================================================
+              const SettingsGroupLabel('对照阅读'),
+              const TranslationSettingsSection(),
             ],
-          ],
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: canSave ? _save : null,
-            icon: const Icon(Icons.save_outlined, size: 18),
-            label: Text(_saving ? '保存中…' : '保存 AI 配置'),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -660,30 +722,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   Widget _targetLangPicker(ThemeData theme) {
     const builtins = ['中文', '英文', '中英互译'];
     final options = [...builtins, ..._customLangs];
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return SettingsControlRow(
+      title: '目标语言',
+      topPadding: 2,
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Text('目标语言', style: theme.textTheme.bodyMedium),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              for (final lang in options)
-                ChoiceChip(
-                  label: Text(lang),
-                  selected: _targetLang == lang,
-                  onSelected: (_) => setState(() => _targetLang = lang),
-                ),
-              ActionChip(
-                avatar: const Icon(Icons.add, size: 16),
-                label: const Text('添加语言'),
-                onPressed: _addCustomLang,
-              ),
-            ],
+          for (final lang in options)
+            ChoiceChip(
+              label: Text(lang),
+              selected: _targetLang == lang,
+              onSelected: (_) => setState(() => _targetLang = lang),
+            ),
+          ActionChip(
+            avatar: const Icon(Icons.add, size: 16),
+            label: const Text('添加语言'),
+            onPressed: _addCustomLang,
           ),
         ],
       ),
@@ -780,47 +836,6 @@ const _templateOptions = [
   (id: 'ai', label: 'AI 技术'),
 ];
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.text, this.theme);
-  final String text;
-  final ThemeData theme;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 8, bottom: 4),
-      child: Text(
-        text,
-        style: theme.textTheme.titleSmall?.copyWith(
-          color: theme.colorScheme.primary,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
-
-/// A lighter sub-heading inside a section (e.g. the AI section's 翻译 /
-/// 模型通用配置 / 搜索方式 / 嵌入搜索 groups).
-class _SubTitle extends StatelessWidget {
-  const _SubTitle(this.text, this.theme);
-  final String text;
-  final ThemeData theme;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 12, bottom: 2),
-      child: Text(
-        text,
-        style: theme.textTheme.bodyMedium?.copyWith(
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
-
 /// Dialog for adding a custom translation language. Owns its controller so
 /// it is disposed only after the dialog is fully torn down (disposing the
 /// controller right after `showDialog` returns trips "used after disposed"
@@ -869,35 +884,3 @@ class _AddLangDialogState extends State<_AddLangDialog> {
   }
 }
 
-class _Field extends StatelessWidget {
-  const _Field({
-    required this.controller,
-    required this.label,
-    required this.hint,
-    this.obscure = false,
-    this.onChanged,
-  });
-
-  final TextEditingController controller;
-  final String label;
-  final String hint;
-  final bool obscure;
-  final ValueChanged<String>? onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: TextField(
-        controller: controller,
-        obscureText: obscure,
-        onChanged: onChanged,
-        decoration: InputDecoration(
-          labelText: label,
-          hintText: hint,
-          border: const OutlineInputBorder(),
-        ),
-      ),
-    );
-  }
-}

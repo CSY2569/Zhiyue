@@ -95,6 +95,12 @@ fn try_init_at(path: &std::path::Path) -> AppResult<std::path::PathBuf> {
 
     let path = db::init_database_at(path)?;
     tracing::info!(?path, "database ready");
+
+    // Bilingual reading (plan §7): enforce the translation cache budget at
+    // startup, quietly (evicts least-recently-used books' artifacts).
+    if let Err(e) = crate::translate::enforce_cache_limit() {
+        tracing::warn!(?e, "translation cache eviction failed");
+    }
     Ok(path)
 }
 
@@ -377,6 +383,11 @@ pub fn delete_book(id: i64) -> i32 {
         if let Some(cover) = cover_path {
             let _ = std::fs::remove_file(&cover);
         }
+        // Bilingual reading (plan §7 删书级联): drop any in-flight
+        // registration and the translated/ artifacts. The
+        // page_translation_cache rows cascade with the book row (FK).
+        crate::translate::unmark_translating(id);
+        let _ = crate::translate::clear_translation_artifacts(id);
         1
     } else {
         0
@@ -1701,6 +1712,329 @@ pub fn search_index_status(book_id: i64) -> String {
     }
     "missing".to_string()
 }
+
+// =============================================================================
+// M7 -- Bilingual reading / 对照阅读 (docs/BILINGUAL_READING_PLAN.md)
+// =============================================================================
+//
+// Thin wrappers over `crate::translate`: paragraph extraction, per-page
+// translation with a streaming progress sink, cache / overview reads and
+// the translation config KV. Orchestration (whole-book queue, concurrency,
+// background behaviour) is Dart-side (plan §9). All error surfaces use the
+// sentinel pattern (an `error: Option<String>` field) -- never `Result`.
+
+/// Result of `extract_page_paragraphs`.
+pub struct ExtractParagraphsResult {
+    pub paragraphs: Vec<crate::models::translate::Paragraph>,
+    pub error: Option<String>,
+}
+
+/// Paragraphs of one page (1-indexed) for inspection. Extracts on an
+/// INDEPENDENT pdfium handle so it never blocks reader rendering (plan §3.0).
+/// Scanned pages without a text layer return an empty list (the translate
+/// call decides whether to run OCR).
+pub fn extract_page_paragraphs(book_id: i64, page: i64) -> ExtractParagraphsResult {
+    match crate::translate::pipeline::extract_paragraphs(book_id, page) {
+        Ok(paragraphs) => ExtractParagraphsResult {
+            paragraphs,
+            error: None,
+        },
+        Err(e) => ExtractParagraphsResult {
+            paragraphs: Vec::new(),
+            error: Some(e.to_string()),
+        },
+    }
+}
+
+/// Result of `get_page_translation` / `get_translation_overview`.
+pub struct PageTranslationResult {
+    /// The cached translation, or None when the page has not been translated.
+    pub translation: Option<crate::models::translate::PageTranslation>,
+    pub error: Option<String>,
+}
+
+/// Reads the cached translation of a page for the CURRENT target language +
+/// provider (the cache key is derived from settings, plan §2). A missing row
+/// is `translation: None` (not an error). Reading refreshes the LRU access
+/// time (plan §7).
+pub fn get_page_translation(book_id: i64, page: i64) -> PageTranslationResult {
+    let (lang, provider) = crate::translate::cache_key();
+    let conn = db::db();
+    match crate::db::repository::translate::get_page_translation(
+        &conn, book_id, page, &lang, &provider, true,
+    ) {
+        Ok(t) => {
+            // A row stamped by an older extractor is stale (its paragraphs
+            // may predate an extraction fix): report it as untranslated so
+            // the UI re-requests instead of showing stale/empty content.
+            let t = t.filter(|t| crate::translate::is_current_source_hash(&t.source_hash));
+            PageTranslationResult {
+                translation: t,
+                error: None,
+            }
+        }
+        Err(e) => PageTranslationResult {
+            translation: None,
+            error: Some(e.to_string()),
+        },
+    }
+}
+
+/// Whole-book progress (plan §9): translated pages vs total for the current
+/// target language + provider; the Dart queue uses `translated < total` to
+/// decide whether to resume.
+pub struct TranslationOverviewResult {
+    pub total_pages: i64,
+    pub translated_pages: i64,
+    pub target_lang: String,
+    pub error: Option<String>,
+}
+
+pub fn get_translation_overview(book_id: i64) -> TranslationOverviewResult {
+    match crate::translate::translation_overview(book_id) {
+        Ok(o) => TranslationOverviewResult {
+            total_pages: o.total_pages,
+            translated_pages: o.translated_pages,
+            target_lang: o.target_lang,
+            error: None,
+        },
+        Err(e) => TranslationOverviewResult {
+            total_pages: 0,
+            translated_pages: 0,
+            target_lang: String::new(),
+            error: Some(e.to_string()),
+        },
+    }
+}
+
+/// Translates one page (1-indexed), streaming progress events (plan §9:
+/// the atomic per-page API the Dart queue drives). `force` re-extracts and
+/// overwrites the cache even on a hit; the default path returns the cached
+/// row instantly.
+///
+/// Async: extraction + HTTP must not block the UI.
+pub async fn translate_page(
+    book_id: i64,
+    page: i64,
+    force: bool,
+    sink: StreamSink<crate::models::translate::TranslationProgressEvent>,
+) {
+    let result = crate::translate::pipeline::run_translate_page(
+        book_id,
+        page,
+        force,
+        |ev| {
+            let _ = sink.add(ev);
+        },
+    )
+    .await;
+    if let Err(e) = result {
+        let _ = sink.add_error(e.to_string());
+    }
+}
+
+/// Deletes all cached translations of a book (rows + artifacts, plan §7).
+/// Returns 1 on success, 0 on failure.
+pub fn clear_translations(book_id: i64) -> i32 {
+    match crate::translate::clear_translations(book_id) {
+        Ok(()) => 1,
+        Err(e) => {
+            tracing::warn!(?e, book_id, "clear_translations failed");
+            0
+        }
+    }
+}
+
+/// Builds the translated PDF on demand (plan §6), streaming page-granular
+/// progress. Final completion is observed by the stream ending; the UI then
+/// opens the path from [get_translated_pdf_path]. Errors go to
+/// `sink.add_error`.
+pub async fn build_translated_pdf(
+    book_id: i64,
+    target_lang: String,
+    sink: StreamSink<crate::models::translate::TranslationProgressEvent>,
+) {
+    // pdfium document building + font embedding is synchronous CPU/IO work:
+    // run it on a blocking thread so the FRB worker is not stalled.
+    let result = tokio::task::spawn_blocking(move || {
+        let mut events = Vec::new();
+        let path = crate::translate::build_translated_pdf(book_id, &target_lang, |ev| {
+            events.push(ev);
+        })?;
+        Ok::<_, AppError>((path, events))
+    })
+    .await;
+    match result {
+        Ok(Ok((path, events))) => {
+            for ev in events {
+                let _ = sink.add(ev);
+            }
+            tracing::info!(%path, "translated pdf built");
+        }
+        Ok(Err(e)) => {
+            let _ = sink.add_error(e.to_string());
+        }
+        Err(e) => {
+            let _ = sink.add_error(format!("译文 PDF 生成任务失败: {e}"));
+        }
+    }
+}
+
+/// Absolute path the translated PDF for [book_id] + [target_lang] would be
+/// (or is) written to; the UI opens it after a build completes.
+pub fn get_translated_pdf_path(book_id: i64, target_lang: String) -> String {
+    let safe: String = target_lang
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '_' })
+        .collect();
+    crate::translate::translated_dir(book_id)
+        .join(format!("{safe}.pdf"))
+        .to_string_lossy()
+        .to_string()
+}
+
+/// Result of [render_translated_page]: a rendered RGBA page bitmap.
+pub struct TranslatedPageBitmap {
+    pub width: u32,
+    pub height: u32,
+    pub rgba: Vec<u8>,
+    /// Whether the page has a current translation (false -> [rgba] is empty
+    /// and the pane shows a "尚未翻译"placeholder).
+    pub has_translation: bool,
+    pub error: Option<String>,
+}
+
+/// Renders ONE page's translation as a PDF page bitmap (the bilingual pane's
+/// page-level channel, plan §5): the pane displays the translation beside the
+/// original page instead of as a text list. Async: building + rasterizing the
+/// single-page PDF is CPU/IO work.
+pub async fn render_translated_page(
+    book_id: i64,
+    page: i64,
+    target_lang: String,
+    dpi_scale: f64,
+) -> TranslatedPageBitmap {
+    if !crate::translate::page_has_translation(book_id, page) {
+        return TranslatedPageBitmap {
+            width: 0,
+            height: 0,
+            rgba: Vec::new(),
+            has_translation: false,
+            error: None,
+        };
+    }
+    let result = tokio::task::spawn_blocking(move || {
+        crate::translate::render_translated_page(book_id, page, &target_lang, dpi_scale as f32)
+    })
+    .await;
+    match result {
+        Ok(Ok(bmp)) => TranslatedPageBitmap {
+            width: bmp.width,
+            height: bmp.height,
+            rgba: bmp.rgba,
+            has_translation: true,
+            error: None,
+        },
+        Ok(Err(e)) => TranslatedPageBitmap {
+            width: 0,
+            height: 0,
+            rgba: Vec::new(),
+            has_translation: true,
+            error: Some(e.to_string()),
+        },
+        Err(e) => TranslatedPageBitmap {
+            width: 0,
+            height: 0,
+            rgba: Vec::new(),
+            has_translation: true,
+            error: Some(format!("译文页渲染任务失败: {e}")),
+        },
+    }
+}
+
+/// Deletes a book's translated artifacts (PDF + formula images); the cache
+/// rows are removed by the FK cascade on book delete. Returns 1 on success.
+pub fn clear_translation_artifacts(book_id: i64) -> i32 {
+    crate::translate::clear_translation_artifacts(book_id)
+        .map(|_| 1)
+        .unwrap_or(0)
+}
+
+/// Reads the translation config (KV `translation_config`, plan §8).
+pub fn get_translation_config() -> crate::models::translate::TranslationConfig {
+    crate::translate::load_translation_config()
+}
+
+/// Persists the translation config. Returns 1 on success, 0 on failure.
+pub fn set_translation_config(config: crate::models::translate::TranslationConfig) -> i32 {
+    match crate::translate::save_translation_config(&config) {
+        Ok(()) => 1,
+        Err(e) => {
+            tracing::warn!(?e, "set_translation_config failed");
+            0
+        }
+    }
+}
+
+/// Registers a book as translating (plan §7 eviction guard: a book in
+/// flight is never evicted). Returns 1.
+pub fn start_book_translation(book_id: i64) -> i32 {
+    crate::translate::mark_translating(book_id);
+    1
+}
+
+/// Clears the translating registration (task finished / cancelled). Returns 1.
+pub fn cancel_translation(book_id: i64) -> i32 {
+    crate::translate::unmark_translating(book_id);
+    1
+}
+
+/// Glossary entries (plan §4.4).
+pub struct GlossaryResult {
+    pub entries: Vec<crate::models::translate::GlossaryEntry>,
+    pub error: Option<String>,
+}
+
+pub fn list_translation_glossary() -> GlossaryResult {
+    let conn = db::db();
+    match crate::db::repository::translate::list_glossary(&conn) {
+        Ok(entries) => GlossaryResult {
+            entries,
+            error: None,
+        },
+        Err(e) => GlossaryResult {
+            entries: Vec::new(),
+            error: Some(e.to_string()),
+        },
+    }
+}
+
+/// Adds a glossary entry; returns the new id, or -1 on failure.
+pub fn add_translation_glossary(
+    source_term: String,
+    target_term: String,
+    source_lang: Option<String>,
+    target_lang: Option<String>,
+) -> i64 {
+    let conn = db::db();
+    crate::db::repository::translate::add_glossary_entry(
+        &conn,
+        &source_term,
+        &target_term,
+        source_lang.as_deref(),
+        target_lang.as_deref(),
+    )
+    .unwrap_or(-1)
+}
+
+/// Removes a glossary entry; returns 1 on success, 0 if not found.
+pub fn delete_translation_glossary(id: i64) -> i32 {
+    let conn = db::db();
+    crate::db::repository::translate::delete_glossary_entry(&conn, id)
+        .map(|n| n as i32)
+        .unwrap_or(0)
+}
+
 
 #[cfg(test)]
 mod tests {

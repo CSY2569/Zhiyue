@@ -197,6 +197,14 @@ fn migrate(conn: &Connection) -> AppResult<()> {
             )?;
             record_version(conn)?;
         }
+        Some(6) => {
+            // v7 only ADDS tables (page_translation_cache /
+            // translation_glossary): `execute_batch(SCHEMA_SQL)` above is
+            // idempotent and has already created them on the old database,
+            // so this branch just records the new version.
+            tracing::info!("migrating schema 6 -> 7 (bilingual reading tables)");
+            record_version(conn)?;
+        }
         Some(v) => {
             tracing::warn!(recorded = v, expected = SCHEMA_VERSION, "schema version mismatch -- migration not yet implemented");
         }
@@ -445,6 +453,86 @@ mod tests {
             )
             .unwrap();
         assert_eq!(remaining, 0, "FTS entries must follow the cascade");
+
+        // migrate is idempotent once up to date.
+        migrate(&conn).unwrap();
+    }
+
+    /// A v6-era database (before bilingual reading): the v7 tables do not
+    /// exist and version 6 is recorded -- what `init_database_at` sees when
+    /// the app updates from a v6 build.
+    fn v6_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(SCHEMA_SQL).unwrap();
+        conn.execute_batch(
+            "DROP TABLE page_translation_cache;
+             DROP TABLE translation_glossary;
+             DELETE FROM schema_version;
+             INSERT INTO schema_version (version) VALUES (6);",
+        )
+        .unwrap();
+        conn
+    }
+
+    #[test]
+    fn migrate_v6_to_v7_creates_bilingual_reading_tables() {
+        let conn = v6_db();
+        // `init_database_at` order: SCHEMA_SQL (idempotent) then migrate.
+        conn.execute_batch(SCHEMA_SQL).unwrap();
+        migrate(&conn).unwrap();
+
+        let v: u32 = conn
+            .query_row("SELECT MAX(version) FROM schema_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(v, SCHEMA_VERSION);
+
+        // The cache table works, upserts on its key and cascades on book
+        // delete (plan §7: deleting a book removes its translations).
+        conn.execute(
+            "INSERT INTO books (title, original_path, stored_path, file_type) \
+             VALUES ('测试书', '/x.pdf', '/x.pdf', 'pdf')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO page_translation_cache \
+             (book_id, page, target_lang, provider, source_hash, result_json) \
+             VALUES (1, 1, '中文', 'deepl', 'h', '{}')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO page_translation_cache \
+             (book_id, page, target_lang, provider, source_hash, result_json) \
+             VALUES (1, 1, '中文', 'deepl', 'h2', '{}') \
+             ON CONFLICT (book_id, page, target_lang, provider) DO UPDATE SET \
+                 result_json = excluded.result_json, \
+                 source_hash = excluded.source_hash",
+            [],
+        )
+        .unwrap();
+        let n: i64 = conn
+            .query_row("SELECT COUNT(*) FROM page_translation_cache", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n, 1, "upsert must replace, not accumulate");
+        let hash: String = conn
+            .query_row("SELECT source_hash FROM page_translation_cache", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(hash, "h2");
+
+        conn.execute("DELETE FROM books WHERE id = 1", []).unwrap();
+        let n: i64 = conn
+            .query_row("SELECT COUNT(*) FROM page_translation_cache", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n, 0, "cache rows must follow the book cascade");
+
+        // Glossary table accepts entries.
+        conn.execute(
+            "INSERT INTO translation_glossary (source_term, target_term) \
+             VALUES ('quantum', '量子')",
+            [],
+        )
+        .unwrap();
 
         // migrate is idempotent once up to date.
         migrate(&conn).unwrap();

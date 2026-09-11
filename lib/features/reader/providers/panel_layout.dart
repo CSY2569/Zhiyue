@@ -19,6 +19,7 @@ class PanelLayout {
     this.outlineWidth = 240,
     this.annotationsWidth = 240,
     this.aiPanelWidth = 320,
+    this.translatedPaneWidth = 480,
     this.cardSize = const Size(440, 360),
   });
 
@@ -26,6 +27,9 @@ class PanelLayout {
   final double outlineWidth;
   final double annotationsWidth;
   final double aiPanelWidth;
+  /// Width of the bilingual-reading translation pane (对照阅读, M7). Wider by
+  /// default than the AI panel: translations need room to read.
+  final double translatedPaneWidth;
   final Size cardSize;
 
   /// Width of [type]'s sidebar.
@@ -45,6 +49,7 @@ class PanelLayout {
     double? outlineWidth,
     double? annotationsWidth,
     double? aiPanelWidth,
+    double? translatedPaneWidth,
     Size? cardSize,
   }) =>
       PanelLayout(
@@ -52,6 +57,7 @@ class PanelLayout {
         outlineWidth: outlineWidth ?? this.outlineWidth,
         annotationsWidth: annotationsWidth ?? this.annotationsWidth,
         aiPanelWidth: aiPanelWidth ?? this.aiPanelWidth,
+        translatedPaneWidth: translatedPaneWidth ?? this.translatedPaneWidth,
         cardSize: cardSize ?? this.cardSize,
       );
 
@@ -67,11 +73,18 @@ class PanelLayout {
     }
   }
 
-  /// Width bounds for the sidebars / AI panel.
+  /// Width bounds for the sidebars / AI panel / translation pane.
   static const double minSidebarWidth = 160;
   static const double maxSidebarWidth = 480;
   static const double minAiPanelWidth = 240;
   static const double maxAiPanelWidth = 560;
+  /// The translation pane is wider than the AI panel (plan §1 v4.2: 280-900).
+  static const double minTranslatedPaneWidth = 280;
+  static const double maxTranslatedPaneWidth = 900;
+  /// The reading area (PdfPageScroll) keeps at least this width when the
+  /// left sidebar, translation pane and AI panel are all open (plan §1
+  /// v4.2 同开时的最小宽度). Panels opened later take priority.
+  static const double minContentWidth = 360;
 
   /// Size bounds for the floating result card.
   static const double minCardWidth = 300;
@@ -81,6 +94,9 @@ class PanelLayout {
 
   static double _clampAiPanel(double w) =>
       w.clamp(minAiPanelWidth, maxAiPanelWidth);
+
+  static double _clampTranslatedPane(double w) =>
+      w.clamp(minTranslatedPaneWidth, maxTranslatedPaneWidth);
 }
 
 /// Manages [PanelLayout] with KV persistence. Resizing during a drag updates
@@ -91,6 +107,7 @@ class PanelLayoutNotifier extends Notifier<PanelLayout> {
   static const _kThumbnails = 'panel_width_thumbnails';
   static const _kAnnotations = 'panel_width_annotations';
   static const _kAiPanel = 'panel_width_ai';
+  static const _kTranslatedPane = 'panel_width_translated';
   static const _kCardSize = 'card_size';
 
   @override
@@ -106,6 +123,7 @@ class PanelLayoutNotifier extends Notifier<PanelLayout> {
       final thumbs = await repo.getSetting(_kThumbnails);
       final notes = await repo.getSetting(_kAnnotations);
       final ai = await repo.getSetting(_kAiPanel);
+      final translated = await repo.getSetting(_kTranslatedPane);
       final card = await repo.getSetting(_kCardSize);
       state = state.copyWith(
         outlineWidth: _parseWidth(outline, PanelLayout.minSidebarWidth,
@@ -116,6 +134,10 @@ class PanelLayoutNotifier extends Notifier<PanelLayout> {
             PanelLayout.maxSidebarWidth),
         aiPanelWidth: _parseWidth(ai, PanelLayout.minAiPanelWidth,
             PanelLayout.maxAiPanelWidth),
+        translatedPaneWidth: _parseWidth(
+            translated,
+            PanelLayout.minTranslatedPaneWidth,
+            PanelLayout.maxTranslatedPaneWidth),
         cardSize: _parseSize(card),
       );
     } catch (_) {
@@ -155,6 +177,36 @@ class PanelLayoutNotifier extends Notifier<PanelLayout> {
     );
   }
 
+  /// Widen / narrow the bilingual-reading translation pane by [dx].
+  void resizeTranslatedPane(double dx) {
+    state = state.copyWith(
+      translatedPaneWidth:
+          PanelLayout._clampTranslatedPane(state.translatedPaneWidth + dx),
+    );
+  }
+
+  /// Clamp the translation pane to at most [max] (used by the shared-space
+  /// rule when several right-side panels are open, plan §1 v4.2).
+  void clampTranslatedPane(double max) {
+    final next = state.translatedPaneWidth
+        .clamp(PanelLayout.minTranslatedPaneWidth, max.clamp(
+            PanelLayout.minTranslatedPaneWidth,
+            PanelLayout.maxTranslatedPaneWidth));
+    if (next != state.translatedPaneWidth) {
+      state = state.copyWith(translatedPaneWidth: next);
+    }
+  }
+
+  /// Clamp the AI panel to at most [max] (shared-space rule).
+  void clampAiPanel(double max) {
+    final next = state.aiPanelWidth.clamp(
+        PanelLayout.minAiPanelWidth,
+        max.clamp(PanelLayout.minAiPanelWidth, PanelLayout.maxAiPanelWidth));
+    if (next != state.aiPanelWidth) {
+      state = state.copyWith(aiPanelWidth: next);
+    }
+  }
+
   /// Resize the floating result card by a drag [delta].
   void resizeCard(Offset delta) {
     state = state.copyWith(
@@ -176,6 +228,8 @@ class PanelLayoutNotifier extends Notifier<PanelLayout> {
       await repo.setSetting(_kThumbnails, s.thumbnailsWidth.toString());
       await repo.setSetting(_kAnnotations, s.annotationsWidth.toString());
       await repo.setSetting(_kAiPanel, s.aiPanelWidth.toString());
+      await repo.setSetting(
+          _kTranslatedPane, s.translatedPaneWidth.toString());
       await repo.setSetting(
           _kCardSize, '${s.cardSize.width}x${s.cardSize.height}');
     } catch (_) {

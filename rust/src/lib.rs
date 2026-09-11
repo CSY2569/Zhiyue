@@ -17,6 +17,8 @@
 //!   - `ai`       : OpenAI-compatible streaming client (M4)
 //!   - `ocr`      : full-page OCR engine + cache chain (M5)
 //!   - `search`   : full-text index + FTS5 search (M6)
+//!   - `translate`: bilingual reading (paragraph extraction + translation
+//!                  providers + translated-PDF writer, M7)
 //!   - `export`   : annotation Markdown / JSON export (M3)
 //!   - `error`    : unified `AppError`
 
@@ -29,6 +31,7 @@ pub mod models;
 pub mod ocr;
 pub mod pdf;
 pub mod search;
+pub mod translate;
 
 // flutter_rust_bridge generated bindings (created by `flutter_rust_bridge_codegen`).
 // The `frb_generated` mod is generated into src/frb_generated.rs; declared here

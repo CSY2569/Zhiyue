@@ -22,7 +22,11 @@
 /// 6: `ai_messages.action_type` -- per-message action label (翻译/解释/搜索/
 /// 聊天/识图) so the history view can show which instruction produced each
 /// turn, not just the thread's latest action.
-pub const SCHEMA_VERSION: u32 = 6;
+/// 7: bilingual reading (M7, docs/BILINGUAL_READING_PLAN.md §9) --
+/// `page_translation_cache` (per-page translations keyed by absolute page
+/// number + target lang + provider; `last_accessed_at` drives the LRU) and
+/// `translation_glossary` (fixed term pairs for consistent naming).
+pub const SCHEMA_VERSION: u32 = 7;
 
 /// Indexes for per-book AI conversation windows (v3, FEATURES 6.5.4).
 ///
@@ -222,6 +226,43 @@ CREATE TABLE IF NOT EXISTS ai_messages (
     FOREIGN KEY (thread_id) REFERENCES ai_threads(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS ai_messages_thread ON ai_messages(thread_id, created_at);
+
+-- ===========================================================================
+-- 6b. Bilingual reading (M7, docs/BILINGUAL_READING_PLAN.md §9)
+--     Per-page translation cache. The KEY is (book_id, page, target_lang,
+--     provider) -- the absolute page number makes completion order and
+--     jump-reading irrelevant (plan §2: the exported PDF always walks 1..N).
+--     `source_hash` guards freshness: a re-extracted page whose text changed
+--     invalidates the row (kept as a column instead of part of the PK to
+--     avoid row accumulation). `last_accessed_at` drives the LRU (plan §7).
+--     Cascades on book delete.
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS page_translation_cache (
+    book_id         INTEGER NOT NULL,
+    page            INTEGER NOT NULL,               -- 1-indexed (plan §2)
+    target_lang     TEXT NOT NULL,                  -- display name, e.g. "中文"
+    provider        TEXT NOT NULL,                  -- 'deepl'|'openai_compat'|'reuse_ai'
+    source_hash     TEXT NOT NULL,                  -- sha256 of paragraph texts
+    result_json     TEXT NOT NULL,                  -- serialized PageTranslation
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    last_accessed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (book_id, page, target_lang, provider),
+    FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_page_translation_lru
+    ON page_translation_cache(book_id, last_accessed_at);
+
+-- Fixed term pairs for consistent naming across a whole book (plan §4.4).
+-- `source_lang`/`target_lang` are optional DeepL-style language-pair
+-- restrictions; null = the entry applies to every translation.
+CREATE TABLE IF NOT EXISTS translation_glossary (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_term TEXT NOT NULL,
+    target_term TEXT NOT NULL,
+    source_lang TEXT,
+    target_lang TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
 
 -- ===========================================================================
 -- 10. settings  (FEATURES 9.1.8 / §6.1, §8.2)

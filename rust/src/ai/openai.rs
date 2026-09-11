@@ -42,7 +42,8 @@ impl OpenAiClient {
     /// Shared HTTP client, built once per process (connection pooling).
     /// Building a fresh client per request discarded the connection pool,
     /// so every chat / vision / search call paid for new TLS + pool setup.
-    fn http_client() -> AppResult<&'static reqwest::Client> {
+    /// Shared with the bilingual-reading providers (M7).
+    pub(crate) fn http_client() -> AppResult<&'static reqwest::Client> {
         static CLIENT: OnceLock<AppResult<reqwest::Client>> = OnceLock::new();
         CLIENT
             .get_or_init(|| {

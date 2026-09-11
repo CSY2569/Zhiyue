@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1977932488;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -2126352703;
 
 // Section: executor
 
@@ -46,6 +46,47 @@ flutter_rust_bridge::frb_generated_default_handler!();
 
 // Section: wire_funcs
 
+fn wire__crate__api__add_translation_glossary_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "add_translation_glossary",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_source_term = <String>::sse_decode(&mut deserializer);
+            let api_target_term = <String>::sse_decode(&mut deserializer);
+            let api_source_lang = <Option<String>>::sse_decode(&mut deserializer);
+            let api_target_lang = <Option<String>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(crate::api::add_translation_glossary(
+                        api_source_term,
+                        api_target_term,
+                        api_source_lang,
+                        api_target_lang,
+                    ))?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__app_version_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -153,6 +194,156 @@ fn wire__crate__api__assign_category_impl(
                         api_book_id,
                         api_category_id,
                     ))?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__build_translated_pdf_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "build_translated_pdf",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_book_id = <i64>::sse_decode(&mut deserializer);
+            let api_target_lang = <String>::sse_decode(&mut deserializer);
+            let api_sink = <StreamSink<
+                crate::models::translate::TranslationProgressEvent,
+                flutter_rust_bridge::for_generated::SseCodec,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, ()>(
+                    (move || async move {
+                        let output_ok = Result::<_, ()>::Ok({
+                            crate::api::build_translated_pdf(
+                                api_book_id,
+                                api_target_lang,
+                                api_sink,
+                            )
+                            .await;
+                        })?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__cancel_translation_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "cancel_translation",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_book_id = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::cancel_translation(api_book_id))?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__clear_translation_artifacts_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "clear_translation_artifacts",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_book_id = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::clear_translation_artifacts(api_book_id))?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__clear_translations_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "clear_translations",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_book_id = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::clear_translations(api_book_id))?;
                     Ok(output_ok)
                 })())
             }
@@ -540,6 +731,40 @@ fn wire__crate__api__delete_image_annotation_impl(
         },
     )
 }
+fn wire__crate__api__delete_translation_glossary_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "delete_translation_glossary",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_id = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::delete_translation_glossary(api_id))?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__ensure_book_index_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -640,6 +865,43 @@ fn wire__crate__api__export_annotations_markdown_impl(
                 transform_result_sse::<_, ()>((move || {
                     let output_ok =
                         Result::<_, ()>::Ok(crate::api::export_annotations_markdown(api_book_id))?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__extract_page_paragraphs_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "extract_page_paragraphs",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_book_id = <i64>::sse_decode(&mut deserializer);
+            let api_page = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(crate::api::extract_page_paragraphs(
+                        api_book_id,
+                        api_page,
+                    ))?;
                     Ok(output_ok)
                 })())
             }
@@ -826,6 +1088,43 @@ fn wire__crate__api__get_page_ocr_impl(
         },
     )
 }
+fn wire__crate__api__get_page_translation_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "get_page_translation",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_book_id = <i64>::sse_decode(&mut deserializer);
+            let api_page = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(crate::api::get_page_translation(
+                        api_book_id,
+                        api_page,
+                    ))?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__get_progress_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -886,6 +1185,109 @@ fn wire__crate__api__get_setting_impl(
             move |context| {
                 transform_result_sse::<_, ()>((move || {
                     let output_ok = Result::<_, ()>::Ok(crate::api::get_setting(api_key))?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__get_translated_pdf_path_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "get_translated_pdf_path",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_book_id = <i64>::sse_decode(&mut deserializer);
+            let api_target_lang = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(crate::api::get_translated_pdf_path(
+                        api_book_id,
+                        api_target_lang,
+                    ))?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__get_translation_config_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "get_translation_config",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(crate::api::get_translation_config())?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__get_translation_overview_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "get_translation_overview",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_book_id = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::get_translation_overview(api_book_id))?;
                     Ok(output_ok)
                 })())
             }
@@ -1192,6 +1594,38 @@ fn wire__crate__api__list_image_annotations_impl(
         },
     )
 }
+fn wire__crate__api__list_translation_glossary_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "list_translation_glossary",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(crate::api::list_translation_glossary())?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__ocr_mode_as_str_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1411,6 +1845,53 @@ fn wire__crate__api__render_thumbnail_impl(
                     (move || async move {
                         let output_ok = Result::<_, ()>::Ok(
                             crate::api::render_thumbnail(api_book_id, api_page, api_max_size).await,
+                        )?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__render_translated_page_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "render_translated_page",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_book_id = <i64>::sse_decode(&mut deserializer);
+            let api_page = <i64>::sse_decode(&mut deserializer);
+            let api_target_lang = <String>::sse_decode(&mut deserializer);
+            let api_dpi_scale = <f64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, ()>(
+                    (move || async move {
+                        let output_ok = Result::<_, ()>::Ok(
+                            crate::api::render_translated_page(
+                                api_book_id,
+                                api_page,
+                                api_target_lang,
+                                api_dpi_scale,
+                            )
+                            .await,
                         )?;
                         Ok(output_ok)
                     })()
@@ -1670,6 +2151,75 @@ fn wire__crate__api__set_setting_impl(
         },
     )
 }
+fn wire__crate__api__set_translation_config_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_translation_config",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_config =
+                <crate::models::translate::TranslationConfig>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::set_translation_config(api_config))?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__start_book_translation_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "start_book_translation",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_book_id = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::start_book_translation(api_book_id))?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__stream_chat_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1864,6 +2414,51 @@ fn wire__crate__api__touch_last_opened_impl(
         },
     )
 }
+fn wire__crate__api__translate_page_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "translate_page",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_book_id = <i64>::sse_decode(&mut deserializer);
+            let api_page = <i64>::sse_decode(&mut deserializer);
+            let api_force = <bool>::sse_decode(&mut deserializer);
+            let api_sink = <StreamSink<
+                crate::models::translate::TranslationProgressEvent,
+                flutter_rust_bridge::for_generated::SseCodec,
+            >>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, ()>(
+                    (move || async move {
+                        let output_ok = Result::<_, ()>::Ok({
+                            crate::api::translate_page(api_book_id, api_page, api_force, api_sink)
+                                .await;
+                        })?;
+                        Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__update_annotation_content_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -2011,6 +2606,19 @@ impl SseDecode for std::collections::HashMap<String, String> {
 }
 
 impl SseDecode for StreamSink<String, flutter_rust_bridge::for_generated::SseCodec> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <String>::sse_decode(deserializer);
+        return StreamSink::deserialize(inner);
+    }
+}
+
+impl SseDecode
+    for StreamSink<
+        crate::models::translate::TranslationProgressEvent,
+        flutter_rust_bridge::for_generated::SseCodec,
+    >
+{
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut inner = <String>::sse_decode(deserializer);
@@ -2310,6 +2918,19 @@ impl SseDecode for crate::api::ExportResult {
     }
 }
 
+impl SseDecode for crate::api::ExtractParagraphsResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_paragraphs =
+            <Vec<crate::models::translate::Paragraph>>::sse_decode(deserializer);
+        let mut var_error = <Option<String>>::sse_decode(deserializer);
+        return crate::api::ExtractParagraphsResult {
+            paragraphs: var_paragraphs,
+            error: var_error,
+        };
+    }
+}
+
 impl SseDecode for f32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2321,6 +2942,53 @@ impl SseDecode for f64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         deserializer.cursor.read_f64::<NativeEndian>().unwrap()
+    }
+}
+
+impl SseDecode for crate::models::translate::FormulaRegion {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_rect = <crate::models::annotation::NormRect>::sse_decode(deserializer);
+        let mut var_imagePath = <Option<String>>::sse_decode(deserializer);
+        let mut var_sourceText = <String>::sse_decode(deserializer);
+        let mut var_placeholder = <String>::sse_decode(deserializer);
+        return crate::models::translate::FormulaRegion {
+            rect: var_rect,
+            image_path: var_imagePath,
+            source_text: var_sourceText,
+            placeholder: var_placeholder,
+        };
+    }
+}
+
+impl SseDecode for crate::models::translate::GlossaryEntry {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_id = <i64>::sse_decode(deserializer);
+        let mut var_sourceTerm = <String>::sse_decode(deserializer);
+        let mut var_targetTerm = <String>::sse_decode(deserializer);
+        let mut var_sourceLang = <Option<String>>::sse_decode(deserializer);
+        let mut var_targetLang = <Option<String>>::sse_decode(deserializer);
+        return crate::models::translate::GlossaryEntry {
+            id: var_id,
+            source_term: var_sourceTerm,
+            target_term: var_targetTerm,
+            source_lang: var_sourceLang,
+            target_lang: var_targetLang,
+        };
+    }
+}
+
+impl SseDecode for crate::api::GlossaryResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_entries =
+            <Vec<crate::models::translate::GlossaryEntry>>::sse_decode(deserializer);
+        let mut var_error = <Option<String>>::sse_decode(deserializer);
+        return crate::api::GlossaryResult {
+            entries: var_entries,
+            error: var_error,
+        };
     }
 }
 
@@ -2511,6 +3179,34 @@ impl SseDecode for Vec<crate::models::ai::CustomPrompt> {
     }
 }
 
+impl SseDecode for Vec<crate::models::translate::FormulaRegion> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::models::translate::FormulaRegion>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::models::translate::GlossaryEntry> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::models::translate::GlossaryEntry>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::models::annotation::ImageAnnotation> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2575,6 +3271,20 @@ impl SseDecode for Vec<crate::pdf::types::OutlineEntry> {
     }
 }
 
+impl SseDecode for Vec<crate::models::translate::Paragraph> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::models::translate::Paragraph>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<u8> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2618,6 +3328,20 @@ impl SseDecode for Vec<crate::models::annotation::TextAnnotation> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<crate::models::annotation::TextAnnotation>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::models::translate::TranslatedParagraph> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::models::translate::TranslatedParagraph>::sse_decode(
                 deserializer,
             ));
         }
@@ -2788,6 +3512,19 @@ impl SseDecode for Option<crate::ocr::OcrResult> {
     }
 }
 
+impl SseDecode for Option<crate::models::translate::PageTranslation> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::models::translate::PageTranslation>::sse_decode(
+                deserializer,
+            ));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<crate::models::progress::ReadingProgress> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2850,6 +3587,90 @@ impl SseDecode for crate::api::PageRenderResult {
             height: var_height,
             rgba: var_rgba,
             error: var_error,
+        };
+    }
+}
+
+impl SseDecode for crate::models::translate::PageTranslation {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_page = <i64>::sse_decode(deserializer);
+        let mut var_targetLang = <String>::sse_decode(deserializer);
+        let mut var_provider = <String>::sse_decode(deserializer);
+        let mut var_sourceHash = <String>::sse_decode(deserializer);
+        let mut var_paragraphs =
+            <Vec<crate::models::translate::TranslatedParagraph>>::sse_decode(deserializer);
+        let mut var_coverage = <f64>::sse_decode(deserializer);
+        return crate::models::translate::PageTranslation {
+            page: var_page,
+            target_lang: var_targetLang,
+            provider: var_provider,
+            source_hash: var_sourceHash,
+            paragraphs: var_paragraphs,
+            coverage: var_coverage,
+        };
+    }
+}
+
+impl SseDecode for crate::api::PageTranslationResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_translation =
+            <Option<crate::models::translate::PageTranslation>>::sse_decode(deserializer);
+        let mut var_error = <Option<String>>::sse_decode(deserializer);
+        return crate::api::PageTranslationResult {
+            translation: var_translation,
+            error: var_error,
+        };
+    }
+}
+
+impl SseDecode for crate::models::translate::Paragraph {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_text = <String>::sse_decode(deserializer);
+        let mut var_rects = <Vec<crate::models::annotation::NormRect>>::sse_decode(deserializer);
+        let mut var_page = <i64>::sse_decode(deserializer);
+        let mut var_kind = <crate::models::translate::ParagraphKind>::sse_decode(deserializer);
+        let mut var_confidence = <f64>::sse_decode(deserializer);
+        let mut var_formulaRegions =
+            <Vec<crate::models::translate::FormulaRegion>>::sse_decode(deserializer);
+        return crate::models::translate::Paragraph {
+            text: var_text,
+            rects: var_rects,
+            page: var_page,
+            kind: var_kind,
+            confidence: var_confidence,
+            formula_regions: var_formulaRegions,
+        };
+    }
+}
+
+impl SseDecode for crate::models::translate::ParagraphKind {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::models::translate::ParagraphKind::Text,
+            1 => crate::models::translate::ParagraphKind::Formula,
+            2 => crate::models::translate::ParagraphKind::Noise,
+            _ => unreachable!("Invalid variant for ParagraphKind: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::models::translate::ParagraphStatus {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::models::translate::ParagraphStatus::Pending,
+            1 => crate::models::translate::ParagraphStatus::Translating,
+            2 => crate::models::translate::ParagraphStatus::Done,
+            3 => crate::models::translate::ParagraphStatus::LowConfidence,
+            4 => crate::models::translate::ParagraphStatus::Failed,
+            5 => crate::models::translate::ParagraphStatus::FormulaCheck,
+            _ => unreachable!("Invalid variant for ParagraphStatus: {}", inner),
         };
     }
 }
@@ -2964,6 +3785,154 @@ impl SseDecode for crate::models::annotation::TextAnnotationKind {
     }
 }
 
+impl SseDecode for crate::api::TranslatedPageBitmap {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_width = <u32>::sse_decode(deserializer);
+        let mut var_height = <u32>::sse_decode(deserializer);
+        let mut var_rgba = <Vec<u8>>::sse_decode(deserializer);
+        let mut var_hasTranslation = <bool>::sse_decode(deserializer);
+        let mut var_error = <Option<String>>::sse_decode(deserializer);
+        return crate::api::TranslatedPageBitmap {
+            width: var_width,
+            height: var_height,
+            rgba: var_rgba,
+            has_translation: var_hasTranslation,
+            error: var_error,
+        };
+    }
+}
+
+impl SseDecode for crate::models::translate::TranslatedParagraph {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_source = <String>::sse_decode(deserializer);
+        let mut var_translated = <String>::sse_decode(deserializer);
+        let mut var_kind = <crate::models::translate::ParagraphKind>::sse_decode(deserializer);
+        let mut var_status = <crate::models::translate::ParagraphStatus>::sse_decode(deserializer);
+        let mut var_confidence = <f64>::sse_decode(deserializer);
+        let mut var_formulaRegions =
+            <Vec<crate::models::translate::FormulaRegion>>::sse_decode(deserializer);
+        return crate::models::translate::TranslatedParagraph {
+            source: var_source,
+            translated: var_translated,
+            kind: var_kind,
+            status: var_status,
+            confidence: var_confidence,
+            formula_regions: var_formulaRegions,
+        };
+    }
+}
+
+impl SseDecode for crate::models::translate::TranslationBackgroundBehavior {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::models::translate::TranslationBackgroundBehavior::Ask,
+            1 => crate::models::translate::TranslationBackgroundBehavior::Continue,
+            2 => crate::models::translate::TranslationBackgroundBehavior::PauseResume,
+            3 => crate::models::translate::TranslationBackgroundBehavior::Cancel,
+            _ => unreachable!(
+                "Invalid variant for TranslationBackgroundBehavior: {}",
+                inner
+            ),
+        };
+    }
+}
+
+impl SseDecode for crate::models::translate::TranslationConfig {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_provider =
+            <crate::models::translate::TranslationProviderKind>::sse_decode(deserializer);
+        let mut var_baseUrl = <Option<String>>::sse_decode(deserializer);
+        let mut var_apiKey = <Option<String>>::sse_decode(deserializer);
+        let mut var_model = <Option<String>>::sse_decode(deserializer);
+        let mut var_sourceLang = <String>::sse_decode(deserializer);
+        let mut var_mode = <crate::models::translate::TranslationMode>::sse_decode(deserializer);
+        let mut var_backgroundBehavior =
+            <crate::models::translate::TranslationBackgroundBehavior>::sse_decode(deserializer);
+        let mut var_autoOcr = <bool>::sse_decode(deserializer);
+        let mut var_concurrency = <i64>::sse_decode(deserializer);
+        let mut var_cacheLimitMb = <i64>::sse_decode(deserializer);
+        return crate::models::translate::TranslationConfig {
+            provider: var_provider,
+            base_url: var_baseUrl,
+            api_key: var_apiKey,
+            model: var_model,
+            source_lang: var_sourceLang,
+            mode: var_mode,
+            background_behavior: var_backgroundBehavior,
+            auto_ocr: var_autoOcr,
+            concurrency: var_concurrency,
+            cache_limit_mb: var_cacheLimitMb,
+        };
+    }
+}
+
+impl SseDecode for crate::models::translate::TranslationMode {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::models::translate::TranslationMode::WholeBook,
+            1 => crate::models::translate::TranslationMode::WithProgress,
+            2 => crate::models::translate::TranslationMode::Manual,
+            _ => unreachable!("Invalid variant for TranslationMode: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::api::TranslationOverviewResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_totalPages = <i64>::sse_decode(deserializer);
+        let mut var_translatedPages = <i64>::sse_decode(deserializer);
+        let mut var_targetLang = <String>::sse_decode(deserializer);
+        let mut var_error = <Option<String>>::sse_decode(deserializer);
+        return crate::api::TranslationOverviewResult {
+            total_pages: var_totalPages,
+            translated_pages: var_translatedPages,
+            target_lang: var_targetLang,
+            error: var_error,
+        };
+    }
+}
+
+impl SseDecode for crate::models::translate::TranslationProgressEvent {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_page = <i64>::sse_decode(deserializer);
+        let mut var_doneParagraphs = <i64>::sse_decode(deserializer);
+        let mut var_totalParagraphs = <i64>::sse_decode(deserializer);
+        let mut var_coverage = <f64>::sse_decode(deserializer);
+        let mut var_finished = <bool>::sse_decode(deserializer);
+        let mut var_error = <Option<String>>::sse_decode(deserializer);
+        return crate::models::translate::TranslationProgressEvent {
+            page: var_page,
+            done_paragraphs: var_doneParagraphs,
+            total_paragraphs: var_totalParagraphs,
+            coverage: var_coverage,
+            finished: var_finished,
+            error: var_error,
+        };
+    }
+}
+
+impl SseDecode for crate::models::translate::TranslationProviderKind {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::models::translate::TranslationProviderKind::DeepL,
+            1 => crate::models::translate::TranslationProviderKind::OpenAiCompat,
+            2 => crate::models::translate::TranslationProviderKind::ReuseAi,
+            _ => unreachable!("Invalid variant for TranslationProviderKind: {}", inner),
+        };
+    }
+}
+
 impl SseDecode for u32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -3005,59 +3974,75 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        1 => wire__crate__api__app_version_impl(port, ptr, rust_vec_len, data_len),
-        2 => wire__crate__api__append_ai_message_impl(port, ptr, rust_vec_len, data_len),
-        3 => wire__crate__api__assign_category_impl(port, ptr, rust_vec_len, data_len),
-        4 => wire__crate__api__close_book_impl(port, ptr, rust_vec_len, data_len),
-        5 => wire__crate__api__create_ai_thread_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__create_annotation_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__create_category_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__create_image_annotation_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__delete_ai_thread_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__delete_annotation_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__delete_book_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__delete_category_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__delete_image_annotation_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__ensure_book_index_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__export_annotations_json_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__export_annotations_markdown_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__extract_text_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__get_ai_config_impl(port, ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__get_book_impl(port, ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__get_outline_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__get_page_ocr_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__get_progress_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__get_setting_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__import_book_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__init_core_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__init_core_with_db_path_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__list_ai_messages_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__list_ai_threads_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__list_annotations_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__list_books_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__list_categories_impl(port, ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__list_image_annotations_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__ocr_mode_as_str_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__open_book_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__page_has_text_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__rename_category_impl(port, ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__render_page_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__render_thumbnail_impl(port, ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__repair_covers_impl(port, ptr, rust_vec_len, data_len),
-        40 => wire__crate__api__save_progress_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__scan_page_impl(port, ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__search_books_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__search_index_status_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__set_ai_config_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__set_setting_impl(port, ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__stream_chat_impl(port, ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__stream_vision_png_impl(port, ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__template_default_text_impl(port, ptr, rust_vec_len, data_len),
-        49 => wire__crate__api__toggle_favorite_impl(port, ptr, rust_vec_len, data_len),
-        50 => wire__crate__api__touch_last_opened_impl(port, ptr, rust_vec_len, data_len),
-        51 => wire__crate__api__update_annotation_content_impl(port, ptr, rust_vec_len, data_len),
-        52 => wire__crate__api__update_image_annotation_impl(port, ptr, rust_vec_len, data_len),
-        53 => wire__crate__api__update_page_ocr_lines_impl(port, ptr, rust_vec_len, data_len),
+        1 => wire__crate__api__add_translation_glossary_impl(port, ptr, rust_vec_len, data_len),
+        2 => wire__crate__api__app_version_impl(port, ptr, rust_vec_len, data_len),
+        3 => wire__crate__api__append_ai_message_impl(port, ptr, rust_vec_len, data_len),
+        4 => wire__crate__api__assign_category_impl(port, ptr, rust_vec_len, data_len),
+        5 => wire__crate__api__build_translated_pdf_impl(port, ptr, rust_vec_len, data_len),
+        6 => wire__crate__api__cancel_translation_impl(port, ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__clear_translation_artifacts_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__clear_translations_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__close_book_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__create_ai_thread_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__create_annotation_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__create_category_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__create_image_annotation_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__delete_ai_thread_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__delete_annotation_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__delete_book_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__delete_category_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__delete_image_annotation_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__delete_translation_glossary_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__ensure_book_index_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__export_annotations_json_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__export_annotations_markdown_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__extract_page_paragraphs_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__extract_text_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__get_ai_config_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__get_book_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__get_outline_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__get_page_ocr_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__get_page_translation_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__get_progress_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__get_setting_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__get_translated_pdf_path_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__get_translation_config_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__get_translation_overview_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__import_book_impl(port, ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__init_core_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__init_core_with_db_path_impl(port, ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__list_ai_messages_impl(port, ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__list_ai_threads_impl(port, ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__list_annotations_impl(port, ptr, rust_vec_len, data_len),
+        41 => wire__crate__api__list_books_impl(port, ptr, rust_vec_len, data_len),
+        42 => wire__crate__api__list_categories_impl(port, ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__list_image_annotations_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__list_translation_glossary_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__ocr_mode_as_str_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__open_book_impl(port, ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__page_has_text_impl(port, ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__rename_category_impl(port, ptr, rust_vec_len, data_len),
+        49 => wire__crate__api__render_page_impl(port, ptr, rust_vec_len, data_len),
+        50 => wire__crate__api__render_thumbnail_impl(port, ptr, rust_vec_len, data_len),
+        51 => wire__crate__api__render_translated_page_impl(port, ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__repair_covers_impl(port, ptr, rust_vec_len, data_len),
+        53 => wire__crate__api__save_progress_impl(port, ptr, rust_vec_len, data_len),
+        54 => wire__crate__api__scan_page_impl(port, ptr, rust_vec_len, data_len),
+        55 => wire__crate__api__search_books_impl(port, ptr, rust_vec_len, data_len),
+        56 => wire__crate__api__search_index_status_impl(port, ptr, rust_vec_len, data_len),
+        57 => wire__crate__api__set_ai_config_impl(port, ptr, rust_vec_len, data_len),
+        58 => wire__crate__api__set_setting_impl(port, ptr, rust_vec_len, data_len),
+        59 => wire__crate__api__set_translation_config_impl(port, ptr, rust_vec_len, data_len),
+        60 => wire__crate__api__start_book_translation_impl(port, ptr, rust_vec_len, data_len),
+        61 => wire__crate__api__stream_chat_impl(port, ptr, rust_vec_len, data_len),
+        62 => wire__crate__api__stream_vision_png_impl(port, ptr, rust_vec_len, data_len),
+        63 => wire__crate__api__template_default_text_impl(port, ptr, rust_vec_len, data_len),
+        64 => wire__crate__api__toggle_favorite_impl(port, ptr, rust_vec_len, data_len),
+        65 => wire__crate__api__touch_last_opened_impl(port, ptr, rust_vec_len, data_len),
+        66 => wire__crate__api__translate_page_impl(port, ptr, rust_vec_len, data_len),
+        67 => wire__crate__api__update_annotation_content_impl(port, ptr, rust_vec_len, data_len),
+        68 => wire__crate__api__update_image_annotation_impl(port, ptr, rust_vec_len, data_len),
+        69 => wire__crate__api__update_page_ocr_lines_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -3386,6 +4371,90 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::ExportResult> for crate::api:
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::ExtractParagraphsResult {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.paragraphs.into_into_dart().into_dart(),
+            self.error.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::ExtractParagraphsResult
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::ExtractParagraphsResult>
+    for crate::api::ExtractParagraphsResult
+{
+    fn into_into_dart(self) -> crate::api::ExtractParagraphsResult {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::models::translate::FormulaRegion {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.rect.into_into_dart().into_dart(),
+            self.image_path.into_into_dart().into_dart(),
+            self.source_text.into_into_dart().into_dart(),
+            self.placeholder.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::models::translate::FormulaRegion
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::models::translate::FormulaRegion>
+    for crate::models::translate::FormulaRegion
+{
+    fn into_into_dart(self) -> crate::models::translate::FormulaRegion {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::models::translate::GlossaryEntry {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.id.into_into_dart().into_dart(),
+            self.source_term.into_into_dart().into_dart(),
+            self.target_term.into_into_dart().into_dart(),
+            self.source_lang.into_into_dart().into_dart(),
+            self.target_lang.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::models::translate::GlossaryEntry
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::models::translate::GlossaryEntry>
+    for crate::models::translate::GlossaryEntry
+{
+    fn into_into_dart(self) -> crate::models::translate::GlossaryEntry {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::GlossaryResult {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.entries.into_into_dart().into_dart(),
+            self.error.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::GlossaryResult {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::GlossaryResult> for crate::api::GlossaryResult {
+    fn into_into_dart(self) -> crate::api::GlossaryResult {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::models::annotation::ImageAnnotation {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -3662,6 +4731,124 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::PageRenderResult>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::models::translate::PageTranslation {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.page.into_into_dart().into_dart(),
+            self.target_lang.into_into_dart().into_dart(),
+            self.provider.into_into_dart().into_dart(),
+            self.source_hash.into_into_dart().into_dart(),
+            self.paragraphs.into_into_dart().into_dart(),
+            self.coverage.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::models::translate::PageTranslation
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::models::translate::PageTranslation>
+    for crate::models::translate::PageTranslation
+{
+    fn into_into_dart(self) -> crate::models::translate::PageTranslation {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::PageTranslationResult {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.translation.into_into_dart().into_dart(),
+            self.error.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::PageTranslationResult
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::PageTranslationResult>
+    for crate::api::PageTranslationResult
+{
+    fn into_into_dart(self) -> crate::api::PageTranslationResult {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::models::translate::Paragraph {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.text.into_into_dart().into_dart(),
+            self.rects.into_into_dart().into_dart(),
+            self.page.into_into_dart().into_dart(),
+            self.kind.into_into_dart().into_dart(),
+            self.confidence.into_into_dart().into_dart(),
+            self.formula_regions.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::models::translate::Paragraph
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::models::translate::Paragraph>
+    for crate::models::translate::Paragraph
+{
+    fn into_into_dart(self) -> crate::models::translate::Paragraph {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::models::translate::ParagraphKind {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Text => 0.into_dart(),
+            Self::Formula => 1.into_dart(),
+            Self::Noise => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::models::translate::ParagraphKind
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::models::translate::ParagraphKind>
+    for crate::models::translate::ParagraphKind
+{
+    fn into_into_dart(self) -> crate::models::translate::ParagraphKind {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::models::translate::ParagraphStatus {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Pending => 0.into_dart(),
+            Self::Translating => 1.into_dart(),
+            Self::Done => 2.into_dart(),
+            Self::LowConfidence => 3.into_dart(),
+            Self::Failed => 4.into_dart(),
+            Self::FormulaCheck => 5.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::models::translate::ParagraphStatus
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::models::translate::ParagraphStatus>
+    for crate::models::translate::ParagraphStatus
+{
+    fn into_into_dart(self) -> crate::models::translate::ParagraphStatus {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::models::progress::ReadingProgress {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -3788,6 +4975,199 @@ impl flutter_rust_bridge::IntoIntoDart<crate::models::annotation::TextAnnotation
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::TranslatedPageBitmap {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.width.into_into_dart().into_dart(),
+            self.height.into_into_dart().into_dart(),
+            self.rgba.into_into_dart().into_dart(),
+            self.has_translation.into_into_dart().into_dart(),
+            self.error.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::TranslatedPageBitmap
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::TranslatedPageBitmap>
+    for crate::api::TranslatedPageBitmap
+{
+    fn into_into_dart(self) -> crate::api::TranslatedPageBitmap {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::models::translate::TranslatedParagraph {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.source.into_into_dart().into_dart(),
+            self.translated.into_into_dart().into_dart(),
+            self.kind.into_into_dart().into_dart(),
+            self.status.into_into_dart().into_dart(),
+            self.confidence.into_into_dart().into_dart(),
+            self.formula_regions.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::models::translate::TranslatedParagraph
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::models::translate::TranslatedParagraph>
+    for crate::models::translate::TranslatedParagraph
+{
+    fn into_into_dart(self) -> crate::models::translate::TranslatedParagraph {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::models::translate::TranslationBackgroundBehavior {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Ask => 0.into_dart(),
+            Self::Continue => 1.into_dart(),
+            Self::PauseResume => 2.into_dart(),
+            Self::Cancel => 3.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::models::translate::TranslationBackgroundBehavior
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::models::translate::TranslationBackgroundBehavior>
+    for crate::models::translate::TranslationBackgroundBehavior
+{
+    fn into_into_dart(self) -> crate::models::translate::TranslationBackgroundBehavior {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::models::translate::TranslationConfig {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.provider.into_into_dart().into_dart(),
+            self.base_url.into_into_dart().into_dart(),
+            self.api_key.into_into_dart().into_dart(),
+            self.model.into_into_dart().into_dart(),
+            self.source_lang.into_into_dart().into_dart(),
+            self.mode.into_into_dart().into_dart(),
+            self.background_behavior.into_into_dart().into_dart(),
+            self.auto_ocr.into_into_dart().into_dart(),
+            self.concurrency.into_into_dart().into_dart(),
+            self.cache_limit_mb.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::models::translate::TranslationConfig
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::models::translate::TranslationConfig>
+    for crate::models::translate::TranslationConfig
+{
+    fn into_into_dart(self) -> crate::models::translate::TranslationConfig {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::models::translate::TranslationMode {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::WholeBook => 0.into_dart(),
+            Self::WithProgress => 1.into_dart(),
+            Self::Manual => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::models::translate::TranslationMode
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::models::translate::TranslationMode>
+    for crate::models::translate::TranslationMode
+{
+    fn into_into_dart(self) -> crate::models::translate::TranslationMode {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::TranslationOverviewResult {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.total_pages.into_into_dart().into_dart(),
+            self.translated_pages.into_into_dart().into_dart(),
+            self.target_lang.into_into_dart().into_dart(),
+            self.error.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::TranslationOverviewResult
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::TranslationOverviewResult>
+    for crate::api::TranslationOverviewResult
+{
+    fn into_into_dart(self) -> crate::api::TranslationOverviewResult {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::models::translate::TranslationProgressEvent {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.page.into_into_dart().into_dart(),
+            self.done_paragraphs.into_into_dart().into_dart(),
+            self.total_paragraphs.into_into_dart().into_dart(),
+            self.coverage.into_into_dart().into_dart(),
+            self.finished.into_into_dart().into_dart(),
+            self.error.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::models::translate::TranslationProgressEvent
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::models::translate::TranslationProgressEvent>
+    for crate::models::translate::TranslationProgressEvent
+{
+    fn into_into_dart(self) -> crate::models::translate::TranslationProgressEvent {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::models::translate::TranslationProviderKind {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::DeepL => 0.into_dart(),
+            Self::OpenAiCompat => 1.into_dart(),
+            Self::ReuseAi => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::models::translate::TranslationProviderKind
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::models::translate::TranslationProviderKind>
+    for crate::models::translate::TranslationProviderKind
+{
+    fn into_into_dart(self) -> crate::models::translate::TranslationProviderKind {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::models::progress::ViewMode {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
@@ -3825,6 +5205,18 @@ impl SseEncode for std::collections::HashMap<String, String> {
 }
 
 impl SseEncode for StreamSink<String, flutter_rust_bridge::for_generated::SseCodec> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        unimplemented!("")
+    }
+}
+
+impl SseEncode
+    for StreamSink<
+        crate::models::translate::TranslationProgressEvent,
+        flutter_rust_bridge::for_generated::SseCodec,
+    >
+{
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         unimplemented!("")
@@ -4039,6 +5431,14 @@ impl SseEncode for crate::api::ExportResult {
     }
 }
 
+impl SseEncode for crate::api::ExtractParagraphsResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<crate::models::translate::Paragraph>>::sse_encode(self.paragraphs, serializer);
+        <Option<String>>::sse_encode(self.error, serializer);
+    }
+}
+
 impl SseEncode for f32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -4050,6 +5450,35 @@ impl SseEncode for f64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         serializer.cursor.write_f64::<NativeEndian>(self).unwrap();
+    }
+}
+
+impl SseEncode for crate::models::translate::FormulaRegion {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <crate::models::annotation::NormRect>::sse_encode(self.rect, serializer);
+        <Option<String>>::sse_encode(self.image_path, serializer);
+        <String>::sse_encode(self.source_text, serializer);
+        <String>::sse_encode(self.placeholder, serializer);
+    }
+}
+
+impl SseEncode for crate::models::translate::GlossaryEntry {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.id, serializer);
+        <String>::sse_encode(self.source_term, serializer);
+        <String>::sse_encode(self.target_term, serializer);
+        <Option<String>>::sse_encode(self.source_lang, serializer);
+        <Option<String>>::sse_encode(self.target_lang, serializer);
+    }
+}
+
+impl SseEncode for crate::api::GlossaryResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<crate::models::translate::GlossaryEntry>>::sse_encode(self.entries, serializer);
+        <Option<String>>::sse_encode(self.error, serializer);
     }
 }
 
@@ -4200,6 +5629,26 @@ impl SseEncode for Vec<crate::models::ai::CustomPrompt> {
     }
 }
 
+impl SseEncode for Vec<crate::models::translate::FormulaRegion> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::models::translate::FormulaRegion>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::models::translate::GlossaryEntry> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::models::translate::GlossaryEntry>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::models::annotation::ImageAnnotation> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -4250,6 +5699,16 @@ impl SseEncode for Vec<crate::pdf::types::OutlineEntry> {
     }
 }
 
+impl SseEncode for Vec<crate::models::translate::Paragraph> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::models::translate::Paragraph>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<u8> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -4286,6 +5745,16 @@ impl SseEncode for Vec<crate::models::annotation::TextAnnotation> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::models::annotation::TextAnnotation>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::models::translate::TranslatedParagraph> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::models::translate::TranslatedParagraph>::sse_encode(item, serializer);
         }
     }
 }
@@ -4423,6 +5892,16 @@ impl SseEncode for Option<crate::ocr::OcrResult> {
     }
 }
 
+impl SseEncode for Option<crate::models::translate::PageTranslation> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::models::translate::PageTranslation>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<crate::models::progress::ReadingProgress> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -4467,6 +5946,84 @@ impl SseEncode for crate::api::PageRenderResult {
         <u32>::sse_encode(self.height, serializer);
         <Vec<u8>>::sse_encode(self.rgba, serializer);
         <Option<String>>::sse_encode(self.error, serializer);
+    }
+}
+
+impl SseEncode for crate::models::translate::PageTranslation {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.page, serializer);
+        <String>::sse_encode(self.target_lang, serializer);
+        <String>::sse_encode(self.provider, serializer);
+        <String>::sse_encode(self.source_hash, serializer);
+        <Vec<crate::models::translate::TranslatedParagraph>>::sse_encode(
+            self.paragraphs,
+            serializer,
+        );
+        <f64>::sse_encode(self.coverage, serializer);
+    }
+}
+
+impl SseEncode for crate::api::PageTranslationResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Option<crate::models::translate::PageTranslation>>::sse_encode(
+            self.translation,
+            serializer,
+        );
+        <Option<String>>::sse_encode(self.error, serializer);
+    }
+}
+
+impl SseEncode for crate::models::translate::Paragraph {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.text, serializer);
+        <Vec<crate::models::annotation::NormRect>>::sse_encode(self.rects, serializer);
+        <i64>::sse_encode(self.page, serializer);
+        <crate::models::translate::ParagraphKind>::sse_encode(self.kind, serializer);
+        <f64>::sse_encode(self.confidence, serializer);
+        <Vec<crate::models::translate::FormulaRegion>>::sse_encode(
+            self.formula_regions,
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::models::translate::ParagraphKind {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::models::translate::ParagraphKind::Text => 0,
+                crate::models::translate::ParagraphKind::Formula => 1,
+                crate::models::translate::ParagraphKind::Noise => 2,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::models::translate::ParagraphStatus {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::models::translate::ParagraphStatus::Pending => 0,
+                crate::models::translate::ParagraphStatus::Translating => 1,
+                crate::models::translate::ParagraphStatus::Done => 2,
+                crate::models::translate::ParagraphStatus::LowConfidence => 3,
+                crate::models::translate::ParagraphStatus::Failed => 4,
+                crate::models::translate::ParagraphStatus::FormulaCheck => 5,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
     }
 }
 
@@ -4540,6 +6097,125 @@ impl SseEncode for crate::models::annotation::TextAnnotationKind {
                 crate::models::annotation::TextAnnotationKind::Underline => 1,
                 crate::models::annotation::TextAnnotationKind::Strikethrough => 2,
                 crate::models::annotation::TextAnnotationKind::Note => 3,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::TranslatedPageBitmap {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u32>::sse_encode(self.width, serializer);
+        <u32>::sse_encode(self.height, serializer);
+        <Vec<u8>>::sse_encode(self.rgba, serializer);
+        <bool>::sse_encode(self.has_translation, serializer);
+        <Option<String>>::sse_encode(self.error, serializer);
+    }
+}
+
+impl SseEncode for crate::models::translate::TranslatedParagraph {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.source, serializer);
+        <String>::sse_encode(self.translated, serializer);
+        <crate::models::translate::ParagraphKind>::sse_encode(self.kind, serializer);
+        <crate::models::translate::ParagraphStatus>::sse_encode(self.status, serializer);
+        <f64>::sse_encode(self.confidence, serializer);
+        <Vec<crate::models::translate::FormulaRegion>>::sse_encode(
+            self.formula_regions,
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::models::translate::TranslationBackgroundBehavior {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::models::translate::TranslationBackgroundBehavior::Ask => 0,
+                crate::models::translate::TranslationBackgroundBehavior::Continue => 1,
+                crate::models::translate::TranslationBackgroundBehavior::PauseResume => 2,
+                crate::models::translate::TranslationBackgroundBehavior::Cancel => 3,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::models::translate::TranslationConfig {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <crate::models::translate::TranslationProviderKind>::sse_encode(self.provider, serializer);
+        <Option<String>>::sse_encode(self.base_url, serializer);
+        <Option<String>>::sse_encode(self.api_key, serializer);
+        <Option<String>>::sse_encode(self.model, serializer);
+        <String>::sse_encode(self.source_lang, serializer);
+        <crate::models::translate::TranslationMode>::sse_encode(self.mode, serializer);
+        <crate::models::translate::TranslationBackgroundBehavior>::sse_encode(
+            self.background_behavior,
+            serializer,
+        );
+        <bool>::sse_encode(self.auto_ocr, serializer);
+        <i64>::sse_encode(self.concurrency, serializer);
+        <i64>::sse_encode(self.cache_limit_mb, serializer);
+    }
+}
+
+impl SseEncode for crate::models::translate::TranslationMode {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::models::translate::TranslationMode::WholeBook => 0,
+                crate::models::translate::TranslationMode::WithProgress => 1,
+                crate::models::translate::TranslationMode::Manual => 2,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::TranslationOverviewResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.total_pages, serializer);
+        <i64>::sse_encode(self.translated_pages, serializer);
+        <String>::sse_encode(self.target_lang, serializer);
+        <Option<String>>::sse_encode(self.error, serializer);
+    }
+}
+
+impl SseEncode for crate::models::translate::TranslationProgressEvent {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.page, serializer);
+        <i64>::sse_encode(self.done_paragraphs, serializer);
+        <i64>::sse_encode(self.total_paragraphs, serializer);
+        <f64>::sse_encode(self.coverage, serializer);
+        <bool>::sse_encode(self.finished, serializer);
+        <Option<String>>::sse_encode(self.error, serializer);
+    }
+}
+
+impl SseEncode for crate::models::translate::TranslationProviderKind {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::models::translate::TranslationProviderKind::DeepL => 0,
+                crate::models::translate::TranslationProviderKind::OpenAiCompat => 1,
+                crate::models::translate::TranslationProviderKind::ReuseAi => 2,
                 _ => {
                     unimplemented!("");
                 }
