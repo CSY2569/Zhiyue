@@ -153,7 +153,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // The page-level view shows the anchor and the rendered page image.
-      expect(find.text('译文 p.2'), findsOneWidget);
+      expect(find.text('p.2'), findsOneWidget);
       expect(find.byType(RawImage), findsWidgets);
       expect(tester.takeException(), isNull);
     });
@@ -182,7 +182,7 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 50));
       });
       await tester.pumpAndSettle();
-      expect(find.text('译文 p.2'), findsOneWidget);
+      expect(find.text('p.2'), findsOneWidget);
 
       // Turn to page 3 by advancing the viewer state (re-pumping a new
       // ProviderScope would NOT work: the scope's element is reused, so the
@@ -198,8 +198,11 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 50));
       });
       await tester.pumpAndSettle();
-      expect(find.text('译文 p.3'), findsOneWidget);
-      expect(find.text('译文 p.2'), findsNothing);
+      expect(find.text('p.3'), findsOneWidget);
+      // The jump scrolled page 3 to the top of the viewport (the p.2 chip
+      // can legitimately remain in the ListView's cache extent, so position
+      // — not presence — is what proves the follow).
+      expect(tester.getTopLeft(find.text('p.3')).dy, lessThan(300));
     });
   });
 }

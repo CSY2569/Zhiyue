@@ -1,81 +1,72 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:rbwa/core/widgets/empty_state.dart';
-import 'package:rbwa/data/repositories/translation_repository.dart';
 import 'package:rbwa/features/ai/providers/ai_config_provider.dart';
 import 'package:rbwa/features/bilingual/providers/page_translation_provider.dart';
 import 'package:rbwa/features/bilingual/providers/translated_page_image_provider.dart';
 import 'package:rbwa/features/bilingual/providers/translation_config_provider.dart';
 import 'package:rbwa/features/bilingual/providers/translation_queue_provider.dart';
+import 'package:rbwa/features/reader/widgets/pdf_page_scroll.dart'
+    show kPageGap, pageHeightProvider;
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
-import 'package:rbwa/src/rust/models/progress.dart';
 import 'package:rbwa/src/rust/models/translate.dart';
 
-/// The bilingual-reading column (对照阅读, plan §5).
-///
-/// Mounted as the RIGHT HALF of the reading area when 对照 is open: the
-/// translation is shown as a real PDF **page** beside the original document
-/// (same page size, original layout with the text areas replaced, selectable
-/// text), rather than a list of paragraphs. [translatedPageImageProvider]
-/// renders the page's translation through Rust and this column draws it
-/// scaled to the column width. Pages follow the original's current page.
+/// The RIGHT "page" of the 对照 view (plan §5): a double-page-style spread —
+/// the translated page is rendered at the SAME display size as the original
+/// page beside it, on the shared reading background, scrolling in step with
+/// it. No chrome of its own: the export / whole-book actions live in the
+/// reader toolbar while 对照 is open.
 class TranslatedColumn extends ConsumerWidget {
   const TranslatedColumn({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
     final viewer = ref.watch(viewerProvider);
     final bookId = viewer.book?.id;
-    final targetLang = ref
-            .watch(aiConfigProvider)
-            .valueOrNull
-            ?.translateTargetLang ??
-        '中文';
+    final targetLang =
+        ref.watch(aiConfigProvider).valueOrNull?.translateTargetLang ??
+            '中文';
     final configured = _isConfigured(ref);
     final configLoading = ref.watch(translationConfigProvider).isLoading;
     final queue = ref.watch(translationQueueProvider);
 
-    return Material(
-      color: theme.colorScheme.surfaceContainerLow,
-      child: Column(
-        children: [
-          _Header(
-            bookId: bookId,
-            page: viewer.currentPage,
-            targetLang: targetLang,
-            configured: configured,
+    Widget body;
+    if (configLoading) {
+      body = const Center(child: CircularProgressIndicator());
+    } else if (!configured) {
+      body = _NotConfigured(onGoSettings: () => _openSettings(context));
+    } else if (bookId == null) {
+      body = const Center(
+        child: Text('打开一本书后即可对照阅读',
+            style: TextStyle(color: Colors.black38)),
+      );
+    } else {
+      // Same display size as the original page (physical height x zoom), so
+      // left and right read as two pages of one spread.
+      final displayH =
+          ref.watch(pageHeightProvider) * viewer.zoom.clamp(0.3, 4.0);
+      body = _SyncedPageList(
+        bookId: bookId,
+        currentPage: viewer.currentPage,
+        pageCount: viewer.pageCount,
+        targetLang: targetLang,
+        displayH: displayH,
+        itemExtent: displayH + kPageGap,
+      );
+    }
+
+    return Stack(
+      children: [
+        body,
+        if (queue.running && queue.totalPages > 0)
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 12,
+            child: _QueuePill(queue: queue),
           ),
-          if (queue.running && queue.totalPages > 0)
-            _QueueProgressBar(queue: queue),
-          const Divider(height: 1),
-          Expanded(
-            // While the config is still loading, do NOT claim "not
-            // configured" -- that flashed a misleading guide on every open.
-            child: configLoading
-                ? const Center(child: CircularProgressIndicator())
-                : !configured
-                    ? _NotConfigured(
-                        onGoSettings: () => _openSettings(context))
-                    : bookId == null
-                        ? const EmptyState(
-                            icon: Icons.translate,
-                            title: '未打开书籍',
-                            message: '打开一本书后即可对照阅读',
-                          )
-                        : _PageList(
-                            bookId: bookId,
-                            mode: viewer.mode,
-                            currentPage: viewer.currentPage,
-                            pageCount: viewer.pageCount,
-                            targetLang: targetLang,
-                          ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -100,298 +91,107 @@ class TranslatedColumn extends ConsumerWidget {
   }
 }
 
-class _Header extends ConsumerWidget {
-  const _Header({
+/// Page list synced to the original's current page: page N lives at offset
+/// (N-1) x itemExtent — the same stride model as [PdfPageScroll] — so a page
+/// turn jumps the column to the matching "page of the spread".
+class _SyncedPageList extends ConsumerStatefulWidget {
+  const _SyncedPageList({
     required this.bookId,
-    required this.page,
-    required this.targetLang,
-    required this.configured,
-  });
-
-  final int? bookId;
-  final int page;
-  final String targetLang;
-  final bool configured;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 4, 4),
-      child: Row(
-        children: [
-          Icon(Icons.translate, size: 16, color: theme.colorScheme.primary),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              '对照阅读',
-              style: theme.textTheme.titleSmall,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Chip(
-            label: Text(targetLang, style: theme.textTheme.labelSmall),
-            visualDensity: VisualDensity.compact,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          const Spacer(),
-          if (configured && bookId != null) ...[
-            IconButton(
-              icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-              tooltip: '导出译文 PDF',
-              visualDensity: VisualDensity.compact,
-              onPressed: () => _exportPdf(context, ref, bookId!, targetLang),
-            ),
-            IconButton(
-              icon: const Icon(Icons.download_done_outlined, size: 18),
-              tooltip: '整本翻译',
-              visualDensity: VisualDensity.compact,
-              onPressed: () => _startWholeBook(context, ref, bookId!),
-            ),
-            IconButton(
-              icon: const Icon(Icons.close, size: 18),
-              tooltip: '关闭对照阅读',
-              visualDensity: VisualDensity.compact,
-              onPressed: () =>
-                  ref.read(translationPaneProvider.notifier).close(),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Future<void> _startWholeBook(
-    BuildContext context,
-    WidgetRef ref,
-    int bookId,
-  ) async {
-    final config = ref.read(translationConfigProvider).valueOrNull;
-    final pageCount = ref.read(viewerProvider).pageCount;
-    if (config == null || pageCount == 0) return;
-
-    var behavior = config.backgroundBehavior;
-    if (behavior == TranslationBackgroundBehavior.ask) {
-      final chosen = await showDialog<TranslationBackgroundBehavior>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('整本翻译后台行为'),
-          content: const Text('整本翻译进行中切换到其他书籍时：'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(
-                  ctx, TranslationBackgroundBehavior.pauseResume),
-              child: const Text('切书暂停，回来续传'),
-            ),
-            TextButton(
-              onPressed: () =>
-                  Navigator.pop(ctx, TranslationBackgroundBehavior.continue_),
-              child: const Text('后台继续'),
-            ),
-            TextButton(
-              onPressed: () =>
-                  Navigator.pop(ctx, TranslationBackgroundBehavior.cancel),
-              child: const Text('离开即取消'),
-            ),
-          ],
-        ),
-      );
-      if (chosen == null) return;
-      behavior = chosen;
-      await ref
-          .read(translationConfigProvider.notifier)
-          .setBackgroundBehavior(chosen);
-    }
-
-    if (!context.mounted) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('整本翻译'),
-        content: Text(
-          '将翻译全书 $pageCount 页。\n\n'
-          '预计耗时约 ${(pageCount * 4 / 60).ceil()} 分钟（依服务与网络浮动）。\n'
-          'DeepL 免费版每月 50 万字符额度，LLM 按 token 计费。\n\n'
-          '进行中可随时在右栏取消；已翻译的页面会缓存。',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('开始翻译'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    ref
-        .read(translationQueueProvider.notifier)
-        .startBook(bookId: bookId, totalPages: pageCount);
-  }
-
-  Future<void> _exportPdf(
-    BuildContext context,
-    WidgetRef ref,
-    int bookId,
-    String targetLang,
-  ) async {
-    final repo = ref.read(translationRepositoryProvider);
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    var done = 0;
-    var total = 0;
-    try {
-      await for (final ev in repo.buildTranslatedPdf(
-        bookId: bookId,
-        targetLang: targetLang,
-      )) {
-        done = ev.doneParagraphs;
-        total = ev.totalParagraphs;
-      }
-    } catch (e) {
-      messenger?.showSnackBar(SnackBar(content: Text('导出失败：$e')));
-      return;
-    }
-    final path = await repo.translatedPdfPath(
-      bookId: bookId,
-      targetLang: targetLang,
-    );
-    if (!context.mounted) return;
-    messenger?.showSnackBar(
-      SnackBar(
-        content: Text('已生成译文 PDF（$done/$total 页）：$path'),
-        action: SnackBarAction(
-          label: '复制路径',
-          onPressed: () => Clipboard.setData(ClipboardData(text: path)),
-        ),
-      ),
-    );
-  }
-}
-
-/// Whole-book progress header (plan §5): 已完成 x/N · 预计剩余 + 取消.
-class _QueueProgressBar extends ConsumerWidget {
-  const _QueueProgressBar({required this.queue});
-  final TranslationQueueState queue;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final remaining = queue.estimatedRemaining;
-    final remainingText =
-        remaining == null ? '' : ' · 预计剩余 ~${remaining.inMinutes} 分钟';
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 4, 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '已完成 ${queue.donePages}/${queue.totalPages} 页$remainingText',
-                  style: theme.textTheme.labelSmall,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              TextButton(
-                style:
-                    TextButton.styleFrom(visualDensity: VisualDensity.compact),
-                onPressed: () =>
-                    ref.read(translationQueueProvider.notifier).cancel(),
-                child: const Text('取消'),
-              ),
-            ],
-          ),
-          LinearProgressIndicator(value: queue.progress, minHeight: 3),
-        ],
-      ),
-    );
-  }
-}
-
-class _NotConfigured extends StatelessWidget {
-  const _NotConfigured({required this.onGoSettings});
-  final VoidCallback onGoSettings;
-
-  @override
-  Widget build(BuildContext context) {
-    return EmptyState(
-      icon: Icons.cloud_off_outlined,
-      title: '未配置翻译服务',
-      message: '在「设置 → 对照阅读」中选择翻译服务并填写 API Key',
-      action: FilledButton.icon(
-        onPressed: onGoSettings,
-        icon: const Icon(Icons.settings_outlined, size: 18),
-        label: const Text('去设置'),
-      ),
-    );
-  }
-}
-
-/// The visible translated pages, one card per page.
-class _PageList extends ConsumerWidget {
-  const _PageList({
-    required this.bookId,
-    required this.mode,
     required this.currentPage,
     required this.pageCount,
     required this.targetLang,
+    required this.displayH,
+    required this.itemExtent,
   });
 
   final int bookId;
-  final ViewMode mode;
   final int currentPage;
   final int pageCount;
   final String targetLang;
+  final double displayH;
+  final double itemExtent;
 
-  List<int> get _visible {
-    if (mode == ViewMode.single) return [currentPage];
-    final right = currentPage + 1;
-    return right <= pageCount ? [currentPage, right] : [currentPage];
+  @override
+  ConsumerState<_SyncedPageList> createState() => _SyncedPageListState();
+}
+
+class _SyncedPageListState extends ConsumerState<_SyncedPageList> {
+  late final _controller = ScrollController(
+    initialScrollOffset: (widget.currentPage - 1).clamp(0, 1 << 30) *
+        widget.itemExtent,
+  );
+  int _syncedPage = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncedPage = widget.currentPage;
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final pages = _visible;
-        return ListView.builder(
-          padding: const EdgeInsets.all(12),
-          itemCount: pages.length,
-          itemBuilder: (context, i) => _TranslatedPageCard(
-            key: ValueKey(pages[i]),
-            bookId: bookId,
-            page: pages[i],
-            targetLang: targetLang,
-            availableWidth: constraints.maxWidth - 24,
+  void didUpdateWidget(covariant _SyncedPageList old) {
+    super.didUpdateWidget(old);
+    if (widget.currentPage != _syncedPage && widget.currentPage >= 1) {
+      _syncedPage = widget.currentPage;
+      _jumpTo(_syncedPage);
+    }
+    if (widget.itemExtent != old.itemExtent) {
+      // The stride changed (zoom / first real page height): re-align.
+      _jumpTo(_syncedPage);
+    }
+  }
+
+  void _jumpTo(int page) {
+    if (!_controller.hasClients) return;
+    final max = _controller.position.maxScrollExtent;
+    _controller.jumpTo(
+      ((page - 1) * widget.itemExtent).clamp(0.0, max),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      controller: _controller,
+      itemExtent: widget.itemExtent,
+      itemCount: widget.pageCount,
+      itemBuilder: (context, i) => Padding(
+        padding: const EdgeInsets.only(bottom: kPageGap),
+        child: Align(
+          child: _TranslatedPageCard(
+            key: ValueKey(i + 1),
+            bookId: widget.bookId,
+            page: i + 1,
+            targetLang: widget.targetLang,
+            displayH: widget.displayH,
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }
 
-/// One page: the rendered translation drawn as a PDF page, with an overlay
-/// label and (when untranslated) a placeholder + 翻译本页 action.
+/// One translated page drawn as a "paper" sheet matching the original page's
+/// display size, with a small page chip for orientation.
 class _TranslatedPageCard extends ConsumerWidget {
   const _TranslatedPageCard({
     super.key,
     required this.bookId,
     required this.page,
     required this.targetLang,
-    required this.availableWidth,
+    required this.displayH,
   });
 
   final int bookId;
   final int page;
   final String targetLang;
-  final double availableWidth;
+  final double displayH;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -409,70 +209,27 @@ class _TranslatedPageCard extends ConsumerWidget {
     final hasTranslation = state?.hasTranslation ?? false;
     final error = state?.error ?? pageState?.error;
 
-    // Aspect ratio from the rendered page (fall back to A4).
-    final aspect = (image != null && image.width > 0)
-        ? image.height / image.width
-        : 1.414;
-    final displayW = availableWidth.clamp(120.0, 1200.0);
-    final displayH = displayW * aspect;
+    // Same aspect as the original page (identical page geometry); fall back
+    // to A4 while the bitmap renders.
+    final aspect = (image != null && image.height > 0)
+        ? image.width / image.height
+        : 1 / 1.414;
+    final displayW = (displayH * aspect).clamp(80.0, 1600.0);
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return SizedBox(
+      width: displayW,
+      height: displayH,
+      child: Stack(
+        fit: StackFit.expand,
         children: [
-          // Page anchor + status/action row (plan §2: p.N 定位锚点).
-          Row(
-            children: [
-              Text(
-                '译文 p.$page',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: theme.colorScheme.primary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const Spacer(),
-              if (translating)
-                const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else
-                TextButton(
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                  ),
-                  onPressed: () => ref
-                      .read(pageTranslationProvider(
-                              (bookId: bookId, page: page))
-                          .notifier)
-                      .translate(force: hasTranslation),
-                  child: Text(hasTranslation ? '重新翻译' : '翻译本页'),
-                ),
-            ],
-          ),
-          if (error != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Text(
-                error,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.error),
-              ),
-            ),
-          // The page itself: a bordered "paper" card sized like the original.
           Container(
-            width: displayW,
-            height: displayH,
             decoration: BoxDecoration(
               color: Colors.white,
               border: Border.all(color: theme.colorScheme.outlineVariant),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.06),
-                  blurRadius: 6,
+                  color: Colors.black.withValues(alpha: 0.12),
+                  blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
               ],
@@ -480,6 +237,7 @@ class _TranslatedPageCard extends ConsumerWidget {
             child: image != null
                 ? RawImage(image: image, fit: BoxFit.fill)
                 : _PagePlaceholder(
+                    page: page,
                     translating: translating,
                     hasTranslation: hasTranslation,
                     onTranslate: () => ref
@@ -489,6 +247,53 @@ class _TranslatedPageCard extends ConsumerWidget {
                         .translate(),
                   ),
           ),
+          // Page chip (orientation + test handle).
+          Positioned(
+            left: 0,
+            top: 0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest
+                    .withValues(alpha: 0.85),
+                borderRadius:
+                    const BorderRadius.only(bottomRight: Radius.circular(6)),
+              ),
+              child: Text(
+                'p.$page',
+                style: theme.textTheme.labelSmall,
+              ),
+            ),
+          ),
+          // Re-translate affordance for translated pages.
+          if (hasTranslation && !translating)
+            Positioned(
+              right: 0,
+              top: 0,
+              child: IconButton(
+                icon: Icon(Icons.refresh,
+                    size: 16, color: theme.colorScheme.outline),
+                tooltip: '重新翻译本页',
+                onPressed: () => ref
+                    .read(pageTranslationProvider(
+                            (bookId: bookId, page: page))
+                        .notifier)
+                    .translate(force: true),
+              ),
+            ),
+          if (error != null)
+            Positioned(
+              left: 6,
+              right: 6,
+              bottom: 6,
+              child: Text(
+                error,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.error),
+              ),
+            ),
         ],
       ),
     );
@@ -497,11 +302,13 @@ class _TranslatedPageCard extends ConsumerWidget {
 
 class _PagePlaceholder extends StatelessWidget {
   const _PagePlaceholder({
+    required this.page,
     required this.translating,
     required this.hasTranslation,
     required this.onTranslate,
   });
 
+  final int page;
   final bool translating;
   final bool hasTranslation;
   final VoidCallback onTranslate;
@@ -537,6 +344,90 @@ class _PagePlaceholder extends StatelessWidget {
               onPressed: onTranslate,
               icon: const Icon(Icons.translate, size: 16),
               label: const Text('翻译本页'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact floating whole-book progress (整本 x/N · 取消) while a run is active.
+class _QueuePill extends ConsumerWidget {
+  const _QueuePill({required this.queue});
+  final TranslationQueueState queue;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.18),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '整本翻译 ${queue.donePages}/${queue.totalPages} 页',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelMedium,
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 80,
+            child: LinearProgressIndicator(
+                value: queue.progress, minHeight: 4),
+          ),
+          TextButton(
+            style:
+                TextButton.styleFrom(visualDensity: VisualDensity.compact),
+            onPressed: () =>
+                ref.read(translationQueueProvider.notifier).cancel(),
+            child: const Text('取消'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NotConfigured extends StatelessWidget {
+  const _NotConfigured({required this.onGoSettings});
+  final VoidCallback onGoSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_outlined, size: 40),
+            const SizedBox(height: 10),
+            Text('未配置翻译服务', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 6),
+            Text(
+              '在「设置 → 对照阅读」中选择翻译服务并填写 API Key',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: onGoSettings,
+              icon: const Icon(Icons.settings_outlined, size: 16),
+              label: const Text('去设置'),
             ),
           ],
         ),

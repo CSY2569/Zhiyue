@@ -420,7 +420,9 @@ fn whiten_paragraphs(img: &mut image::RgbaImage, t: &PageTranslation) {
     let pad_x = 0.0015;
     let pad_y = 0.0025;
     for para in &t.paragraphs {
-        if para.kind != ParagraphKind::Text {
+        // Mirror the overlay draw rule: formulas and inline-formula
+        // paragraphs keep their original pixels.
+        if para.kind != ParagraphKind::Text || !para.formula_regions.is_empty() {
             continue;
         }
         for r in &para.rects {
@@ -782,9 +784,13 @@ fn write_overlay_page(
     );
 
     for para in &t.paragraphs {
-        if para.kind != ParagraphKind::Text {
-            // Whole-paragraph formulas keep their ORIGINAL pixels in the
-            // background -- nothing to draw.
+        // Whole-paragraph formulas AND paragraphs containing inline formula
+        // regions keep their ORIGINAL pixels: whitening the tight line rects
+        // would slice through tall math (fractions, sums) and the flat
+        // re-draw loses the layout.
+        if para.kind != ParagraphKind::Text
+            || !para.formula_regions.is_empty()
+        {
             continue;
         }
         let text = display_text(para);

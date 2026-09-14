@@ -580,21 +580,27 @@ fn is_math_font_name(name: &str) -> bool {
         "CMMI", "CMSY", "CMEX", // Computer Modern math italic / symbols / ext
         "MTMI", "MTSY", "MTEX", // MathType math faces
         "MSAM", "MSBM", "LASY", "EUFM", "EUSM", "RSFS", // AMS / Euler / script
+        "TXMI", "TXSY", "TXEX", // txfonts math faces
+        "PXMI", "PXSY", "PXEX", // pxfonts math faces
+        "WASY", // WASY symbol font
     ];
     if prefixes.iter().any(|p| upper.starts_with(p)) {
+        return true;
+    }
+    // Any family carrying MATH in its name is math-only: Cambria Math,
+    // STIX Two Math, TeXGyreTermesMath, LibertinusMath, DejaVuMath,
+    // Euclid Math, MathJax, Mathematica-style faces, ...
+    if upper.contains("MATH") {
         return true;
     }
     [
         "SYMBOL",
         "STIX",
         "XITS",
-        "CAMBRIA MATH",
-        "LATINMODERNMATH",
-        "LATIN MODERN MATH",
-        "ASANA MATH",
+        "ASANA",
         "NEO EULER",
         "NEWCM", // New Computer Modern (math companion to TeX Gyre)
-        "MATHJAX",
+        "EUCLID",
     ]
     .iter()
     .any(|p| upper.contains(p))
@@ -607,10 +613,15 @@ fn is_math_font_name(name: &str) -> bool {
 fn is_strong_math_char(c: char) -> bool {
     matches!(c,
         '+' | '-' | '=' | '<' | '>' | '*' | '/' | '^' | '_' | '|'
-        | '±' | '∓' | '×' | '÷' | '⋅' | '∘' | '⊕' | '⊗' | '⊥' | '∝'
-        | '∑' | '∏' | '∫' | '∮' | '√' | '∞' | '∂' | '∇'
-        | '≤' | '≥' | '≠' | '≈' | '∼' | '≪' | '≫' | '∈' | '∉' | '⊂' | '⊆'
-        | '→' | '←' | '↔' | '⇒' | '⇔' | '∀' | '∃' | '⟨' | '⟩'
+        | '±' | '∓' | '×' | '÷' | '⋅' | '·' | '∘' | '∗' | '⊕' | '⊗' | '⊙' | '⊘' | '⊥' | '∝'
+        | '∑' | '∏' | '∫' | '∮' | '√' | '∞' | '∂' | '∇' | '¬'
+        | '≤' | '≥' | '≠' | '≈' | '≃' | '≍' | '≐' | '≅' | '≡' | '≢' | '∼' | '≪' | '≫'
+        | '∈' | '∉' | '∋' | '⊂' | '⊃' | '⊆' | '⊇'
+        | '→' | '←' | '↔' | '↦' | '⇀' | '↼' | '↑' | '↓' | '⇑' | '⇓' | '↕' | '⇕'
+        | '⇒' | '⇐' | '⇔' | '⊢' | '⊣' | '⊨'
+        | '∀' | '∃' | '⟨' | '⟩' | '⟪' | '⟫' | '〈' | '〉'
+        | '⌊' | '⌋' | '⌈' | '⌉' | '∥' | '∦' | '∠' | '∵' | '∴'
+        | '′' | '″' | '‵'
         | 'α'..='ω' | 'Α'..='Ω'
     )
 }
@@ -1074,7 +1085,9 @@ mod tests {
         for name in [
             "CMMI12", "CMSY10", "CMEX10", "MTMI", "MTSY", "Symbol", "StandardSymbolsPS",
             "STIXGeneral", "XITSMath", "Cambria Math", "ABCDEF+CMMI12", "MSAM10",
-            "NewCMMath-Book", "LatinModernMath",
+            "NewCMMath-Book", "LatinModernMath", "STIXTwoMath-Regular", "TXMI10",
+            "PXSY10", "WASY10", "LibertinusMath-Regular", "DejaVuMath-TeXGyre",
+            "EuclidMathTwo",
         ] {
             assert!(is_math_font_name(name), "{name}");
         }
@@ -1109,6 +1122,10 @@ mod tests {
         // Real formulas (operators/symbols, no ordinary words) pass.
         for text in ["x2 +y", "E=mc2", "a ≤ b", "α + β", "∑ x", "f(x)=0"] {
             assert!(text_looks_like_formula(text), "{text:?}");
+        }
+        // Newly covered symbols count as strong math signals.
+        for c in ['′', '″', '⊢', '⊣', '⊨', '↦', '≡', '∥', '⌊', '¬', '·'] {
+            assert!(is_strong_math_char(c), "{c}");
         }
     }
 

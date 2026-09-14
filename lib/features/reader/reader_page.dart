@@ -423,10 +423,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// double-page mode). The translation column follows the original's current
   /// page; the original keeps every interaction (zoom, selection, marks).
   Widget _buildSplitContent(BuildContext context, ViewerState state) {
+    // Double-page spread: both halves share the reading background, the
+    // pages are separated by the same gutter the double views use.
     return Row(
       children: [
         Expanded(child: _buildContent(context, state)),
-        const VerticalDivider(width: 1, thickness: 1),
+        const SizedBox(width: 12),
         const Expanded(child: TranslatedColumn()),
       ],
     );

@@ -312,10 +312,17 @@ async fn translate_page_inner(
     let source_hash = extract::stamp_source_hash(&crate::translate::source_hash(&texts));
 
     // --- segments: text paragraphs only (formulas stay as images) --------
+    // Paragraphs carrying inline formula regions keep their ORIGINAL pixels
+    // in the overlay (the drawn replacement would erase the formula
+    // graphics), so they are not machine-translated either.
     let segment_idx: Vec<usize> = paragraphs
         .iter()
         .enumerate()
-        .filter(|(_, p)| p.kind == ParagraphKind::Text && !p.text.trim().is_empty())
+        .filter(|(_, p)| {
+            p.kind == ParagraphKind::Text
+                && !p.text.trim().is_empty()
+                && p.formula_regions.is_empty()
+        })
         .map(|(i, _)| i)
         .collect();
     let segments: Vec<Segment> = segment_idx

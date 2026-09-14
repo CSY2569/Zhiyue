@@ -98,7 +98,10 @@ pub fn source_hash(texts: &[&str]) -> String {    let mut hasher = Sha256::new()
 /// positioning input); older rows are re-translated to gain them.
 /// v4: broader display-formula classification (math-letter ratio + centered
 /// short blocks) so equations keep their original pixels in the overlay.
-pub const EXTRACTOR_VERSION: u32 = 4;
+/// v5: broader math-font table (any *MATH* family, TX/PX/WASY faces) and
+/// symbol table (primes, turnstiles, maps-to, floor/ceil, ...) so more
+/// display math is kept as original pixels.
+pub const EXTRACTOR_VERSION: u32 = 5;
 
 /// Stamps a source hash with the current extractor version.
 pub fn stamp_source_hash(hash: &str) -> String {
