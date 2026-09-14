@@ -45,6 +45,7 @@ fn translated(page: i64, effective_lang: &str, text: &str) -> PageTranslation {
             status: ParagraphStatus::Done,
             confidence: 1.0,
             formula_regions: Vec::new(),
+            rects: Vec::new(),
         }],
         coverage: 1.0,
     }

@@ -307,6 +307,12 @@ pub struct TranslatedParagraph {
     pub status: ParagraphStatus,
     pub confidence: f64,
     pub formula_regions: Vec<FormulaRegion>,
+    /// Bounding rects of the paragraph's LINES (normalized, top-left origin),
+    /// copied from the extracted [Paragraph]. The overlay writer draws the
+    /// translation at this footprint; empty for rows cached before v3 (such
+    /// rows are rejected as stale before reaching the writer).
+    #[serde(default)]
+    pub rects: Vec<NormRect>,
 }
 
 /// The cached translation of one page (table: `page_translation_cache`).
@@ -467,6 +473,7 @@ mod tests {
                     source_text: "x^2".into(),
                     placeholder: "⟨F1-MATH_0⟩".into(),
                 }],
+                rects: vec![NormRect { x: 0.1, y: 0.2, w: 0.3, h: 0.05 }],
             }],
             coverage: 1.0,
         };
@@ -476,6 +483,14 @@ mod tests {
         assert_eq!(back.paragraphs.len(), 1);
         assert_eq!(back.paragraphs[0].translated, "你好 ⟨F1-MATH_0⟩ 世界");
         assert_eq!(back.paragraphs[0].formula_regions.len(), 1);
+        assert_eq!(back.paragraphs[0].rects.len(), 1);
+
+        // Legacy JSON without rects (pre-v3 rows) reads with empty rects.
+        let legacy: TranslatedParagraph = serde_json::from_str(
+            r#"{"source":"a","translated":"b","kind":"Text","status":"Done","confidence":1.0,"formula_regions":[]}"#,
+        )
+        .unwrap();
+        assert!(legacy.rects.is_empty());
         assert_eq!(
             back.paragraphs[0].formula_regions[0].image_path.as_deref(),
             Some("translated/1/formulas/p12_f0.png")

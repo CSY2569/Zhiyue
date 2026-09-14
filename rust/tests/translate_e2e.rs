@@ -189,6 +189,7 @@ async fn translate_page_end_to_end_with_mock_llm() {
                 status: rbwa_core::models::translate::ParagraphStatus::Done,
                 confidence: 1.0,
                 formula_regions: Vec::new(),
+                rects: Vec::new(),
             }],
             coverage: 1.0,
         };

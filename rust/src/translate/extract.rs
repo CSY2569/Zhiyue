@@ -23,8 +23,6 @@
 //!
 //! Pages are 1-indexed everywhere in this module (plan §2).
 
-use std::path::Path;
-
 use pdfium_render::prelude::*;
 
 use crate::error::AppResult;
@@ -36,10 +34,6 @@ use crate::ocr::OcrLine;
 const MARGIN_FRACTION: f64 = 0.08;
 /// A margin line longer than this is treated as content, not noise.
 const MAX_NOISE_CHARS: usize = 80;
-/// Formula render scale (page points -> pixels).
-const FORMULA_RENDER_SCALE: f64 = 3.0;
-/// Cap on rendered pixels per page during formula capture.
-const FORMULA_MAX_PIXELS: f64 = 24_000_000.0;
 
 /// Version of the paragraph-extraction algorithm. Bumped whenever extraction,
 /// noise removal or formula detection changes in a way that makes previously
@@ -129,17 +123,13 @@ pub fn margin_line_texts(doc: &PdfDocument<'_>, page: i64) -> AppResult<Vec<Stri
 ///
 /// `neighbors` holds the margin line texts of the adjacent pages (for
 /// header/footer repetition detection); empty for standalone use.
-/// `formulas_dir` (`translated/{book_id}/formulas`) enables formula image
-/// capture; with `None` regions still come back with `image_path: None`.
 pub fn extract_page(
     doc: &PdfDocument<'_>,
     page: i64,
     neighbors: &[String],
-    formulas_dir: Option<&Path>,
 ) -> AppResult<ExtractOutcome> {
-    let pg = doc.pages().get((page - 1) as PdfPageIndex)?;
-    let page_w = pg.width().value.max(1.0) as f64;
-    let page_h = pg.height().value.max(1.0) as f64;
+    // Kept for the page-range validation (out-of-range pages error here).
+    let _pg = doc.pages().get((page - 1) as PdfPageIndex)?;
     let chars = collect_page_chars(doc, page)?;
     if chars.iter().all(|c| c.ch.trim().is_empty()) {
         return Ok(ExtractOutcome {
@@ -164,56 +154,12 @@ pub fn extract_page(
         .collect();
 
     // --- formula detection (plan §3.4) ------------------------------------
+    // Whole-paragraph formulas are NOT machine-translated; the overlay writer
+    // keeps the original page pixels at their position, so no region image is
+    // captured anymore.
     let signals = math_signals(&chars);
     let regions = detect_formula_regions(&chars, &signals);
-    let mut paragraphs = attach_formulas(paragraphs, &chars, &signals, &regions);
-
-    // --- formula image capture --------------------------------------------
-    if let Some(dir) = formulas_dir {
-        if !paragraphs.iter().any(|p| p.kind == ParagraphKind::Formula) {
-            return Ok(ExtractOutcome {
-                paragraphs,
-                has_text_layer: true,
-            });
-        }
-        std::fs::create_dir_all(dir)?;
-        let page_px = page_w * page_h * FORMULA_RENDER_SCALE * FORMULA_RENDER_SCALE;
-        let scale = if page_px > FORMULA_MAX_PIXELS {
-            (FORMULA_MAX_PIXELS / (page_w * page_h)).sqrt()
-        } else {
-            FORMULA_RENDER_SCALE
-        };
-        let config = PdfRenderConfig::new()
-            .set_target_width((page_w * scale).max(1.0) as i32)
-            .set_target_height((page_h * scale).max(1.0) as i32);
-        let bitmap = pg.render_with_config(&config)?;
-        let bmp_w = bitmap.width();
-        let bmp_h = bitmap.height();
-        let rgba = bitmap.as_rgba_bytes();
-        let mut idx = 0usize;
-        for p in &mut paragraphs {
-            if p.kind != ParagraphKind::Formula {
-                continue;
-            }
-            // Whole-paragraph formulas: capture the paragraph rect itself.
-            let rect = paragraph_rect(p).unwrap_or(NormRect {
-                x: 0.0,
-                y: 0.0,
-                w: 1.0,
-                h: 1.0,
-            });
-            let name = format!("p{}_pf{}.png", page, idx);
-            if let Some(rel) = capture_region(&rgba, bmp_w, bmp_h, &rect, dir, &name) {
-                p.formula_regions.push(FormulaRegion {
-                    rect,
-                    image_path: Some(rel),
-                    source_text: p.text.clone(),
-                    placeholder: String::new(),
-                });
-            }
-            idx += 1;
-        }
-    }
+    let paragraphs = attach_formulas(paragraphs, &chars, &signals, &regions);
 
     Ok(ExtractOutcome {
         paragraphs,
@@ -820,48 +766,6 @@ fn rects_overlap(a: &NormRect, b: &NormRect) -> bool {
 }
 
 // =============================================================================
-// Formula image capture
-// =============================================================================
-
-/// Crops `rect` (normalized, top-left origin) from a rendered page and
-/// saves it as `dir/name`. Returns the file name on success.
-fn capture_region(
-    rgba: &[u8],
-    bmp_w: i32,
-    bmp_h: i32,
-    rect: &NormRect,
-    dir: &Path,
-    name: &str,
-) -> Option<String> {
-    // Pad by 10% of the region height so ascenders/descenders survive.
-    let pad = (rect.h * 0.1).min(0.02);
-    let x0 = ((rect.x - pad).max(0.0) * bmp_w as f64).floor().max(0.0) as i32;
-    let y0 = ((rect.y - pad).max(0.0) * bmp_h as f64).floor().max(0.0) as i32;
-    let x1 = ((rect.x + rect.w + pad).min(1.0) * bmp_w as f64).ceil().min(bmp_w as f64) as i32;
-    let y1 = ((rect.y + rect.h + pad).min(1.0) * bmp_h as f64).ceil().min(bmp_h as f64) as i32;
-    let w = (x1 - x0).max(1);
-    let h = (y1 - y0).max(1);
-    if w <= 0 || h <= 0 || w * h > 40_000_000 {
-        return None;
-    }
-    let mut out = vec![0u8; (w * h * 4) as usize];
-    for row in 0..h {
-        let src_y = (y0 + row).min(bmp_h - 1) as usize;
-        let src = (src_y * bmp_w as usize + x0 as usize) * 4;
-        let dst = (row as usize * w as usize) * 4;
-        let len = w as usize * 4;
-        if src + len <= rgba.len() && dst + len <= out.len() {
-            out[dst..dst + len].copy_from_slice(&rgba[src..src + len]);
-        }
-    }
-    let img = image::RgbaImage::from_raw(w as u32, h as u32, out)?;
-    let full = dir.join(name);
-    img.save(&full)
-        .ok()
-        .map(|_| full.to_string_lossy().to_string())
-}
-
-// =============================================================================
 // Text utilities
 // =============================================================================
 
@@ -905,7 +809,7 @@ pub fn cjk_ratio(s: &str) -> f64 {
     }
 }
 
-fn median(values: &mut [f64]) -> Option<f64> {
+pub(crate) fn median(values: &mut [f64]) -> Option<f64> {
     if values.is_empty() {
         return None;
     }
@@ -1199,7 +1103,7 @@ mod tests {
         // (the real pipeline supplies neighbor margin texts, plan §3.3).
         let neighbors = vec!["Chapter 3 Introduction".to_string()];
         let outcome = crate::pdf::with_document_file(tmp.to_str().unwrap(), |doc2| {
-            extract_page(doc2, 1, &neighbors, None)
+            extract_page(doc2, 1, &neighbors)
         })
         .unwrap();
         assert!(outcome.has_text_layer);

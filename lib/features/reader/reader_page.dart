@@ -17,7 +17,8 @@ import 'package:rbwa/features/annotation/widgets/note_composer.dart';
 import 'package:rbwa/features/annotation/widgets/note_popup.dart';
 import 'package:rbwa/features/bilingual/providers/page_translation_provider.dart';
 import 'package:rbwa/features/bilingual/providers/translation_queue_provider.dart';
-import 'package:rbwa/features/bilingual/widgets/translated_pane.dart';
+import 'package:rbwa/features/bilingual/widgets/translated_pane.dart'
+    show TranslatedColumn;
 import 'package:rbwa/features/reader/providers/panel_layout.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
 import 'package:rbwa/features/reader/widgets/pdf_page_scroll.dart';
@@ -53,12 +54,13 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   late final ProviderSubscription _viewerSub;
   late final ProviderSubscription _aiSub;
   late final ProviderSubscription _aiPanelSub;
-  late final ProviderSubscription _translatePanelSub;
   late final ProviderSubscription _queueSub;
 
-  /// Right-side panels in the order they were opened; when the panels squeeze
-  /// the reading area below its minimum, the EARLIER-opened one is clamped
-  /// first (plan §1 v4.2 后开启者优先 -- the later keeps its width).
+  /// The AI panel was opened before or after the left sidebar; when panels
+  /// squeeze the reading area below its minimum, the EARLIER-opened one is
+  /// clamped first (plan §1 v4.2 后开启者优先 -- the later keeps its width).
+  /// The 对照 view is NOT here: it lives inside the content area as a 50/50
+  /// split and needs no clamping.
   final List<String> _rightOrder = [];
   bool _sidebarCollapseNotified = false;
   int? _lastQueuedBookId;
@@ -98,19 +100,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       (prev, next) => _setVisible(_aiCardController, next),
     );
 
-    // Track the open order of the two right-side panels (plan §1 v4.2).
+    // Track the open order of the AI panel vs the left sidebar (plan §1 v4.2).
     _aiPanelSub = ref.listenManual(
       aiProvider.select((s) => s.aiPanelOpen),
       (prev, next) {
         if (next && !(prev ?? false)) _rightOrder.add('ai');
         if (!next) _rightOrder.remove('ai');
-      },
-    );
-    _translatePanelSub = ref.listenManual(
-      translationPaneProvider.select((s) => s.open),
-      (prev, next) {
-        if (next && !(prev ?? false)) _rightOrder.add('translate');
-        if (!next) _rightOrder.remove('translate');
       },
     );
 
@@ -159,18 +154,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (!show && c.isShowing) c.hide();
   }
 
-  /// Clamps the open right-side panels so the reading area keeps at least
-  /// [PanelLayout.minContentWidth] logical pixels (plan §1 v4.2). Panels are
-  /// reduced in REVERSE open order (the earlier-opened one gives way first);
-  /// if even their minimums do not fit, the left sidebar is collapsed with a
-  /// one-time hint.
+  /// Clamps the AI panel so the reading area keeps at least
+  /// [PanelLayout.minContentWidth] logical pixels (plan §1 v4.2); if even its
+  /// minimum does not fit, the left sidebar is collapsed with a one-time hint.
+  /// The 对照 view needs no clamping: it is a 50/50 split INSIDE the content
+  /// area, so the original always keeps half of whatever is available.
   ///
   /// Runs in a post-frame callback: the widths live in [PanelLayoutNotifier],
   /// and mutating a provider during build is not allowed.
   void _enforceContentMinimum(
     double available, {
     required bool aiOpen,
-    required bool translateOpen,
     required bool sidebarOpen,
     required double sidebarWidth,
     required BuildContext context,
@@ -178,8 +172,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (available <= 0) return;
     final layout = ref.read(panelLayoutProvider);
     final aiW = aiOpen ? layout.aiPanelWidth : 0.0;
-    final trW = translateOpen ? layout.translatedPaneWidth : 0.0;
-    final content = available - sidebarWidth - aiW - trW;
+    final content = available - sidebarWidth - aiW;
     if (content >= PanelLayout.minContentWidth) return;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -190,13 +183,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       // The later-opened panel keeps its width; reduce earlier ones first.
       for (final which in _rightOrder.reversed) {
         if (deficit <= 0) break;
-        final cur = ref.read(panelLayoutProvider);
-        if (which == 'translate' && translateOpen) {
-          final next = (cur.translatedPaneWidth - deficit)
-              .clamp(PanelLayout.minTranslatedPaneWidth, cur.translatedPaneWidth);
-          deficit -= cur.translatedPaneWidth - next;
-          notifier.clampTranslatedPane(next);
-        } else if (which == 'ai' && aiOpen) {
+        if (which == 'ai' && aiOpen) {
+          final cur = ref.read(panelLayoutProvider);
           final next = (cur.aiPanelWidth - deficit)
               .clamp(PanelLayout.minAiPanelWidth, cur.aiPanelWidth);
           deficit -= cur.aiPanelWidth - next;
@@ -227,7 +215,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _viewerSub.close();
     _aiSub.close();
     _aiPanelSub.close();
-    _translatePanelSub.close();
     _queueSub.close();
     // NOTE: cannot call ref.read() here -- Riverpod forbids using `ref` after
     // the widget is disposed. The ViewerNotifier's own dispose() cancels the
@@ -321,7 +308,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                       _enforceContentMinimum(
                         constraints.maxWidth,
                         aiOpen: aiOpen,
-                        translateOpen: translateOpen,
                         sidebarOpen: state.openSidebar != null,
                         sidebarWidth:
                             state.openSidebar == null
@@ -346,36 +332,27 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                                   .commit(),
                             ),
                           ],
-                          Expanded(child: _buildContent(context, state)),
-                          if (translateOpen || aiOpen) ...[
-                            // Right-side panels: the translation pane first,
-                            // then the AI panel. Handles are right-aligned, so
-                            // a drag left (negative dx) widens them.
-                            if (translateOpen) ...[
-                              PanelResizeHandle(
-                                onResize: (dx) => ref
-                                    .read(panelLayoutProvider.notifier)
-                                    .resizeTranslatedPane(-dx),
-                                onResizeEnd: () => ref
-                                    .read(panelLayoutProvider.notifier)
-                                    .commit(),
-                              ),
-                              const TranslatedPane(),
-                            ],
-                            if (aiOpen) ...[
-                              PanelResizeHandle(
-                                onResize: (dx) => ref
-                                    .read(panelLayoutProvider.notifier)
-                                    .resizeAiPanel(-dx),
-                                onResizeEnd: () => ref
-                                    .read(panelLayoutProvider.notifier)
-                                    .commit(),
-                              ),
-                              AiPanelSide(
-                                bookId: book?.id,
-                                bookTitle: book?.title,
-                              ),
-                            ],
+                          Expanded(
+                            child: translateOpen
+                                ? _buildSplitContent(context, state)
+                                : _buildContent(context, state),
+                          ),
+                          if (aiOpen) ...[
+                            // The AI panel stays a resizable side panel;
+                            // its handle is right-aligned, so a drag left
+                            // (negative dx) widens it.
+                            PanelResizeHandle(
+                              onResize: (dx) => ref
+                                  .read(panelLayoutProvider.notifier)
+                                  .resizeAiPanel(-dx),
+                              onResizeEnd: () => ref
+                                  .read(panelLayoutProvider.notifier)
+                                  .commit(),
+                            ),
+                            AiPanelSide(
+                              bookId: book?.id,
+                              bookTitle: book?.title,
+                            ),
                           ],
                         ],
                       );
@@ -439,6 +416,20 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           onJump: (page) => _jumpToPage(page + 1),
         );
     }
+  }
+
+  /// 对照 view (plan §1 v4.2): the reading area splits 50/50 -- the original
+  /// page on the left, its translation on the right, no drag handle (like the
+  /// double-page mode). The translation column follows the original's current
+  /// page; the original keeps every interaction (zoom, selection, marks).
+  Widget _buildSplitContent(BuildContext context, ViewerState state) {
+    return Row(
+      children: [
+        Expanded(child: _buildContent(context, state)),
+        const VerticalDivider(width: 1, thickness: 1),
+        const Expanded(child: TranslatedColumn()),
+      ],
+    );
   }
 
   Widget _buildContent(BuildContext context, ViewerState state) {

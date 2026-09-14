@@ -111,6 +111,7 @@ class FakeTranslationRepo extends TranslationRepository {
             status: ParagraphStatus.done,
             confidence: 1.0,
             formulaRegions: const [],
+            rects: const [],
           ),
         ],
         coverage: 1.0,

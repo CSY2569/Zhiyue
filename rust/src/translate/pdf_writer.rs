@@ -51,6 +51,16 @@ const MARGIN: f32 = 48.0;
 const LINE_SPACING: f32 = 1.45;
 /// Paragraph spacing in points.
 const PARA_SPACING: f32 = 6.0;
+/// Cap on background-render pixels (the overlay's page raster).
+const BG_MAX_PIXELS: f64 = 24_000_000.0;
+/// JPEG quality of the overlay page background (photos/figures tolerate 88;
+/// keeps whole-book exports at ~100-250 KB per page instead of ~1 MB).
+const JPEG_QUALITY: u8 = 88;
+/// Smallest font the shrink-to-fit loop may pick for an overlay paragraph.
+const MIN_OVERLAY_SIZE: f32 = 5.5;
+/// Background render scale for whole-book exports (in-app passes the live
+/// view scale through `render_translated_page`).
+const EXPORT_BG_SCALE: f32 = 2.0;
 
 /// Builds the translated PDF for [book_id]. Streams page-granular progress.
 /// Returns the absolute path of the written file.
@@ -109,7 +119,15 @@ pub fn build_translated_pdf(
     let mut kids: Vec<Object> = Vec::with_capacity(plans.len());
 
     for plan in &plans {
-        let page_id = write_page(&mut doc, pages_id, font_id, plan, target_lang, &metrics)?;
+        // Overlay background for translated pages (lazily, one page at a
+        // time). Failure degrades that page to the compact reflow layout.
+        let bg = match &plan.cached {
+            Some(t) => render_page_background(&book, plan.page, t, EXPORT_BG_SCALE)
+                .ok()
+                .flatten(),
+            None => None,
+        };
+        let page_id = write_page(&mut doc, pages_id, font_id, plan, target_lang, &metrics, bg.as_ref())?;
         kids.push(Object::Reference(page_id));
         on_event(TranslationProgressEvent {
             page: plan.page,
@@ -172,14 +190,17 @@ fn page_used_chars(cached: Option<&PageTranslation>, target_lang: &str) -> Vec<c
 /// Builds a ONE-PAGE PDF (in memory) holding only [page]'s translated content.
 ///
 /// This is the pane's dedicated PAGE-LEVEL channel: the reader renders this
-/// beside the original document, so the翻译 looks like the original page
-/// (same size, selectable text, formula images) rather than a text list.
-/// It is also the per-page building block of the full export. Returns `None`
-/// when the page has no current translation (the caller shows a placeholder).
+/// beside the original document -- the translation is laid out at the original
+/// paragraphs' positions over the whitened original-page raster, so it looks
+/// like the original page (same size, same structure, selectable text).
+/// [dpi_scale] drives the background raster sharpness. Returns `None`-safe:
+/// untranslated pages produce a compact placeholder page (the caller usually
+/// checks `page_has_translation` first and shows its own placeholder).
 pub fn build_page_pdf_bytes(
     book_id: i64,
     page: i64,
     target_lang: &str,
+    dpi_scale: f32,
 ) -> AppResult<Vec<u8>> {
     let book = load_book(book_id)?;
     let cached = load_cached_translation(book_id, page);
@@ -201,7 +222,13 @@ pub fn build_page_pdf_bytes(
         ph,
         cached,
     };
-    let page_id = write_page(&mut doc, pages_id, font_id, &plan, target_lang, &metrics)?;
+    let bg = match &plan.cached {
+        Some(t) => render_page_background(&book, page, t, dpi_scale)
+            .ok()
+            .flatten(),
+        None => None,
+    };
+    let page_id = write_page(&mut doc, pages_id, font_id, &plan, target_lang, &metrics, bg.as_ref())?;
     doc.objects.insert(
         pages_id,
         Object::Dictionary(dictionary! {
@@ -218,7 +245,8 @@ pub fn build_page_pdf_bytes(
 }
 
 /// Builds the one-page PDF and rasterizes it to RGBA through pdfium (loaded
-/// from memory). [dpi_scale] multiplies the point->pixel factor. Used by the
+/// from memory). [dpi_scale] multiplies the point->pixel factor (used both
+/// for the composed-page raster and the background sharpness). Used by the
 /// bilingual pane's page-level render API.
 pub fn render_translated_page(
     book_id: i64,
@@ -226,7 +254,7 @@ pub fn render_translated_page(
     target_lang: &str,
     dpi_scale: f32,
 ) -> AppResult<crate::pdf::types::PageBitmap> {
-    let bytes = build_page_pdf_bytes(book_id, page, target_lang)?;
+    let bytes = build_page_pdf_bytes(book_id, page, target_lang, dpi_scale)?;
     // Rasterize under the process-wide pdfium lock (pdfium is not thread-safe).
     crate::pdf::with_pdfium_lock(move |pdfium| {
         let doc = pdfium
@@ -318,6 +346,139 @@ fn page_size(book: &BookInfo, page: i64) -> AppResult<(f32, f32)> {
         }
     }
     Ok((595.0, 842.0)) // A4 fallback
+}
+
+// =============================================================================
+// Overlay background: original page raster with text areas whitened
+// =============================================================================
+
+/// JPEG-encoded whitened page raster for the overlay layout.
+struct Background {
+    jpeg: Vec<u8>,
+    px_w: i32,
+    px_h: i32,
+}
+
+/// Renders the ORIGINAL page and blanks every text paragraph's line rects, so
+/// the overlay writer can draw translations at the same spots while figures,
+/// formulas, tables, margins and the column structure stay visible.
+/// [scale] multiplies page points -> pixels (capped by [BG_MAX_PIXELS]).
+/// Returns `None` for unsupported book kinds.
+fn render_page_background(
+    book: &BookInfo,
+    page: i64,
+    t: &PageTranslation,
+    scale: f32,
+) -> AppResult<Option<Background>> {
+    let mut rgba_img = match book.file_type.as_str() {
+        "pdf" => crate::pdf::with_document_file(&book.stored_path, |doc| {
+            use pdfium_render::prelude::*;
+            let pg = doc.pages().get((page - 1) as PdfPageIndex)?;
+            let pw = pg.width().value.max(1.0) as f64;
+            let phh = pg.height().value.max(1.0) as f64;
+            let mut s = scale.max(0.1) as f64;
+            if pw * phh * s * s > BG_MAX_PIXELS {
+                s = (BG_MAX_PIXELS / (pw * phh)).sqrt();
+            }
+            let config = PdfRenderConfig::new()
+                .set_target_width(((pw * s) as i32).max(1))
+                .set_target_height(((phh * s) as i32).max(1));
+            let bitmap = pg.render_with_config(&config)?;
+            image::RgbaImage::from_raw(
+                bitmap.width() as u32,
+                bitmap.height() as u32,
+                bitmap.as_rgba_bytes().to_vec(),
+            )
+            .ok_or_else(|| AppError::Pdf("页面光栅尺寸不匹配".into()))
+        })?,
+        "image" => image::open(&book.stored_path)
+            .map_err(|e| AppError::Internal(format!("decode image: {e}")))?
+            .to_rgba8(),
+        _ => return Ok(None),
+    };
+    whiten_paragraphs(&mut rgba_img, t);
+    let (px_w, px_h) = (rgba_img.width() as i32, rgba_img.height() as i32);
+    let rgb = image::DynamicImage::ImageRgba8(rgba_img).to_rgb8();
+    let mut buf = std::io::Cursor::new(Vec::new());
+    rgb.write_with_encoder(image::codecs::jpeg::JpegEncoder::new_with_quality(
+        &mut buf, JPEG_QUALITY,
+    ))
+    .map_err(|e| AppError::Pdf(format!("背景 JPEG 编码失败: {e}")))?;
+    Ok(Some(Background {
+        jpeg: buf.into_inner(),
+        px_w,
+        px_h,
+    }))
+}
+
+/// Fills each text paragraph's line rects (slightly padded) with white.
+/// Formula paragraphs are skipped -- their original pixels stay visible.
+fn whiten_paragraphs(img: &mut image::RgbaImage, t: &PageTranslation) {
+    let (w, h) = (img.width() as f64, img.height() as f64);
+    // Padding in normalized page units: a bit of vertical slack covers
+    // ascenders/descenders beyond the tight line box.
+    let pad_x = 0.0015;
+    let pad_y = 0.0025;
+    for para in &t.paragraphs {
+        if para.kind != ParagraphKind::Text {
+            continue;
+        }
+        for r in &para.rects {
+            let x0 = ((r.x - pad_x).max(0.0) * w).floor() as i32;
+            let y0 = ((r.y - pad_y).max(0.0) * h).floor() as i32;
+            let x1 = ((r.x + r.w + pad_x).min(1.0) * w).ceil() as i32;
+            let y1 = ((r.y + r.h + pad_y).min(1.0) * h).ceil() as i32;
+            for yy in y0.max(0)..y1.min(img.height() as i32) {
+                for xx in x0.max(0)..x1.min(img.width() as i32) {
+                    img.put_pixel(xx as u32, yy as u32, image::Rgba([255, 255, 255, 255]));
+                }
+            }
+        }
+    }
+}
+
+// =============================================================================
+// Overlay text fitting
+// =============================================================================
+
+/// Union of a paragraph's line rects (its full footprint).
+fn union_rect(rects: &[crate::models::annotation::NormRect]) -> Option<crate::models::annotation::NormRect> {
+    use crate::models::annotation::NormRect;
+    let mut it = rects.iter().filter(|r| r.w > 0.0 && r.h > 0.0);
+    let first = *it.next()?;
+    let (mut x0, mut y0, mut x1, mut y1) =
+        (first.x, first.y, first.x + first.w, first.y + first.h);
+    for r in it {
+        x0 = x0.min(r.x);
+        y0 = y0.min(r.y);
+        x1 = x1.max(r.x + r.w);
+        y1 = y1.max(r.y + r.h);
+    }
+    Some(NormRect {
+        x: x0,
+        y: y0,
+        w: (x1 - x0).max(0.0),
+        h: (y1 - y0).max(0.0),
+    })
+}
+
+/// Shrink-to-fit: wrap at [col_w] starting from the size hint; if the wrapped
+/// block is taller than [max_h], shrink by 10% until it fits or the floor is
+/// reached (the floor may overflow slightly -- clipped when drawing).
+fn fit_paragraph(
+    text: &str,
+    col_w: f32,
+    max_h: f32,
+    m: &FontMetrics,
+    hint: f32,
+) -> (f32, Vec<String>) {
+    let mut size = hint.clamp(MIN_OVERLAY_SIZE, 28.0);
+    let mut lines = wrap_text(text, col_w, size, m);
+    while lines.len() as f32 * size * LINE_SPACING > max_h && size > MIN_OVERLAY_SIZE {
+        size = (size * 0.9).max(MIN_OVERLAY_SIZE);
+        lines = wrap_text(text, col_w, size, m);
+    }
+    (size, lines)
 }
 
 // =============================================================================
@@ -537,7 +698,132 @@ fn utf16be_hex(c: char) -> String {
 // Page writing
 // =============================================================================
 
+/// Writes one page: overlay layout (translation drawn AT the original
+/// paragraphs' positions over the whitened original-page raster) when the
+/// page has a translation with rects + a rendered background; otherwise the
+/// compact reflow layout (placeholder pages, pre-v3 rows, failed raster).
 fn write_page(
+    doc: &mut Document,
+    pages_id: ObjectId,
+    font_id: ObjectId,
+    plan: &PagePlan,
+    target_lang: &str,
+    m: &FontMetrics,
+    bg: Option<&Background>,
+) -> AppResult<ObjectId> {
+    if let (Some(t), Some(bg)) = (&plan.cached, bg) {
+        let rects_ready = t
+            .paragraphs
+            .iter()
+            .filter(|p| p.kind == ParagraphKind::Text)
+            .all(|p| !p.rects.is_empty());
+        if rects_ready {
+            return write_overlay_page(doc, pages_id, font_id, plan, m, t, bg);
+        }
+    }
+    write_flow_page(doc, pages_id, font_id, plan, target_lang, m)
+}
+
+/// Shared page-object assembly: content stream + resources + page dict.
+fn finish_page(
+    doc: &mut Document,
+    pages_id: ObjectId,
+    font_id: ObjectId,
+    content: String,
+    xobjects: Vec<(String, ObjectId)>,
+    pw: f32,
+    ph: f32,
+) -> ObjectId {
+    let content_id = doc.add_object(Stream::new(dictionary! {}, content.into_bytes()));
+    let mut resources = dictionary! {
+        "Font" => dictionary! { "F1" => Object::Reference(font_id) },
+    };
+    if !xobjects.is_empty() {
+        let mut xo = lopdf::Dictionary::new();
+        for (n, id) in &xobjects {
+            xo.set(n.as_bytes().to_vec(), Object::Reference(*id));
+        }
+        resources.set("XObject", Object::Dictionary(xo));
+    }
+    doc.add_object(dictionary! {
+        "Type" => name("Page"),
+        "Parent" => Object::Reference(pages_id),
+        "MediaBox" => Object::Array(vec![
+            Object::Integer(0), Object::Integer(0),
+            Object::Real(pw), Object::Real(ph),
+        ]),
+        "Resources" => Object::Dictionary(resources),
+        "Contents" => Object::Reference(content_id),
+    })
+}
+
+/// OVERLAY layout: the original page raster (with text areas whitened) is the
+/// background, and each paragraph's translation is drawn as real vector text
+/// at the paragraph's original footprint (shrink-to-fit per paragraph).
+/// Figures, formulas, tables, headers/footers and the column structure all
+/// survive untouched -- only the text areas are replaced.
+fn write_overlay_page(
+    doc: &mut Document,
+    pages_id: ObjectId,
+    font_id: ObjectId,
+    plan: &PagePlan,
+    m: &FontMetrics,
+    t: &PageTranslation,
+    bg: &Background,
+) -> AppResult<ObjectId> {
+    let (pw, ph) = (plan.pw, plan.ph);
+    let mut content = String::new();
+    let mut xobjects: Vec<(String, ObjectId)> = Vec::new();
+
+    emit_image_jpeg(
+        &mut content, &mut xobjects, doc,
+        &bg.jpeg, bg.px_w, bg.px_h,
+        0.0, 0.0, pw, ph,
+    );
+
+    for para in &t.paragraphs {
+        if para.kind != ParagraphKind::Text {
+            // Whole-paragraph formulas keep their ORIGINAL pixels in the
+            // background -- nothing to draw.
+            continue;
+        }
+        let text = display_text(para);
+        if text.trim().is_empty() {
+            continue;
+        }
+        let Some(rect) = union_rect(&para.rects) else {
+            continue;
+        };
+        let (pw, ph) = (plan.pw as f64, plan.ph as f64);
+        let col_w = ((rect.w * pw - 2.0).max(20.0)) as f32;
+        let max_h = ((rect.h * ph + ph * 0.03).max(ph * 0.02)) as f32;
+        // Font-size hint: the paragraph's median line height is a good proxy
+        // for its em size (headings stay big, body stays body).
+        let mut heights: Vec<f64> = para.rects.iter().map(|r| r.h).collect();
+        let hint = crate::translate::extract::median(&mut heights).unwrap_or(0.012) * ph * 0.82;
+        let (size, lines) = fit_paragraph(&text, col_w, max_h, m, hint as f32);
+
+        // rects are top-left origin; PDF y is bottom-up.
+        let top = (ph - rect.y * ph) as f32;
+        let bottom = (ph - (rect.y + rect.h) * ph) as f32;
+        let line_h = size * LINE_SPACING;
+        let mut y = top - size * 0.95;
+        for line in lines {
+            if y < bottom - size * 0.25 {
+                break;
+            }
+            emit_line(&mut content, m, (rect.x * pw + 1.0) as f32, y, size, &line);
+            y -= line_h;
+        }
+    }
+
+    Ok(finish_page(doc, pages_id, font_id, content, xobjects, pw, ph))
+}
+
+/// COMPACT reflow layout (fallback + placeholder pages): anchor line, then
+/// every paragraph re-flowed into a single column; formulas embedded as the
+/// captured region images when available.
+fn write_flow_page(
     doc: &mut Document,
     pages_id: ObjectId,
     font_id: ObjectId,
@@ -609,30 +895,41 @@ fn write_page(
         }
     }
 
-    let content_id = doc.add_object(Stream::new(dictionary! {}, content.into_bytes()));
+    Ok(finish_page(doc, pages_id, font_id, content, xobjects, pw, ph))
+}
 
-    let mut resources = dictionary! {
-        "Font" => dictionary! { "F1" => Object::Reference(font_id) },
-    };
-    if !xobjects.is_empty() {
-        let mut xo = lopdf::Dictionary::new();
-        for (n, id) in &xobjects {
-            xo.set(n.as_bytes().to_vec(), Object::Reference(*id));
-        }
-        resources.set("XObject", Object::Dictionary(xo));
-    }
-
-    let page_id = doc.add_object(dictionary! {
-        "Type" => name("Page"),
-        "Parent" => Object::Reference(pages_id),
-        "MediaBox" => Object::Array(vec![
-            Object::Integer(0), Object::Integer(0),
-            Object::Real(pw), Object::Real(ph),
-        ]),
-        "Resources" => Object::Dictionary(resources),
-        "Contents" => Object::Reference(content_id),
-    });
-    Ok(page_id)
+/// Embeds a JPEG as an image XObject (DCTDecode -- no recompression) and
+/// appends the `Do` operator drawing it at (x, y) sized (w_pt, h_pt).
+fn emit_image_jpeg(
+    content: &mut String,
+    xobjects: &mut Vec<(String, ObjectId)>,
+    doc: &mut Document,
+    jpeg: &[u8],
+    px_w: i32,
+    px_h: i32,
+    x: f32,
+    y: f32,
+    w_pt: f32,
+    h_pt: f32,
+) {
+    let stream = Stream::new(
+        dictionary! {
+            "Type" => name("XObject"),
+            "Subtype" => name("Image"),
+            "Width" => Object::Integer(px_w as i64),
+            "Height" => Object::Integer(px_h as i64),
+            "ColorSpace" => name("DeviceRGB"),
+            "BitsPerComponent" => Object::Integer(8),
+            "Filter" => name("DCTDecode"),
+        },
+        jpeg.to_vec(),
+    );
+    let id = doc.add_object(stream);
+    let nm = format!("Bg{}", xobjects.len());
+    content.push_str(&format!(
+        "q {w_pt:.2} 0 0 {h_pt:.2} {x:.2} {y:.2} cm /{nm} Do Q\n"
+    ));
+    xobjects.push((nm, id));
 }
 
 /// Height the formula image will occupy (0 when no image is usable).
@@ -820,6 +1117,7 @@ mod tests {
             status: ParagraphStatus::Done,
             confidence: 1.0,
             formula_regions: Vec::new(),
+            rects: Vec::new(),
         }
     }
 
@@ -931,6 +1229,7 @@ mod tests {
                 status: ParagraphStatus::Done,
                 confidence: 1.0,
                 formula_regions: Vec::new(),
+                rects: Vec::new(),
             }],
             coverage: 1.0,
         };
@@ -959,8 +1258,10 @@ mod tests {
         ];
         let mut kids = Vec::new();
         for plan in &plans {
+            // No background -> the flow layout (anchors + placeholders); these
+            // plans' paragraphs also carry no rects, so overlay never applies.
             kids.push(Object::Reference(
-                write_page(&mut doc, pages_id, font_id, plan, "中文", &m).unwrap(),
+                write_page(&mut doc, pages_id, font_id, plan, "中文", &m, None).unwrap(),
             ));
         }
         doc.objects.insert(
@@ -1003,6 +1304,123 @@ mod tests {
             eprintln!("skipping pdf reopen: libpdfium not on the search path");
         }
         let _ = std::fs::remove_dir_all(&scratch);
+    }
+
+    /// Overlay layout: whitened raster background + the translation drawn as
+    /// vector text at the paragraphs' original footprints (no anchor, no
+    /// reflow). Formula paragraphs must NOT be whitened.
+    #[test]
+    fn overlay_page_keeps_background_and_positions_translation() {
+        // Paragraphs with line rects (as persisted since extractor v3).
+        let mut hello = text_para("Hello world", "你好世界");
+        hello.rects = vec![
+            NormRect { x: 0.1, y: 0.1, w: 0.5, h: 0.02 },
+            NormRect { x: 0.1, y: 0.125, w: 0.45, h: 0.02 },
+        ];
+        let mut formula = text_para("x2 +y", "");
+        formula.kind = ParagraphKind::Formula;
+        formula.rects = vec![NormRect { x: 0.7, y: 0.7, w: 0.2, h: 0.1 }];
+        let t = PageTranslation {
+            page: 1,
+            target_lang: "中文".into(),
+            provider: "reuse_ai".into(),
+            source_hash: "h".into(),
+            paragraphs: vec![hello, formula],
+            coverage: 1.0,
+        };
+
+        // Whitening: text rects go white, the formula rect stays.
+        let mut img = image::RgbaImage::from_pixel(100, 100, image::Rgba([128, 128, 128, 255]));
+        whiten_paragraphs(&mut img, &t);
+        assert_eq!(img.get_pixel(30, 12), &image::Rgba([255, 255, 255, 255]));
+        assert_eq!(img.get_pixel(15, 14), &image::Rgba([255, 255, 255, 255]));
+        assert_eq!(img.get_pixel(80, 75), &image::Rgba([128, 128, 128, 255]));
+
+        // Fabricate a background JPEG (no pdfium needed for assembly).
+        let probe = image::RgbImage::from_pixel(20, 10, image::Rgb([200, 10, 10]));
+        let mut jpeg_buf = std::io::Cursor::new(Vec::new());
+        probe
+            .write_with_encoder(image::codecs::jpeg::JpegEncoder::new_with_quality(
+                &mut jpeg_buf, 88,
+            ))
+            .unwrap();
+        let bg = Background { jpeg: jpeg_buf.into_inner(), px_w: 20, px_h: 10 };
+
+        let m = metrics();
+        let mut doc = Document::with_version("1.7");
+        let pages_id = doc.new_object_id();
+        let catalog_id = doc.add_object(dictionary! {
+            "Type" => name("Catalog"),
+            "Pages" => Object::Reference(pages_id),
+        });
+        doc.trailer.set("Root", Object::Reference(catalog_id));
+        let font_id = add_font(&mut doc, &m).unwrap();
+        let plan = PagePlan { page: 1, pw: 595.0, ph: 842.0, cached: Some(t) };
+        let page_id = write_page(
+            &mut doc, pages_id, font_id, &plan, "中文", &m, Some(&bg),
+        )
+        .unwrap();
+        doc.objects.insert(
+            pages_id,
+            Object::Dictionary(dictionary! {
+                "Type" => name("Pages"),
+                "Kids" => Object::Array(vec![Object::Reference(page_id)]),
+                "Count" => Object::Integer(1),
+            }),
+        );
+        let mut buf = Vec::new();
+        doc.save_to(&mut buf).unwrap();
+
+        // The assembled doc carries exactly one DCTDecode image XObject.
+        let images = doc
+            .objects
+            .values()
+            .filter(|o| {
+                o.as_stream().map(|s| {
+                    s.dict.get(b"Subtype").ok()
+                        .and_then(|v| v.as_name().ok())
+                        == Some(b"Image".as_slice())
+                }).unwrap_or(false)
+            })
+            .count();
+        assert_eq!(images, 1, "overlay page must embed the background image");
+
+        // Reopen (skips without libpdfium): the translation extracts as text
+        // at the page level and the flow-layout anchor is gone.
+        let pdf_path = std::env::temp_dir().join(format!("rbwa_overlay_{}.pdf", std::process::id()));
+        std::fs::write(&pdf_path, &buf).unwrap();
+        let checked = crate::pdf::with_document_file(pdf_path.to_str().unwrap(), |reopened| {
+            assert_eq!(reopened.pages().len(), 1);
+            let text = reopened.pages().get(0)?.text()?.all();
+            assert!(text.contains("你好世界"), "overlay text: {text:?}");
+            assert!(!text.contains("原书 p."), "overlay drops the anchor: {text:?}");
+            Ok(())
+        });
+        if checked.is_err() {
+            eprintln!("skipping pdf reopen: libpdfium not on the search path");
+        }
+        let _ = std::fs::remove_file(&pdf_path);
+    }
+
+    #[test]
+    fn fit_paragraph_shrinks_until_it_fits() {
+        let m = metrics();
+        let text = "量子力学是物理学的分支，研究物质世界微观尺度上的结构与演化规律。".repeat(6);
+        let (hint_size, _) = fit_paragraph(&text, 200.0, 10_000.0, &m, 11.0);
+        // Tall box: the hint size already fits.
+        assert!((hint_size - 11.0).abs() < 1e-4);
+        // Tight box: the size shrinks towards the floor.
+        let (size, lines) = fit_paragraph(&text, 200.0, 40.0, &m, 11.0);
+        assert!(size < 11.0, "must shrink: {size}");
+        assert!(lines.len() as f32 * size * LINE_SPACING <= 40.0 + f32::EPSILON || size == MIN_OVERLAY_SIZE);
+        // Union of line rects spans the whole paragraph footprint.
+        let u = union_rect(&[
+            NormRect { x: 0.2, y: 0.1, w: 0.3, h: 0.02 },
+            NormRect { x: 0.1, y: 0.12, w: 0.4, h: 0.02 },
+        ])
+        .unwrap();
+        assert!((u.x - 0.1).abs() < 1e-9 && (u.y - 0.1).abs() < 1e-9);
+        assert!((u.w - 0.4).abs() < 1e-9 && (u.h - 0.04).abs() < 1e-9);
     }
 }
 

@@ -170,6 +170,26 @@
 
 **验证**：Rust 121 单测 + 2 集成全绿；Flutter **203** 测试全绿（含新增回归：`a finished batch re-arms…`、`a failed page is not counted done…`）；`flutter analyze` / `cargo clippy` 无新增。产物已重建（debug 核心、release bundle、`dist/` AppImage）；`/Data/Appimage/ZhiYue.AppImage` 因应用正在运行未覆盖，关闭应用后可用 `dist/ZhiYue-x86_64.AppImage` 更新。
 
+### 3.9 体验升级：左右对照分栏 + 译文版式保留（2026-09-14）
+
+**背景**：功能可用后用户反馈两点：① 对照阅读不该是右侧独立窗格，应当"像双页显示那样左原文右译文"；② 译文页是单栏重排，丢了原文版式，显得凌乱。
+
+**对照分栏（Flutter）**：
+- `translateOpen` 时阅读区本身 50/50 分栏（左原文 / 右 `TranslatedColumn`，细分割线，无拖拽把手），原右挂载窗格与 `translatedPaneWidth`/resize/clamp/KV 全套删除。
+- 开启对照时若处于双滚/双翻，自动切为单页并记住原模式（`TranslationPaneState.modeBefore`），关闭时恢复——左右始终"原文一页 ↔ 译文一页"。
+- 译文栏复用原页面卡片（`translatedPageImageProvider` 渲染），翻页即跟随；dpiScale 1.0→1.5。
+
+**版式保留（Rust `pdf_writer` overlay）**：
+- 页面合成改为：**原页光栅（JPEG q88，24MP 上限）作整页背景 → 文本段落行矩形（`TranslatedParagraph` 新增持久化 `rects`）涂白 → 译文按段落原位绘制**（宽度=矩形宽，字号按行高中位数估算 6–28pt，超高 ×0.9 收缩至 5.5pt；Identity-H 矢量文本，可选中/可检索）。
+- 图表、公式段、页眉页脚、页码、分栏结构全部由背景原样保留（公式段不涂白）；分栏论文的左右栏自然各归其位。
+- 单栏重排降级为回退路径（占位页 / 旧缓存行 / 背景渲染失败时仍可用）；导出 PDF 与对照视图同版式（未译页保持矢量占位，控制体积）。
+- 兼容性：`EXTRACTOR_VERSION` 2→3（旧行无 rects，自动判过期重译）；公式小图截取管线移除（overlay 直接保留原页像素，`translated/{id}/formulas/` 不再产生）；FRB codegen 更新模型。
+
+**验证**：
+- Rust 123 单测 + 2 集成全绿（新增 overlay/whiten/fit 测试）；`flutter analyze` 0 问题；Flutter 203 测试全绿（新增"翻页跟随"回归）。
+- 真实书籍 5 实测（DB 副本 + mock LLM）：正文页/目录页 overlay 渲染正确——译文按段落原位排版、段落间距与原页一致、图表与页码由背景保留（渲染位图人工核对通过）。
+- 产物：debug 核心、release bundle、`dist/` 与 `/Data/Appimage/ZhiYue.AppImage` 均已重建部署（当时应用未运行）。
+
 ## 4. 后续开发方向
 
 ### 4.1 近期（补齐规格 P2 缺口）

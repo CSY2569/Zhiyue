@@ -3859,6 +3859,7 @@ impl SseDecode for crate::models::translate::TranslatedParagraph {
         let mut var_confidence = <f64>::sse_decode(deserializer);
         let mut var_formulaRegions =
             <Vec<crate::models::translate::FormulaRegion>>::sse_decode(deserializer);
+        let mut var_rects = <Vec<crate::models::annotation::NormRect>>::sse_decode(deserializer);
         return crate::models::translate::TranslatedParagraph {
             source: var_source,
             translated: var_translated,
@@ -3866,6 +3867,7 @@ impl SseDecode for crate::models::translate::TranslatedParagraph {
             status: var_status,
             confidence: var_confidence,
             formula_regions: var_formulaRegions,
+            rects: var_rects,
         };
     }
 }
@@ -5055,6 +5057,7 @@ impl flutter_rust_bridge::IntoDart for crate::models::translate::TranslatedParag
             self.status.into_into_dart().into_dart(),
             self.confidence.into_into_dart().into_dart(),
             self.formula_regions.into_into_dart().into_dart(),
+            self.rects.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -6186,6 +6189,7 @@ impl SseEncode for crate::models::translate::TranslatedParagraph {
             self.formula_regions,
             serializer,
         );
+        <Vec<crate::models::annotation::NormRect>>::sse_encode(self.rects, serializer);
     }
 }
 

@@ -10,27 +10,24 @@ import 'package:rbwa/features/bilingual/providers/page_translation_provider.dart
 import 'package:rbwa/features/bilingual/providers/translated_page_image_provider.dart';
 import 'package:rbwa/features/bilingual/providers/translation_config_provider.dart';
 import 'package:rbwa/features/bilingual/providers/translation_queue_provider.dart';
-import 'package:rbwa/features/reader/providers/panel_layout.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
 import 'package:rbwa/src/rust/models/progress.dart';
 import 'package:rbwa/src/rust/models/translate.dart';
 
-/// The bilingual-reading pane (对照阅读, plan §5).
+/// The bilingual-reading column (对照阅读, plan §5).
 ///
-/// The translation is shown as a real PDF **page** beside the original
-/// document (same page size, selectable text, embedded formula images),
-/// rather than a list of paragraphs: [translatedPageImageProvider] renders the
-/// page's translation through Rust (single-page PDF -> RGBA) and this pane
-/// draws it scaled to the pane width. Double-page modes stack both visible
-/// pages.
-class TranslatedPane extends ConsumerWidget {
-  const TranslatedPane({super.key});
+/// Mounted as the RIGHT HALF of the reading area when 对照 is open: the
+/// translation is shown as a real PDF **page** beside the original document
+/// (same page size, original layout with the text areas replaced, selectable
+/// text), rather than a list of paragraphs. [translatedPageImageProvider]
+/// renders the page's translation through Rust and this column draws it
+/// scaled to the column width. Pages follow the original's current page.
+class TranslatedColumn extends ConsumerWidget {
+  const TranslatedColumn({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final width =
-        ref.watch(panelLayoutProvider.select((p) => p.translatedPaneWidth));
     final viewer = ref.watch(viewerProvider);
     final bookId = viewer.book?.id;
     final targetLang = ref
@@ -42,45 +39,42 @@ class TranslatedPane extends ConsumerWidget {
     final configLoading = ref.watch(translationConfigProvider).isLoading;
     final queue = ref.watch(translationQueueProvider);
 
-    return SizedBox(
-      width: width,
-      child: Material(
-        color: theme.colorScheme.surfaceContainerLow,
-        child: Column(
-          children: [
-            _Header(
-              bookId: bookId,
-              page: viewer.currentPage,
-              targetLang: targetLang,
-              configured: configured,
-            ),
-            if (queue.running && queue.totalPages > 0)
-              _QueueProgressBar(queue: queue),
-            const Divider(height: 1),
-            Expanded(
-              // While the config is still loading, do NOT claim "not
-              // configured" -- that flashed a misleading guide on every open.
-              child: configLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : !configured
-                      ? _NotConfigured(
-                          onGoSettings: () => _openSettings(context))
-                      : bookId == null
-                          ? const EmptyState(
-                              icon: Icons.translate,
-                              title: '未打开书籍',
-                              message: '打开一本书后即可对照阅读',
-                            )
-                          : _PageList(
-                              bookId: bookId,
-                              mode: viewer.mode,
-                              currentPage: viewer.currentPage,
-                              pageCount: viewer.pageCount,
-                              targetLang: targetLang,
-                            ),
-            ),
-          ],
-        ),
+    return Material(
+      color: theme.colorScheme.surfaceContainerLow,
+      child: Column(
+        children: [
+          _Header(
+            bookId: bookId,
+            page: viewer.currentPage,
+            targetLang: targetLang,
+            configured: configured,
+          ),
+          if (queue.running && queue.totalPages > 0)
+            _QueueProgressBar(queue: queue),
+          const Divider(height: 1),
+          Expanded(
+            // While the config is still loading, do NOT claim "not
+            // configured" -- that flashed a misleading guide on every open.
+            child: configLoading
+                ? const Center(child: CircularProgressIndicator())
+                : !configured
+                    ? _NotConfigured(
+                        onGoSettings: () => _openSettings(context))
+                    : bookId == null
+                        ? const EmptyState(
+                            icon: Icons.translate,
+                            title: '未打开书籍',
+                            message: '打开一本书后即可对照阅读',
+                          )
+                        : _PageList(
+                            bookId: bookId,
+                            mode: viewer.mode,
+                            currentPage: viewer.currentPage,
+                            pageCount: viewer.pageCount,
+                            targetLang: targetLang,
+                          ),
+          ),
+        ],
       ),
     );
   }

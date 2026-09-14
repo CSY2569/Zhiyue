@@ -227,6 +227,12 @@ class TranslatedParagraph {
   final double confidence;
   final List<FormulaRegion> formulaRegions;
 
+  /// Bounding rects of the paragraph's LINES (normalized, top-left origin),
+  /// copied from the extracted [Paragraph]. The overlay writer draws the
+  /// translation at this footprint; empty for rows cached before v3 (such
+  /// rows are rejected as stale before reaching the writer).
+  final List<NormRect> rects;
+
   const TranslatedParagraph({
     required this.source,
     required this.translated,
@@ -234,6 +240,7 @@ class TranslatedParagraph {
     required this.status,
     required this.confidence,
     required this.formulaRegions,
+    required this.rects,
   });
 
   @override
@@ -243,7 +250,8 @@ class TranslatedParagraph {
       kind.hashCode ^
       status.hashCode ^
       confidence.hashCode ^
-      formulaRegions.hashCode;
+      formulaRegions.hashCode ^
+      rects.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -255,7 +263,8 @@ class TranslatedParagraph {
           kind == other.kind &&
           status == other.status &&
           confidence == other.confidence &&
-          formulaRegions == other.formulaRegions;
+          formulaRegions == other.formulaRegions &&
+          rects == other.rects;
 }
 
 /// What happens to a running whole-book translation when the user switches

@@ -53,6 +53,9 @@ class TranslatedPageImageNotifier extends AutoDisposeFamilyAsyncNotifier<
         bookId: arg.bookId,
         page: arg.page,
         targetLang: arg.targetLang,
+        // 1.5x keeps the page raster crisp at half-window display sizes
+        // (the overlay background is rendered at the same scale).
+        dpiScale: 1.5,
       );
       if (res.error != null) {
         return TranslatedPageImage(

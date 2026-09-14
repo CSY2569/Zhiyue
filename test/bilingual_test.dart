@@ -8,7 +8,6 @@ import 'package:rbwa/data/repositories/translation_repository.dart';
 import 'package:rbwa/features/bilingual/providers/page_translation_provider.dart';
 import 'package:rbwa/features/bilingual/providers/translated_page_image_provider.dart';
 import 'package:rbwa/features/bilingual/widgets/translated_pane.dart';
-import 'package:rbwa/features/reader/providers/panel_layout.dart';
 import 'package:rbwa/src/rust/models/translate.dart';
 
 import 'helpers/fake_ai_repo.dart';
@@ -16,15 +15,6 @@ import 'helpers/fake_translation_repo.dart';
 import 'helpers/widget_harness.dart';
 
 void main() {
-  group('panel layout — translated pane width', () {
-    test('defaults and clamps use the 280-900 range (plan §1 v4.2)', () {
-      expect(const PanelLayout().translatedPaneWidth, 480);
-      expect(PanelLayout.minTranslatedPaneWidth, 280);
-      expect(PanelLayout.maxTranslatedPaneWidth, 900);
-      expect(PanelLayout.minContentWidth, 360);
-    });
-  });
-
   group('translated page image provider', () {
     testWidgets('renders an image when the page has a translation',
         (tester) async {
@@ -107,7 +97,7 @@ void main() {
     });
   });
 
-  group('pane widget', () {
+  group('对照 column widget', () {
     testWidgets('shows the empty-service guide when unconfigured',
         (tester) async {
       final repo = FakeTranslationRepo()
@@ -128,7 +118,7 @@ void main() {
           translationRepositoryProvider.overrideWithValue(repo),
         ],
         child: const MaterialApp(
-          home: Scaffold(body: SizedBox(width: 400, child: TranslatedPane())),
+          home: Scaffold(body: SizedBox(width: 400, child: TranslatedColumn())),
         ),
       ));
       await tester.pump();
@@ -152,7 +142,7 @@ void main() {
         ],
         child: MaterialApp(
           theme: AppTheme.light(),
-          home: const Scaffold(body: TranslatedPane()),
+          home: const Scaffold(body: TranslatedColumn()),
         ),
       ));
       // runAsync so the page bitmap decodes.
@@ -166,6 +156,50 @@ void main() {
       expect(find.text('译文 p.2'), findsOneWidget);
       expect(find.byType(RawImage), findsWidgets);
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('follows the original page when the reader turns pages',
+        (tester) async {
+      final repo = FakeTranslationRepo();
+      tester.view.physicalSize = const Size(520, 1000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          aiRepositoryProvider.overrideWithValue(FakeAiRepo()),
+          translationRepositoryProvider.overrideWithValue(repo),
+          defaultViewer(book: testBook(pageCount: 3), currentPage: 2),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: const Scaffold(body: TranslatedColumn()),
+        ),
+      ));
+      await tester.runAsync(() async {
+        await tester.pump();
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      });
+      await tester.pumpAndSettle();
+      expect(find.text('译文 p.2'), findsOneWidget);
+
+      // Turn to page 3 by advancing the viewer state (re-pumping a new
+      // ProviderScope would NOT work: the scope's element is reused, so the
+      // old container would survive).
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(TranslatedColumn)),
+        listen: false,
+      );
+      final notifier = container.read(viewerProvider.notifier);
+      notifier.state = notifier.state.copyWith(currentPage: 3);
+      await tester.runAsync(() async {
+        await tester.pump();
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      });
+      await tester.pumpAndSettle();
+      expect(find.text('译文 p.3'), findsOneWidget);
+      expect(find.text('译文 p.2'), findsNothing);
     });
   });
 }

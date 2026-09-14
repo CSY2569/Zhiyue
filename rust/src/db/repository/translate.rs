@@ -244,6 +244,7 @@ mod tests {
                 status: ParagraphStatus::Done,
                 confidence: 1.0,
                 formula_regions: Vec::new(),
+                rects: Vec::new(),
             }],
             coverage: 1.0,
         }

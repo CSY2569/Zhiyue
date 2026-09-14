@@ -73,7 +73,7 @@ pub fn extract_paragraphs(book_id: i64, page: i64) -> AppResult<Vec<Paragraph>> 
     }
     crate::pdf::with_document_file(&book.stored_path, |doc| {
         let neighbors = neighbor_margin_texts(doc, page);
-        let outcome = extract::extract_page(doc, page, &neighbors, None)?;
+        let outcome = extract::extract_page(doc, page, &neighbors)?;
         let mut paragraphs = outcome.paragraphs;
         if !outcome.has_text_layer {
             // Scan pages without OCR stay empty here; the translate pipeline
@@ -228,12 +228,11 @@ async fn translate_page_inner(
     };
 
     // --- extraction (independent handles, serialized under the pdfium lock) --
-    let formulas_dir = crate::translate::translated_dir(book_id).join("formulas");
     // (paragraphs, had_text_layer)
     let (paragraphs, had_text_layer): (Vec<Paragraph>, bool) = match book.file_type.as_str() {
         "pdf" => crate::pdf::with_document_file(&book.stored_path, |doc| {
             let neighbors = neighbor_margin_texts(doc, page);
-            let outcome = extract::extract_page(doc, page, &neighbors, Some(&formulas_dir))?;
+            let outcome = extract::extract_page(doc, page, &neighbors)?;
             if outcome.has_text_layer {
                 Ok((outcome.paragraphs, true))
             } else if tc.auto_ocr {
@@ -378,8 +377,8 @@ async fn translate_page_inner(
     let mut done = 0i64;
     for (i, p) in paragraphs.iter().enumerate() {
         if p.kind == ParagraphKind::Formula {
-            // Whole-paragraph formula: kept as the captured image, never
-            // machine-translated (plan §3.4).
+            // Whole-paragraph formula: the overlay writer keeps the original
+            // pixels, never machine-translates it (plan §3.4).
             translated.push(TranslatedParagraph {
                 source: p.text.clone(),
                 translated: String::new(),
@@ -387,6 +386,7 @@ async fn translate_page_inner(
                 status: ParagraphStatus::Done,
                 confidence: p.confidence,
                 formula_regions: p.formula_regions.clone(),
+                rects: p.rects.clone(),
             });
             continue;
         }
@@ -413,6 +413,7 @@ async fn translate_page_inner(
                 status,
                 confidence: p.confidence,
                 formula_regions: p.formula_regions.clone(),
+                rects: p.rects.clone(),
             });
         } else {
             // Non-text, non-formula leftovers (e.g. empty): kept verbatim.
@@ -423,6 +424,7 @@ async fn translate_page_inner(
                 status: ParagraphStatus::Done,
                 confidence: p.confidence,
                 formula_regions: p.formula_regions.clone(),
+                rects: p.rects.clone(),
             });
         }
     }

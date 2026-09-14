@@ -4,30 +4,32 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:rbwa/data/repositories/translation_repository.dart';
 import 'package:rbwa/features/bilingual/providers/translated_page_image_provider.dart';
+import 'package:rbwa/features/reader/providers/viewer_provider.dart';
+import 'package:rbwa/src/rust/models/progress.dart';
 import 'package:rbwa/src/rust/models/translate.dart';
 
-/// Open/closed state of the bilingual-reading translation pane (对照阅读).
+/// Open/closed state of the bilingual-reading 对照 view.
 ///
-/// Kept separate from the panel layout (which owns the width) so the toolbar
-/// button and the reader Row can watch a tiny slice. Also tracks the order in
-/// which panels were opened: when the left sidebar, translation pane and AI
-/// panel squeeze the reading area, the LATER-opened panel is clamped first
-/// (plan §1 v4.2 后开启者优先).
+/// No longer a side panel: when open, the READING AREA itself splits 50/50
+/// into original (left) + translation (right), like the double-page mode.
+/// [modeBefore] remembers the view mode the reader had before opening --
+/// 对照 pairs one original page with its translation, so opening forces the
+/// single-page view, and closing restores what the user had.
 class TranslationPaneState {
   const TranslationPaneState({
     this.open = false,
-    this.openSeq = 0,
+    this.modeBefore,
   });
 
   final bool open;
 
-  /// Monotonic counter bumped each time the pane opens; higher = opened later.
-  final int openSeq;
+  /// View mode to restore on close (null = the reader was already single-page).
+  final ViewMode? modeBefore;
 
-  TranslationPaneState copyWith({bool? open, int? openSeq}) =>
+  TranslationPaneState copyWith({bool? open, ViewMode? modeBefore}) =>
       TranslationPaneState(
         open: open ?? this.open,
-        openSeq: openSeq ?? this.openSeq,
+        modeBefore: modeBefore ?? this.modeBefore,
       );
 }
 
@@ -36,14 +38,27 @@ class TranslationPaneNotifier extends Notifier<TranslationPaneState> {
   TranslationPaneState build() => const TranslationPaneState();
 
   void toggle() {
-    final next = !state.open;
-    state = state.copyWith(
-      open: next,
-      openSeq: next ? state.openSeq + 1 : state.openSeq,
-    );
+    if (state.open) {
+      close();
+      return;
+    }
+    final viewer = ref.read(viewerProvider);
+    // Remember a non-single mode so close() can restore it.
+    final modeBefore =
+        viewer.mode != ViewMode.single ? viewer.mode : state.modeBefore;
+    if (viewer.mode != ViewMode.single) {
+      ref.read(viewerProvider.notifier).setMode(ViewMode.single);
+    }
+    state = TranslationPaneState(open: true, modeBefore: modeBefore);
   }
 
-  void close() => state = state.copyWith(open: false);
+  void close() {
+    final restore = state.modeBefore;
+    if (restore != null) {
+      ref.read(viewerProvider.notifier).setMode(restore);
+    }
+    state = TranslationPaneState(open: false);
+  }
 }
 
 final translationPaneProvider =

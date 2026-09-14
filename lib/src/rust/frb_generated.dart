@@ -3578,8 +3578,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TranslatedParagraph dco_decode_translated_paragraph(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
     return TranslatedParagraph(
       source: dco_decode_String(arr[0]),
       translated: dco_decode_String(arr[1]),
@@ -3587,6 +3587,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       status: dco_decode_paragraph_status(arr[3]),
       confidence: dco_decode_f_64(arr[4]),
       formulaRegions: dco_decode_list_formula_region(arr[5]),
+      rects: dco_decode_list_norm_rect(arr[6]),
     );
   }
 
@@ -4856,6 +4857,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_status = sse_decode_paragraph_status(deserializer);
     var var_confidence = sse_decode_f_64(deserializer);
     var var_formulaRegions = sse_decode_list_formula_region(deserializer);
+    var var_rects = sse_decode_list_norm_rect(deserializer);
     return TranslatedParagraph(
       source: var_source,
       translated: var_translated,
@@ -4863,6 +4865,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       status: var_status,
       confidence: var_confidence,
       formulaRegions: var_formulaRegions,
+      rects: var_rects,
     );
   }
 
@@ -6004,6 +6007,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_paragraph_status(self.status, serializer);
     sse_encode_f_64(self.confidence, serializer);
     sse_encode_list_formula_region(self.formulaRegions, serializer);
+    sse_encode_list_norm_rect(self.rects, serializer);
   }
 
   @protected
