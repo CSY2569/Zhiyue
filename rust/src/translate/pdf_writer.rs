@@ -281,7 +281,7 @@ fn page_used_chars(cached: Option<&PageTranslation>, target_lang: &str) -> Vec<c
     let mut used: Vec<char> = Vec::new();
     // Anchors / placeholder text + the separators they contain (spaces and
     // the fullwidth colon are easy to forget and draw as tofu when absent).
-    used.extend("原书第 页尚未翻译　译本：p. —".chars());
+    used.extend("原书第 页尚未翻译　译本：p. —…".chars());
     used.push(' ');
     used.extend("0123456789".chars());
     used.extend(target_lang.chars());
@@ -530,11 +530,8 @@ fn whiten_paragraphs(img: &mut image::RgbaImage, t: &PageTranslation) {
     // formula looks broken.
     let pad_y = 0.004;
     for para in &t.paragraphs {
-        // Mirror the draw rule: formulas and symbol-gap paragraphs keep
-        // their original pixels.
-        if para.kind != ParagraphKind::Text
-            || crate::translate::extract::text_has_symbol_gaps(&para.source)
-        {
+        // Mirror the draw rule: formula paragraphs keep their original pixels.
+        if para.kind != ParagraphKind::Text {
             continue;
         }
         for r in &para.rects {
@@ -902,14 +899,11 @@ fn write_overlay_page(
 
     for para in &t.paragraphs {
         // Whole-paragraph formulas keep their ORIGINAL pixels in the
-        // background -- nothing to draw. Inline-formula paragraphs are drawn
-        // with the tokens substituted by their source text (user decision:
-        // they must be translated; the whiten padding covers tall glyphs).
-        // Symbol-gap paragraphs (unrecoverable math glyphs) keep their
-        // original pixels too -- drawing text with holes is worse.
-        if para.kind != ParagraphKind::Text
-            || crate::translate::extract::text_has_symbol_gaps(&para.source)
-        {
+        // background -- nothing to draw. Every Text paragraph is whitened
+        // and re-drawn with its translation, including paragraphs whose
+        // extraction lost inline math glyphs (the LLM translates around
+        // the unrecoverable symbols); only formulas keep original pixels.
+        if para.kind != ParagraphKind::Text {
             continue;
         }
         let text = display_text(para);
@@ -933,11 +927,20 @@ fn write_overlay_page(
         let bottom = (ph - (rect.y + rect.h) * ph) as f32;
         let line_h = size * LINE_SPACING;
         let mut y = top - size * 0.95;
-        for line in lines {
+        for (i, line) in lines.iter().enumerate() {
             if y < bottom - size * 0.25 {
                 break;
             }
-            emit_line(&mut content, m, (rect.x * pw + 1.0) as f32, y, size, &line);
+            // The fit can hit the minimum size while the translation still
+            // needs more lines than the paragraph's footprint holds; the
+            // loop then cuts the overflow. Mark the cut with an ellipsis
+            // instead of silently dropping the rest (a whited gap with no
+            // explanation reads as lost content).
+            let mut drawn = line.clone();
+            if i + 1 < lines.len() && y - line_h < bottom - size * 0.25 {
+                drawn.push('…');
+            }
+            emit_line(&mut content, m, (rect.x * pw + 1.0) as f32, y, size, &drawn);
             y -= line_h;
         }
     }
@@ -1549,6 +1552,72 @@ mod tests {
             let text = reopened.pages().get(0)?.text()?.all();
             assert!(text.contains("你好世界"), "overlay text: {text:?}");
             assert!(!text.contains("原书 p."), "overlay drops the anchor: {text:?}");
+            Ok(())
+        });
+        if checked.is_err() {
+            eprintln!("skipping pdf reopen: libpdfium not on the search path");
+        }
+        let _ = std::fs::remove_file(&pdf_path);
+    }
+
+    /// A translation too long for its one-line footprint (the fit hits the
+    /// minimum size) is cut by the draw loop -- the cut must be marked with
+    /// an ellipsis, not silently dropped (a whited gap reads as lost text).
+    #[test]
+    fn overlay_overflow_lines_end_with_ellipsis() {
+        let mut tiny = text_para("Proof.", "一二三四五六七八九十");
+        tiny.rects = vec![NormRect { x: 0.1, y: 0.5, w: 0.02, h: 0.005 }];
+        let t = PageTranslation {
+            page: 1,
+            target_lang: "中文".into(),
+            provider: "reuse_ai".into(),
+            source_hash: "h".into(),
+            paragraphs: vec![tiny],
+            coverage: 1.0,
+        };
+        let probe = image::RgbImage::from_pixel(20, 10, image::Rgb([200, 10, 10]));
+        let mut jpeg_buf = std::io::Cursor::new(Vec::new());
+        probe
+            .write_with_encoder(image::codecs::jpeg::JpegEncoder::new_with_quality(
+                &mut jpeg_buf, 88,
+            ))
+            .unwrap();
+        let bg = Background { jpeg: jpeg_buf.into_inner(), px_w: 20, px_h: 10 };
+        let m = FontMetrics::prepare(['一', '…'].as_ref()).unwrap();
+        let mut doc = Document::with_version("1.7");
+        let pages_id = doc.new_object_id();
+        let catalog_id = doc.add_object(dictionary! {
+            "Type" => name("Catalog"),
+            "Pages" => Object::Reference(pages_id),
+        });
+        doc.trailer.set("Root", Object::Reference(catalog_id));
+        let font_id = add_font(&mut doc, &m).unwrap();
+        let plan = PagePlan { page: 1, pw: 595.0, ph: 842.0, cached: Some(t) };
+        let page_id = write_page(&mut doc, pages_id, font_id, &plan, "中文", &m, Some(&bg))
+            .unwrap();
+        doc.objects.insert(
+            pages_id,
+            Object::Dictionary(dictionary! {
+                "Type" => name("Pages"),
+                "Kids" => Object::Array(vec![Object::Reference(page_id)]),
+                "Count" => Object::Integer(1),
+            }),
+        );
+        let mut buf = Vec::new();
+        doc.save_to(&mut buf).unwrap();
+        let pdf_path = std::env::temp_dir().join(format!(
+            "rbwa_ellipsis_{}.pdf",
+            std::process::id()
+        ));
+        std::fs::write(&pdf_path, &buf).unwrap();
+        let checked = crate::pdf::with_document_file(pdf_path.to_str().unwrap(), |reopened| {
+            let text = reopened.pages().get(0)?.text()?.all();
+            assert!(text.contains('…'), "cut must be marked: {text:?}");
+            assert!(text.contains('一'), "first line drawn: {text:?}");
+            assert!(
+                !text.contains('十'),
+                "overflow lines are cut, not drawn: {text:?}"
+            );
             Ok(())
         });
         if checked.is_err() {

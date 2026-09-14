@@ -101,7 +101,12 @@ pub fn source_hash(texts: &[&str]) -> String {    let mut hasher = Sha256::new()
 /// v5: broader math-font table (any *MATH* family, TX/PX/WASY faces) and
 /// symbol table (primes, turnstiles, maps-to, floor/ceil, ...) so more
 /// display math is kept as original pixels.
-pub const EXTRACTOR_VERSION: u32 = 6;
+/// v6: paragraphs with unrecoverable math symbols ("(, )") kept their
+/// original pixels instead of being translated.
+/// v7: that whole-paragraph preservation is REVERSED -- only formulas keep
+/// original pixels; symbol-gap paragraphs are translated like any other
+/// text, so v6 rows (which cached empty translations for them) are stale.
+pub const EXTRACTOR_VERSION: u32 = 7;
 
 /// Stamps a source hash with the current extractor version.
 pub fn stamp_source_hash(hash: &str) -> String {

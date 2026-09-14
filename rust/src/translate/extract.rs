@@ -896,7 +896,45 @@ fn is_whole_paragraph_formula(
     if centered_short && (math_ratio >= 0.12 || text_looks_like_formula(&p.text)) {
         return true;
     }
+    // Rule 4: all-math operator equations. When >= 90% of the paragraph's
+    // chars are math-classified -- including its LETTERS, i.e. operator
+    // names such as "recover" set in math faces -- it is a display equation
+    // even though the word-shaped runs defeat rules 1/2 (e.g.
+    // "recoverΓ(trackΓ(, )(, )) = recoverΓ(, ) (10)"). Guards: at most a
+    // handful of word-shaped runs, a structural-symbol-dense body (equations
+    // score ~0.5, prose <= 0.15) and at least one strong math char, so prose
+    // that merely shares a mathy family (NewCM text faces) stays prose.
+    if math_ratio >= 0.9
+        && count_alpha_runs(&p.text, 4) <= 6
+        && symbol_fraction(&p.text) >= 0.3
+        && p.text.chars().any(is_strong_math_char)
+    {
+        return true;
+    }
     false
+}
+
+/// Fraction of non-whitespace chars that are structural symbols (anything
+/// not alphanumeric). Display equations are symbol-dense -- brackets,
+/// commas and relations carry ~half the body ("recoverΓ(x) = recoverΓ(x)")
+/// -- while prose, even hyphenated ("state-of-the-art"), stays <= 0.15.
+fn symbol_fraction(text: &str) -> f64 {
+    let mut total = 0usize;
+    let mut symbols = 0usize;
+    for c in text.chars() {
+        if c.is_whitespace() {
+            continue;
+        }
+        total += 1;
+        if !c.is_alphanumeric() {
+            symbols += 1;
+        }
+    }
+    if total == 0 {
+        0.0
+    } else {
+        symbols as f64 / total as f64
+    }
 }
 
 /// Whether [text] ends with an equation-number marker like "(2)".
@@ -984,57 +1022,6 @@ pub fn count_cjk(s: &str) -> usize {
                 | '\u{FF00}'..='\u{FFEF}')   // fullwidth forms
         })
         .count()
-}
-
-/// Comma-separated slots of a paren group's chars.
-fn slots(inner: &[char]) -> usize {
-    inner
-        .split(|c| *c == ',')
-        .filter(|s| s.iter().any(|c| !c.is_whitespace()))
-        .count()
-}
-
-/// Whether [text] shows "symbol gaps": parenthesized groups that contain no
-/// alphabetic characters at all (e.g. "(, )", "(1, 1)", "()"). This is the
-/// signature of math glyphs the PDF cannot map back to text (math fonts
-/// without a ToUnicode table): the symbols existed in the original line but
-/// are unrecoverable, so the paragraph must keep its ORIGINAL pixels instead
-/// of being whitened and re-drawn with holes the translation cannot fill.
-pub fn text_has_symbol_gaps(text: &str) -> bool {
-    let bytes: Vec<char> = text.chars().collect();
-    let mut depth = 0usize;
-    let mut start = 0usize;
-    for (i, c) in bytes.iter().enumerate() {
-        match c {
-            '(' | '（' | '[' | '【' => {
-                if depth == 0 {
-                    start = i;
-                }
-                depth += 1;
-            }
-            ')' | '）' | ']' | '】' if depth > 0 => {
-                depth -= 1;
-                if depth == 0 {
-                    let inner = &bytes[start + 1..i];
-                    // No letters inside the group: "(, )", "(1, 1)" and "()"
-                    // are unrecoverable math remnants. A single numeric
-                    // reference like "(10)" is a normal prose citation and
-                    // stays translatable.
-                    if inner.iter().any(|c| c.is_alphabetic()) {
-                        continue;
-                    }
-                    let has_content = inner.iter().any(|c| !c.is_whitespace());
-                    let has_alnum =
-                        inner.iter().any(|c| c.is_ascii_alphanumeric());
-                    if !has_content || slots(inner) >= 2 || !has_alnum {
-                        return true;
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-    false
 }
 
 /// CJK fraction of a text (drives source-language detection, plan §4.5).
@@ -1227,6 +1214,70 @@ mod tests {
             "prose in a math font must not become Formula");
         assert!(out[0].formula_regions.is_empty(),
             "prose must not produce formula regions: {:?}", out[0].formula_regions);
+    }
+
+    /// Rule 4: a wide display equation whose operator names ("recover",
+    /// "track") defeat the word guards of rules 1/2 -- every char is math
+    /// font and the body is symbol-dense, so it must keep its pixels.
+    #[test]
+    fn operator_name_equation_is_a_formula() {
+        let text = "recoverΓ(trackΓ(, )(, )) = recoverΓ(, ) (10)";
+        let mut chars = Vec::new();
+        for (i, c) in text.chars().enumerate() {
+            chars.push(char(
+                &c.to_string(),
+                0.25 + i as f64 * 0.011,
+                0.3,
+                0.01,
+                0.02,
+                "NewCMMath-Book",
+            ));
+        }
+        let paras = vec![Paragraph {
+            text: text.into(),
+            rects: vec![NormRect { x: 0.24, y: 0.29, w: 0.55, h: 0.04 }],
+            page: 1,
+            kind: ParagraphKind::Text,
+            confidence: 1.0,
+            formula_regions: Vec::new(),
+        }];
+        let signals = math_signals(&chars);
+        let regions = detect_formula_regions(&chars, &signals);
+        let out = attach_formulas(paras, &chars, &signals, &regions);
+        assert_eq!(out[0].kind, ParagraphKind::Formula,
+            "operator-name equation must keep its original pixels");
+    }
+
+    /// Rule 4 guard: hyphenated prose set in a math font has a strong char
+    /// (the hyphen) and few word runs, but its body is letter-dense -- it
+    /// must stay Text.
+    #[test]
+    fn hyphenated_math_font_prose_is_not_a_formula() {
+        let text = "state-of-the-art systems";
+        let mut chars = Vec::new();
+        for (i, c) in text.chars().enumerate() {
+            chars.push(char(
+                &c.to_string(),
+                0.1 + i as f64 * 0.012,
+                0.3,
+                0.01,
+                0.02,
+                "NewCMMath-Book",
+            ));
+        }
+        let paras = vec![Paragraph {
+            text: text.into(),
+            rects: vec![NormRect { x: 0.08, y: 0.29, w: 0.4, h: 0.04 }],
+            page: 1,
+            kind: ParagraphKind::Text,
+            confidence: 1.0,
+            formula_regions: Vec::new(),
+        }];
+        let signals = math_signals(&chars);
+        let regions = detect_formula_regions(&chars, &signals);
+        let out = attach_formulas(paras, &chars, &signals, &regions);
+        assert_eq!(out[0].kind, ParagraphKind::Text,
+            "hyphenated prose in a math font must not become Formula");
     }
 
     /// Display equation with a subscript WORD ("Γ ⊢ t : T_effect"): the
@@ -1427,28 +1478,6 @@ mod tests {
         assert!(!is_noise(header, Some(NormRect { x: 0.3, y: 0.3, w: 0.4, h: 0.02 }), &[]));
         // Margin text that is neither a page number nor repeated stays.
         assert!(!is_noise("Some unique footnote-ish line", Some(NormRect { x: 0.2, y: 0.97, w: 0.6, h: 0.02 }), &[]));
-    }
-
-    #[test]
-    fn symbol_gaps_detect_unrecoverable_math() {
-        // Math letters the PDF cannot map back to text: holes in parens.
-        for s in [
-            "It can be understood as a pair (, ), where:",
-            "For every (1, 1), ⋯, (, ) applied in order",
-            "define track on pairs ():",
-            "state () = (, id):",
-        ] {
-            assert!(text_has_symbol_gaps(s), "{s:?}");
-        }
-        // Real prose / real math text has letters inside the parens.
-        for s in [
-            "Given a context Γ, define its effect context as:",
-            "For every (γ, φ) ∈ ∂Γ and every pair (f, g)",
-            "track(f, g) transforms γ by f",
-            "代入式 (10) 得到结果", // single-slot numeric reference stays
-        ] {
-            assert!(!text_has_symbol_gaps(s), "{s:?}");
-        }
     }
 
     #[test]

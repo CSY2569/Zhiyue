@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>对照阅读(双语翻译)完整工作流程与技术栈</title>
+<style>
+  :root {
+    --bg: #f7f8fa; --card: #ffffff; --ink: #1c2733; --muted: #5b6b7b;
+    --accent: #0e7490; --accent-soft: #e0f2f7; --line: #dde4ec;
+    --code-bg: #eef2f6; --tag-bg: #0891b2; --warn: #b45309; --warn-bg: #fef3c7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.75 -apple-system, "Segoe UI", "Noto Sans SC", "PingFang SC",
+          "Microsoft YaHei", sans-serif;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 32px 24px 80px; }
+  header.hero {
+    background: linear-gradient(135deg, #0e7490, #155e75 60%, #164e63);
+    color: #fff; border-radius: 14px; padding: 30px 34px; margin-bottom: 30px;
+  }
+  header.hero h1 { margin: 0 0 8px; font-size: 26px; letter-spacing: .5px; }
+  header.hero p { margin: 0; opacity: .92; font-size: 14px; }
+  header.hero .meta { margin-top: 12px; font-size: 12.5px; opacity: .8; }
+  h2 {
+    font-size: 19px; margin: 38px 0 14px; padding-left: 12px;
+    border-left: 4px solid var(--accent); line-height: 1.4;
+  }
+  h3 { font-size: 15.5px; margin: 20px 0 8px; color: var(--accent); }
+  p { margin: 8px 0; }
+  code {
+    background: var(--code-bg); border: 1px solid var(--line);
+    border-radius: 4px; padding: 1px 6px; font-size: 12.5px;
+    font-family: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+    color: #0f3a47; word-break: break-all;
+  }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 18px 22px; margin: 14px 0;
+    box-shadow: 0 1px 3px rgba(16,42,67,.05);
+  }
+  /* 流程总览 */
+  .flow { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; margin: 18px 0 6px; }
+  .stage {
+    flex: 1 1 130px; min-width: 128px; background: var(--card);
+    border: 1.5px solid var(--accent); border-radius: 10px;
+    padding: 10px 12px; position: relative;
+  }
+  .stage .num {
+    position: absolute; top: -11px; left: 10px; background: var(--tag-bg);
+    color: #fff; font-size: 11px; font-weight: 700; border-radius: 10px;
+    padding: 1px 8px;
+  }
+  .stage b { display: block; font-size: 13.5px; margin: 6px 0 3px; }
+  .stage span { font-size: 11.5px; color: var(--muted); display: block; line-height: 1.5; }
+  .arrow { align-self: center; color: var(--accent); font-size: 18px; font-weight: 700; }
+  /* 技术标签 */
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .tag {
+    background: var(--accent-soft); color: var(--accent); font-size: 12px;
+    border-radius: 5px; padding: 2px 9px; border: 1px solid #bae6ee;
+  }
+  .tag.rust { background: #fef3e2; color: #b45309; border-color: #f5d9a8; }
+  .tag.dart { background: #e3ecfd; color: #1d4ed8; border-color: #c3d5f8; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 13.5px; background: var(--card); }
+  th, td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #f0f5f8; font-weight: 600; white-space: nowrap; }
+  tr:nth-child(even) td { background: #fbfcfd; }
+  .note {
+    background: var(--warn-bg); border: 1px solid #f0d48a; border-radius: 10px;
+    padding: 12px 16px; margin: 12px 0; font-size: 13.5px;
+  }
+  .note b { color: var(--warn); }
+  ul { margin: 6px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 860px) { .two-col { grid-template-columns: 1fr; } }
+  .step-list { counter-reset: step; padding-left: 0; list-style: none; }
+  .step-list li {
+    counter-increment: step; position: relative; padding-left: 40px; margin: 10px 0;
+  }
+  .step-list li::before {
+    content: counter(step); position: absolute; left: 0; top: 2px;
+    width: 26px; height: 26px; border-radius: 50%; background: var(--accent);
+    color: #fff; font-size: 13px; font-weight: 700; display: flex;
+    align-items: center; justify-content: center;
+  }
+  footer { margin-top: 46px; font-size: 12px; color: var(--muted); text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>对照阅读(双语翻译)— 完整工作流程与技术栈</h1>
+  <p>左页原文 · 右页译文(版式保留覆盖)· 整本 / 随进度 / 手动三种模式 · 可选中文本的译文 PDF 导出</p>
+  <div class="meta">
+    对应实现:commit 26d1763 / ee330a2(2026-09)· 架构:Flutter(Dart 编排)+ Rust 核心(flutter_rust_bridge 2.12)
+    · 文档生成时测试基线:Rust 128 单测 + 2 集成 / Flutter 203
+  </div>
+</header>
+
+<!-- ======================= 总览 ======================= -->
+<h2>一、端到端流程总览</h2>
+<div class="flow">
+  <div class="stage"><span class="num">1</span><b>触发与编排</b><span>工具栏开关 / 队列模式<br>Dart</span></div>
+  <div class="arrow">→</div>
+  <div class="stage"><span class="num">2</span><b>缓存快路径</b><span>SQLite 页级缓存<br>版本戳校验</span></div>
+  <div class="arrow">→</div>
+  <div class="stage"><span class="num">3</span><b>段落抽取</b><span>pdfium 字符几何<br>聚类 / 降噪 / 公式识别</span></div>
+  <div class="arrow">→</div>
+  <div class="stage"><span class="num">4</span><b>翻译提供方</b><span>DeepL / LLM<br>严格对齐 + 占位符</span></div>
+  <div class="arrow">→</div>
+  <div class="stage"><span class="num">5</span><b>结果缓存</b><span>段落级 upsert<br>覆盖率统计</span></div>
+  <div class="arrow">→</div>
+  <div class="stage"><span class="num">6</span><b>版式保留渲染</b><span>原页光栅背景<br>原位矢量译文</span></div>
+  <div class="arrow">→</div>
+  <div class="stage"><span class="num">7</span><b>双页对照呈现</b><span>左右同尺寸<br>翻页跟随</span></div>
+</div>
+<p style="font-size:13px;color:var(--muted)">
+  旁路能力:<b>译文 PDF 导出</b>(按 1..N 组装同版式页面)、<b>LRU 缓存治理</b>(2GB 上限 / 固定保留 / 级联清理)、<b>OCR 回退</b>(扫描页)。
+</p>
+
+<!-- ======================= 阶段详解 ======================= -->
+<h2>二、各阶段详解与对应技术</h2>
+
+<div class="card">
+  <h3>阶段 1 · 触发与队列编排(Flutter / Dart)</h3>
+  <p>工具栏「对照阅读」按钮切换 <code>translationPaneProvider</code>:阅读区变为 <b>50/50 左右分栏</b>(左原文 <code>PdfPageScroll</code>,右译文 <code>TranslatedColumn</code>);若当前是双滚/双翻,自动切为单页并记住原模式(<code>modeBefore</code>),关闭时恢复。</p>
+  <p>翻译的发起有三种模式(设置 <code>translation_config.mode</code>):</p>
+  <ul>
+    <li><b>整本</b>:<code>startBook</code> 将 1..N 入队,先经 <code>getTranslatedPages</code> 一次批量读回已译页(跳过缓存);</li>
+    <li><b>随进度</b>(默认):每次翻页 <code>onVisiblePages</code> 入队「可见页 + 后两页」;</li>
+    <li><b>手动</b>:仅右页卡片上的「翻译本页」按钮。</li>
+  </ul>
+  <p>队列 <code>TranslationQueueNotifier</code> 负责并发池(配置 <code>concurrency</code>,夹取 1–8)、取消(<code>cancel</code> 停发新页)、失败页记忆(<code>_failed</code>,不自动重试、可手动重试)、切书后台行为(cancel / pause_resume / continue,恢复依赖缓存跳过)。调用翻译前会等待配置异步加载完成(<code>await translationConfigProvider.future</code>,消除开书瞬间的竞态)。</p>
+  <div class="tags">
+    <span class="tag dart">Dart</span><span class="tag dart">Riverpod Notifier / AsyncNotifier</span>
+    <span class="tag dart">StreamSink 消费流</span><span class="tag dart">go_router(设置页跳转)</span>
+    <span class="tag dart">window_manager</span>
+  </div>
+  <p style="font-size:13px"><code>lib/features/bilingual/providers/translation_queue_provider.dart</code> ·
+     <code>page_translation_provider.dart</code> · <code>reader_page.dart (_buildSplitContent)</code></p>
+</div>
+
+<div class="card">
+  <h3>阶段 2 · 页级缓存快路径(Rust / SQLite)</h3>
+  <p>每次翻译前先查 <code>page_translation_cache</code>:主键 (book_id, page, <b>配置目标语言</b>, provider),命中且 <code>source_hash</code> 带当前抽取器版本戳(<code>v6:sha256</code>)即直接返回,不发起任何网络请求。版本戳让抽取算法升级后旧结果自动失效重译;「中英互译」按页解析生效语言存于载荷、键用配置语言,保证读写一致。</p>
+  <p>读取同时刷新 <code>last_accessed_at</code>(LRU 依据)。导出与对照视图使用同一缓存,且同样拒绝过期行。</p>
+  <div class="tags">
+    <span class="tag rust">rusqlite (bundled SQLite, WAL)</span>
+    <span class="tag rust">sha2 指纹</span>
+    <span class="tag rust">EXTRACTOR_VERSION 版本戳</span>
+    <span class="tag rust">serde_json 载荷</span>
+    <span class="tag rust">非可重入 Mutex 纪律(cache_key_with 复用连接)</span>
+  </div>
+  <p style="font-size:13px"><code>rust/src/db/repository/translate.rs</code> · <code>rust/src/translate/mod.rs (cache_key / is_current_source_hash)</code></p>
+</div>
+
+<div class="card">
+  <h3>阶段 3 · 段落抽取(Rust / pdfium)</h3>
+  <p>在<b>独立 pdfium 文档句柄</b>上执行(进程级 <code>PDFIUM_LOCK</code> 串行——pdfium 非线程安全,并发调用会静默返回空文本),绝不阻塞阅读器渲染。管线:</p>
+  <ol class="step-list">
+    <li><b>字符采集</b> <code>collect_page_chars</code>:每个字符的几何(tight_bounds → 归一化矩形,顶左原点)与字体元数据(字体名、symbolic 标志、缩放/未缩放字号、旋转角、连字符标志)。</li>
+    <li><b>行聚类</b> <code>cluster_lines</code>:基线中心 y 距离(0.6×行高容差)聚类;空格吸附最近行;丢弃控制字符。</li>
+    <li><b>阅读顺序</b> <code>order_for_reading</code>:扫描 0.35–0.65 的栏槽检测双栏(无跨栏线才拆),左栏先读。</li>
+    <li><b>段落合并</b> <code>fallback_paragraphs</code>:垂直间隙(&gt; 中位行高×0.7)与首行缩进分段;<b>窄且居中的行判定为显示公式,独立成段</b>( prose↔公式交界强制断开)。</li>
+    <li><b>文本修复</b> <code>join_paragraph_text</code> / <code>normalize_text</code>:行尾连字符+小写续行还原(continua- / tion → continuation)、CJK 直接拼接、连字归一(ﬁ→fi)、软连字符剔除。</li>
+    <li><b>噪声剔除</b> <code>is_noise</code>:上下 8% 边距带 + 页码样式("− 3 −"、"Page 12")+ 相邻页同位置重复 → 页眉/页脚/页码剔除。</li>
+    <li><b>公式识别</b>:字符级信号(<code>is_math_font_name</code> 数学专用字体表 + 任意 *MATH* 族通配 + TX/PX/WASY;<code>is_strong_math_char</code> 60+ 运算符/希腊字母;缩放比偏离中位 = 上下标;symbolic 字体)聚成公式区;整段公式四信号判定 <code>is_whole_paragraph_formula</code>(≥80% 纯符号 / 数学字母占比 ≥60% 且长词 ≤1 / 居中短块+数学信号 / 全数学字体算子名公式:<code>math_ratio ≥ 0.9</code> + 长词 ≤6 + 符号占比 ≥0.3),外加 <code>text_looks_like_formula</code> 内容门控保护 LaTeX 正文。</li>
+    <li><b>不可恢复符号</b>:PDF 缺 ToUnicode 时行内公式符号在抽取文本中留下空洞("(, )");这类段落仍<b>正常送翻、正常重绘</b>——只保留整体判定为公式的段落原像素,不整段保留原文。</li>
+    <li><b>OCR 回退</b>:无文字层且开启 auto_ocr → 页面光栅 → <code>rapidocr</code>(页级 OCR 缓存)→ 按行距并入同一重建流程;置信度 &lt;0.8 标低置信。</li>
+  </ol>
+  <div class="tags">
+    <span class="tag rust">pdfium-render 0.9(thread_safe + PDFIUM_LOCK)</span>
+    <span class="tag rust">基线聚类 / 中位数阈值</span>
+    <span class="tag rust">字体元数据公式识别</span>
+    <span class="tag rust">rapidocr-core + onnxruntime</span>
+    <span class="tag rust">页级 OCR 缓存</span>
+  </div>
+  <p style="font-size:13px"><code>rust/src/translate/extract.rs</code>(~1300 行,含全部单测)</p>
+</div>
+
+<div class="card">
+  <h3>阶段 4 · 翻译提供方(Rust / DeepL 与 OpenAI 兼容 LLM)</h3>
+  <p>统一 <code>Provider</code> 接口 <code>translate_segments</code>,按 ≤20 段一批:</p>
+  <ul>
+    <li><b>DeepL</b>:<code>POST /v2/translate</code>,<code>tag_handling=xml</code> + <code>ignore_tags</code> 让公式占位符原样穿透;术语表经 API 创建并按语言对持久化 <code>glossary_id</code>;语言码映射(中文→ZH…);key 后缀 <code>:fx</code> 自动选免费端点。</li>
+    <li><b>OpenAI 兼容 LLM</b>(独立配置或复用 AI 设置):要求严格对齐 JSON 数组 <code>[{"i","t"}]</code>,缺项/错位对<b>缺失编号逐段重试 ≤3 轮</b>;不可信文本以 <code>&lt;text&gt;</code> 包裹防提示注入;失败段保留原文标 Failed。</li>
+    <li><b>公式占位符保护</b>:内联公式替换为随机前缀令牌 <code>⟨F{时间纳anos}{pid}-MATH_n⟩</code>(防书内伪造),回填时校验「恰好出现一次且未变」,失败标「公式需核对」或回退原文本。</li>
+    <li><b>传输</b> <code>post_with_retry</code>:429/5xx 指数退避 + Retry-After,≤3 次;4xx 快速失败并截断展示错误体。</li>
+    <li><b>目标语言</b>:沿用 AI 设置;「中英互译」按每页 CJK 占比(<code>cjk_ratio</code>)解析为中文或英文。</li>
+  </ul>
+  <div class="tags">
+    <span class="tag rust">reqwest (rustls-tls, JSON)</span>
+    <span class="tag rust">手写重试/退避</span>
+    <span class="tag rust">严格索引对齐协议</span>
+    <span class="tag rust">XML ignore_tags</span>
+    <span class="tag rust">术语表 glossary</span>
+    <span class="tag rust">&lt;text&gt; 注入防御</span>
+  </div>
+  <p style="font-size:13px"><code>rust/src/translate/providers.rs</code></p>
+</div>
+
+<div class="card">
+  <h3>阶段 5 · 结果组装与缓存写入(Rust)</h3>
+  <p>逐段映射回 <code>TranslatedParagraph</code>{ source, translated, kind, status, confidence, formula_regions, <b>rects(行矩形)</b> },状态含 Done / Failed / LowConfidence / FormulaCheck;页级覆盖率 <code>coverage</code> 与 v6 版本戳一起 upsert 进缓存。行矩形是版式保留渲染的定位输入。</p>
+  <div class="tags"><span class="tag rust">serde 序列化(向后兼容默认字段)</span><span class="tag rust">upsert ON CONFLICT</span></div>
+  <p style="font-size:13px"><code>rust/src/translate/pipeline.rs (run_translate_page)</code></p>
+</div>
+
+<div class="card">
+  <h3>阶段 6 · 版式保留渲染(Rust / lopdf + pdfium)—— 本功能的核心</h3>
+  <p>把一页译文合成为「原页背景 + 原位矢量译文」的 PDF,再光栅化成位图给右页显示:</p>
+  <ol class="step-list">
+    <li><b>背景</b>:原页按 dpi 渲染(24MP 像素上限),每个文本段落的<b>行矩形涂白</b>(纵向 padding 覆盖高出行的数学字形),JPEG q90 编码为 DCTDecode 整页 XObject —— 图表、公式、表格、页眉页脚、分栏结构全部原样保留。</li>
+    <li><b>原位译文</b>:每个文本段落在其行矩形并集内绘制 —— 宽度=矩形宽,字号按行高中位数×0.82 估算(6–28pt),超高按 ×0.9 收缩至 5.5pt;<code>wrap_text</code> 以真实字体量宽断行(拉丁在空格断、CJK 任意断)。</li>
+    <li><b>真矢量文本</b>:lopdf 构造 Type0 / Identity-H CID 字体 + /ToUnicode CMap + /W 宽度表,<code>subsetter</code> 运行时子集化内置 Noto Sans SC(31k 字形,含希腊;OFL 许可随源码分发)——译文<b>可选中、可检索</b>,PDF 体积小。</li>
+    <li><b>字形回退</b> <code>FALLBACK_GLYPHS</code>(约 70 项,递归链):字体缺失的数学符号(∘ ≔ ⊔⊓ ℝℤℚ ⟶ ₁₂ₙ ϑ…)映射到存在的形近字符,杜绝 .notdef 空洞。</li>
+    <li><b>保留规则</b>:仅整段公式(<code>ParagraphKind::Formula</code>)不涂白不绘制 —— 原像素即最高保真;其余文本(含抽取丢失行内符号的段落)一律涂白重绘译文。译文超出 footprint 被截断时,末行补 '…' 标记,不静默丢失。</li>
+    <li><b>光栅化</b>:合成 PDF 经 pdfium 按 <b>dpi 3.0</b> 渲染(背景与合成同比例,1:1 像素无重采样模糊),实测 A4 约 1785×2525 / 210ms。</li>
+    <li><b>回退布局</b>:占位页、旧缓存行或光栅失败时降级为紧凑单栏重排(锚点 + 量宽排版 + 公式小图)。</li>
+  </ol>
+  <div class="tags">
+    <span class="tag rust">lopdf(PDF 对象模型)</span>
+    <span class="tag rust">subsetter + ttf-parser(运行时字体子集)</span>
+    <span class="tag rust">Identity-H CID + /ToUnicode</span>
+    <span class="tag rust">JPEG DCTDecode 背景</span>
+    <span class="tag rust">pdfium 光栅化</span>
+    <span class="tag rust">FALLBACK_GLYPHS 递归回退</span>
+  </div>
+  <p style="font-size:13px"><code>rust/src/translate/pdf_writer.rs (write_overlay_page / render_page_background / fit_paragraph)</code></p>
+</div>
+
+<div class="card">
+  <h3>阶段 7 · 双页对照呈现(Flutter)</h3>
+  <p><code>translatedPageImageProvider</code>(autoDispose family,键 = 书/页/语言)调用核心渲染并以 <code>decodeImageFromPixels</code> 解码;<code>translationRevisionProvider</code> 计数器在翻译完成时自增,使可见页自动重渲染。</p>
+  <p>右页为<b>真双页样式</b>:译文页按「物理页高 × 缩放」与原文页<b>同显示尺寸</b>绘制,同一 16px 书沟节奏;列表项步长与原文一致,翻页时 <code>jumpTo((N−1)×stride)</code> 跟随。整本进度为右页底部浮动胶囊(进度条 + 取消);未译页显示占位卡与「翻译本页」;导出 / 整本翻译按钮收纳在工具栏(对照开启时出现)。</p>
+  <div class="tags">
+    <span class="tag dart">Riverpod autoDispose family</span>
+    <span class="tag dart">ui.Image 解码</span>
+    <span class="tag dart">ScrollController 步长同步</span>
+    <span class="tag dart">Stack 浮动组件</span>
+  </div>
+  <p style="font-size:13px"><code>lib/features/bilingual/widgets/translated_pane.dart</code> · <code>translated_page_image_provider.dart</code> · <code>bilingual_actions.dart</code></p>
+</div>
+
+<div class="card">
+  <h3>旁路 A · 译文 PDF 导出</h3>
+  <p><code>build_translated_pdf</code> 按 <b>1..N 原书顺序</b>遍历缓存组装(不按完成时间),与对照视图完全同版式;未译页插入矢量占位页「原书第 N 页 —— 尚未翻译」保持页码对齐;进度经 <b>tokio mpsc 通道真流式</b>推送到 UI。完成后触发 LRU 预算检查。输出路径 <code>translated/{book_id}/{语言}.pdf</code>。</p>
+  <div class="tags"><span class="tag rust">tokio mpsc 流式</span><span class="tag rust">spawn_blocking</span><span class="tag dart">Stream 消费 + SnackBar</span></div>
+</div>
+
+<div class="card">
+  <h3>旁路 B · 缓存治理与级联</h3>
+  <ul>
+    <li><b>LRU 逐出</b> <code>enforce_cache_limit</code>:「translated/」产物超 <code>cache_limit_mb</code>(默认 2048)时按最久未访问删书产物;固定保留(pinned)、正在翻译、当前打开的书跳过;启动与导出后静默执行。</li>
+    <li><b>删书级联</b>:外键 ON DELETE CASCADE 清缓存行,显式删 <code>translated/{id}</code> 目录。</li>
+    <li><b>设置</b>:服务选择 / 源语言 / 模式 / 后台行为 / 自动 OCR / 并发 / 缓存上限 / 固定保留管理 / 术语表编辑(卡片式设置区)。</li>
+  </ul>
+  <div class="tags"><span class="tag rust">LRU + KV 固定保留</span><span class="tag rust">FK CASCADE</span><span class="tag dart">设置卡片 UI</span></div>
+  <p style="font-size:13px"><code>lib/features/bilingual/widgets/translation_settings_section.dart</code> · <code>lib/features/settings/widgets/settings_widgets.dart</code></p>
+</div>
+
+<!-- ======================= 技术栈表 ======================= -->
+<h2>三、技术栈总表</h2>
+<table>
+  <tr><th style="width:150px">环节</th><th>技术 / 机制</th><th>关键位置</th></tr>
+  <tr><td>FFI 桥接</td><td>flutter_rust_bridge 2.12(版本锁定),StreamSink 流式,Dart 侧仅经 Repository 封装访问</td><td><code>rust/src/api.rs</code> · <code>lib/data/repositories/translation_repository.dart</code></td></tr>
+  <tr><td>PDF 基础</td><td>pdfium-render 0.9(thread_safe) + 进程级 PDFIUM_LOCK 串行;独立文档句柄避免阻塞阅读器</td><td><code>rust/src/pdf/pdfium.rs</code></td></tr>
+  <tr><td>段落抽取</td><td>字符几何 + 字体元数据 → 基线聚类 → 双栏检测 → 间隙/缩进合并;连字/断字修复;页眉页脚剔除;四信号公式判定;OCR 回退</td><td><code>rust/src/translate/extract.rs</code></td></tr>
+  <tr><td>翻译引擎</td><td>DeepL(xml ignore_tags + glossary)/ OpenAI 兼容(严格 [{"i","t"}] 对齐 + 逐段重试);占位符防伪造与回填校验;429/5xx 退避</td><td><code>rust/src/translate/providers.rs</code></td></tr>
+  <tr><td>缓存</td><td>SQLite 页级缓存(配置语言+provider 键,v{N}:sha256 版本戳,LRU 触碰刷新);产物目录 2GB LRU;pinned / 翻译中 / 打开中豁免</td><td><code>rust/src/db/repository/translate.rs</code> · <code>translate/mod.rs</code></td></tr>
+  <tr><td>版式保留</td><td>原页 JPEG 光栅背景 + 行矩形涂白 + 原位 Identity-H 矢量译文;运行时字体子集;字号自适应收缩;65+ 字形回退链</td><td><code>rust/src/translate/pdf_writer.rs</code></td></tr>
+  <tr><td>OCR 回退</td><td>rapidocr-core(ONNX)双模式,页级缓存,置信度标注</td><td><code>rust/src/ocr/</code> · <code>pipeline.rs (ocr_page)</code></td></tr>
+  <tr><td>编排与 UI</td><td>Riverpod 队列(并发/取消/失败记忆)、autoDispose 页图像提供方、双页同步滚动、工具栏动作收纳、浮动进度胶囊</td><td><code>lib/features/bilingual/</code></td></tr>
+  <tr><td>数据层</td><td>SQLite(WAL, FK CASCADE, FTS5 供全文搜索)、settings KV 配置、schema 版本 7 迁移链</td><td><code>rust/src/db/</code></td></tr>
+  <tr><td>质量保障</td><td>Rust 128 单测 + 集成/回归(e2e mock LLM、死锁回归、字形覆盖清点);Flutter 203(队列状态机、缓存键、字形/间隙、窗格跟随);真实书籍 + 数据库副本 + 本地 mock LLM 的端到端核验</td><td><code>rust/tests/</code> · <code>test/</code></td></tr>
+</table>
+
+<!-- ======================= 一页的旅程 ======================= -->
+<h2>四、一页的旅程(随进度模式,时序)</h2>
+<div class="card">
+  <ol class="step-list">
+    <li>用户翻到第 12 页 → 阅读器监听 <code>viewerProvider</code> 触发 <code>onVisiblePages(book, [12])</code>。</li>
+    <li>队列等待配置就绪 → 目标集 {12, 13, 14} → 一次 <code>getTranslatedPages</code> 得已译集 → 差集入队(跳过失败记忆页)。</li>
+    <li>并发池(默认 2–3)逐页调 <code>translatePage</code> 流;核心先查缓存 —— 第 12 页已译则秒回。</li>
+    <li>第 13 页未译:抽取 → 25 段(其中 4 段判为公式保留)→ 21 段分两批 POST 到 LLM → 严格对齐 + 占位符保护 → 组装 → 计算指纹(v7:sha256)→ 写缓存 → 发完成事件。</li>
+    <li>队列自增 revision → 右页的 translatedPageImageProvider 失效重渲染:原页光栅涂白 + 译文原位绘制 + pdfium 3x 光栅 → 双页右栏换上新译文。</li>
+    <li>用户点工具栏「导出译文 PDF」→ 1..N 组装(未译页占位)→ 流式进度 → SnackBar 给出路径,可一键复制。</li>
+  </ol>
+</div>
+
+<!-- ======================= 限制 ======================= -->
+<h2>五、已知限制与设计取舍</h2>
+<div class="note">
+  <b>无 ToUnicode 的数学字体:</b>部分 LaTeX PDF 的数学字形(γ、φ、f₁)没有文本映射,抽取层拿不到 —— 对应位置在译文中留空,且含此类缺口的段落按上节规则<b>整段保留原文</b>(左栏完整可见)。后续可探索按字形反查字体编码恢复。
+</div>
+<ul>
+  <li><b>重排溢出</b>:译文超过原段落矩形时字号收缩至 5.5pt 下限,仍放不下则截断(不跨页增长,保证页码对齐)。</li>
+  <li><b>扫描页</b>:依赖 OCR,置信度 &lt;0.8 标低置信;无文字层且未开 OCR 时报可读错误。</li>
+  <li><b>公式保真边界</b>:检测依赖字体命名/符号/缩放信号,极少数正文用数学字体排版的书以「长词门控」保护,仍可能有个别段落被保守保留为原文。</li>
+  <li><b>翻译质量</b>:LLM 逐段直译,丢弃符号的源文本会降低质量(现已通过保留原像素规避大部分);术语表可约束译名一致性。</li>
+</ul>
+
+<footer>
+  智阅(ZhiYue)对照阅读模块 · 依据 2026-09 实现整理 · 详细决策记录见 docs/IMPLEMENTATION_STATUS.md §3.7–3.13 与 docs/BILINGUAL_READING_PLAN.md
+</footer>
+
+</div>
+</body>
+</html>

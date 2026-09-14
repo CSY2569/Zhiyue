@@ -48,6 +48,16 @@ fn make_pdf(dir: &Path) -> PathBuf {
                 font,
                 PdfPoints::new(12.0),
             )?;
+            // A paragraph whose extraction has "symbol gaps" (math glyphs the
+            // PDF cannot map back to text leave "(, )" holes). Placed well
+            // below so it forms its own paragraph.
+            objects.create_text_object(
+                PdfPoints::new(60.0),
+                PdfPoints::new(620.0),
+                "It can be understood as a pair (, ), where:",
+                font,
+                PdfPoints::new(12.0),
+            )?;
         }
         doc.save_to_file(&path)?;
         Ok(())
@@ -56,16 +66,22 @@ fn make_pdf(dir: &Path) -> PathBuf {
     path
 }
 
-/// Serves one chat-completions response per connection, forever.
-async fn mock_llm(answer: &'static str) -> String {
+/// Serves one chat-completions response per connection, forever. Every
+/// request body is captured so tests can assert what the LLM was asked.
+async fn mock_llm(answer: &'static str) -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
+    let captured = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let sink = captured.clone();
     tokio::spawn(async move {
         loop {
             let Ok((mut sock, _)) = listener.accept().await else {
                 return;
             };
-            let _ = read_request(&mut sock).await;
+            let req = read_request(&mut sock).await;
+            if let Ok(mut log) = sink.lock() {
+                log.push(req);
+            }
             let body = format!(
                 r#"{{"choices":[{{"message":{{"content":"{answer}"}}}}]}}"#
             );
@@ -78,7 +94,7 @@ async fn mock_llm(answer: &'static str) -> String {
             let _ = sock.write_all(resp.as_bytes()).await;
         }
     });
-    format!("http://127.0.0.1:{port}/v1")
+    (format!("http://127.0.0.1:{port}/v1"), captured)
 }
 
 async fn read_request(sock: &mut tokio::net::TcpStream) -> String {
@@ -138,7 +154,10 @@ async fn translate_page_end_to_end_with_mock_llm() {
         .unwrap();
     }
 
-    let base = mock_llm(r#"[{\"i\":0,\"t\":\"量子世界很奇妙。\"}]"#).await;
+    let (base, requests) = mock_llm(
+        r#"[{\"i\":0,\"t\":\"量子世界很奇妙。\"},{\"i\":1,\"t\":\"它可以理解为一个二元组，其中：\"}]"#,
+    )
+    .await;
     insert_setting(
         "ai_config",
         &format!(
@@ -171,6 +190,28 @@ async fn translate_page_end_to_end_with_mock_llm() {
         "source_hash not stamped: {:?}",
         t.source_hash
     );
+
+    // Regression (v7): a paragraph whose extraction lost inline math glyphs
+    // ("(, )" holes from math fonts without ToUnicode) must be TRANSLATED
+    // like any other text -- sent to the LLM, whitened and re-drawn. Only
+    // whole-paragraph formulas keep their original pixels.
+    {
+        let sent = requests.lock().unwrap().join("\n");
+        assert!(
+            sent.contains("pair (, )"),
+            "symbol-gap paragraph was not sent to the LLM: {sent}"
+        );
+        assert!(
+            t.paragraphs
+                .iter()
+                .any(|p| p.translated.contains("二元组")),
+            "symbol-gap paragraph was not translated: {:?}",
+            t.paragraphs
+                .iter()
+                .map(|p| p.translated.as_str())
+                .collect::<Vec<_>>()
+        );
+    }
 
     // Phase 2 -- regression for the reported "翻译功能无效" bug: overwrite the
     // cache with an OLD-extractor row (all-formula, zero translations, no
