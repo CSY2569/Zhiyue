@@ -179,20 +179,6 @@ class PageTranslationNotifier
       state = AsyncData(s.copyWith(loading: false, error: e.toString()));
     }
   }
-
-  /// Reloads the cached row (e.g. after a language change).
-  Future<void> refresh() async {
-    final repo = ref.read(translationRepositoryProvider);
-    try {
-      final res = await repo.getPageTranslation(arg.bookId, arg.page);
-      state = AsyncData(PageTranslationState(
-        translation: res.translation,
-        error: res.error,
-      ));
-    } catch (e) {
-      state = AsyncData(PageTranslationState(error: e.toString()));
-    }
-  }
 }
 
 final pageTranslationProvider = AsyncNotifierProvider.family<

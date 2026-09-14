@@ -267,7 +267,7 @@ pub fn restore_placeholders(text: &str, subs: &[Placeholder]) -> (String, Vec<bo
     for sub in subs {
         let count = text.matches(&sub.token).count();
         if count == 1 {
-            text = text.replace(&sub.token, &sub.token); // token stays; consumers swap it
+            // The token stays in the text; consumers substitute the formula.
             ok.push(true);
         } else {
             // Mangled / duplicated / dropped: restore the original formula
@@ -815,10 +815,12 @@ mod tests {
         }
         // ReuseAi with a configured AI works; a translation-model override
         // wins, otherwise the AI settings' text model is used.
-        let mut ai2 = AiConfig::default();
-        ai2.api_key = "sk-1".into();
-        ai2.text_model = "deepseek-chat".into();
-        ai2.base_url = "https://api.deepseek.com/v1".into();
+        let ai2 = AiConfig {
+            api_key: "sk-1".into(),
+            text_model: "deepseek-chat".into(),
+            base_url: "https://api.deepseek.com/v1".into(),
+            ..Default::default()
+        };
         tc.provider = TranslationProviderKind::ReuseAi;
         tc.model = None;
         match provider_from_config(&tc, &ai2).unwrap() {

@@ -66,6 +66,9 @@ pub fn build_translated_pdf(
     let (lang_key, provider) = crate::translate::cache_key();
 
     // --- pass A: gather every page's cached translation + original size ----
+    // Stale rows (old extractor stamp) count as untranslated, matching the
+    // pane's page renderer -- an export must never mix old-extractor
+    // paragraphs with fresh ones.
     let mut plans: Vec<PagePlan> = Vec::with_capacity(page_count as usize);
     for page in 1..=page_count {
         let cached = {
@@ -75,6 +78,7 @@ pub fn build_translated_pdf(
             )
             .ok()
             .flatten()
+            .filter(|t| crate::translate::is_current_source_hash(&t.source_hash))
         };
         let (pw, ph) = page_size(&book, page)?;
         plans.push(PagePlan {
@@ -88,16 +92,7 @@ pub fn build_translated_pdf(
     // --- subset the font to exactly the glyphs used ------------------------
     let mut used: Vec<char> = Vec::new();
     for p in &plans {
-        // Anchors + placeholder text are always rendered.
-        used.extend("原书第页尚未翻译　译本p." .chars());
-        used.extend("0123456789".chars());
-        used.extend(target_lang.chars());
-        if let Some(t) = &p.cached {
-            for para in &t.paragraphs {
-                used.extend(display_text(para).chars());
-                used.extend(para.source.chars());
-            }
-        }
+        used.extend(page_used_chars(p.cached.as_ref(), target_lang));
     }
     let metrics = FontMetrics::prepare(&used)?;
 
@@ -270,11 +265,6 @@ fn sanitize_lang(target_lang: &str) -> String {
 pub fn translated_pdf_path(book_id: i64, target_lang: &str) -> std::path::PathBuf {
     crate::translate::translated_dir(book_id)
         .join(format!("{}.pdf", sanitize_lang(target_lang)))
-}
-
-/// Whether the translated PDF artifact exists on disk.
-pub fn translated_pdf_exists(book_id: i64, target_lang: &str) -> bool {
-    translated_pdf_path(book_id, target_lang).exists()
 }
 
 struct BookInfo {

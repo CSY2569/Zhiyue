@@ -339,8 +339,8 @@ fn fallback_paragraphs(chars: &[PageChar], page: i64) -> Vec<Paragraph> {
         return Vec::new();
     }
     let ordered = order_for_reading(&lines);
-    let heights: Vec<f64> = ordered.iter().map(|l| l.rect.h).collect();
-    let median_h = median(&mut heights.clone()).unwrap_or(0.02).max(0.005);
+    let mut heights: Vec<f64> = ordered.iter().map(|l| l.rect.h).collect();
+    let median_h = median(&mut heights).unwrap_or(0.02).max(0.005);
 
     let mut paragraphs: Vec<Paragraph> = Vec::new();
     let mut current: Vec<Line> = Vec::new();
@@ -445,8 +445,8 @@ pub fn ocr_lines_to_paragraphs(lines: &[OcrLine], page: i64) -> Vec<Paragraph> {
     if sorted.is_empty() {
         return Vec::new();
     }
-    let heights: Vec<f64> = sorted.iter().map(|l| l.h).collect();
-    let median_h = median(&mut heights.clone()).unwrap_or(0.02).max(0.005);
+    let mut heights: Vec<f64> = sorted.iter().map(|l| l.h).collect();
+    let median_h = median(&mut heights).unwrap_or(0.02).max(0.005);
 
     let mut paragraphs: Vec<Paragraph> = Vec::new();
     let mut current: Vec<&OcrLine> = Vec::new();
@@ -496,7 +496,7 @@ pub fn ocr_lines_to_paragraphs(lines: &[OcrLine], page: i64) -> Vec<Paragraph> {
 
 fn in_margin(rect: &NormRect) -> bool {
     let cy = rect.y + rect.h / 2.0;
-    cy < MARGIN_FRACTION || cy > 1.0 - MARGIN_FRACTION
+    !(MARGIN_FRACTION..=(1.0 - MARGIN_FRACTION)).contains(&cy)
 }
 
 fn paragraph_rect(p: &Paragraph) -> Option<NormRect> {
@@ -603,7 +603,7 @@ fn math_signals(chars: &[PageChar]) -> MathSignals {
 /// Only families that are used exclusively for mathematics are matched, and
 /// font metadata is never sufficient on its own (see [text_looks_like_formula]).
 fn is_math_font_name(name: &str) -> bool {
-    let base = name.split('+').last().unwrap_or(name);
+    let base = name.split('+').next_back().unwrap_or(name);
     let upper = base.trim().to_ascii_uppercase();
     let prefixes = [
         "CMMI", "CMSY", "CMEX", // Computer Modern math italic / symbols / ext
@@ -873,8 +873,7 @@ pub fn normalize_text(s: &str) -> String {
         .replace('\u{FB02}', "fl")
         .replace('\u{FB03}', "ffi")
         .replace('\u{FB04}', "ffl")
-        .replace('\u{FB05}', "st")
-        .replace('\u{FB06}', "st")
+        .replace(['\u{FB05}', '\u{FB06}'], "st")
         .replace('\u{00AD}', ""); // soft hyphen
     normalize_ws(&s)
 }

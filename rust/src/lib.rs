@@ -18,7 +18,7 @@
 //!   - `ocr`      : full-page OCR engine + cache chain (M5)
 //!   - `search`   : full-text index + FTS5 search (M6)
 //!   - `translate`: bilingual reading (paragraph extraction + translation
-//!                  providers + translated-PDF writer, M7)
+//!     providers + translated-PDF writer, M7)
 //!   - `export`   : annotation Markdown / JSON export (M3)
 //!   - `error`    : unified `AppError`
 

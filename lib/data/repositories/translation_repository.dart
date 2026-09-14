@@ -38,6 +38,13 @@ class TranslationRepository {
   Future<rust.TranslationOverviewResult> getTranslationOverview(int bookId) =>
       rust.getTranslationOverview(bookId: bookId);
 
+  /// Pages of [bookId] with a CURRENT cached translation (stale rows filtered
+  /// by the core). One batched read the queue seeds its work list from.
+  Future<Set<int>> getTranslatedPages(int bookId) async =>
+      (await rust.getTranslatedPages(bookId: bookId))
+          .map((p) => p.toInt())
+          .toSet();
+
   /// Deletes every cached translation + artifact of a book.
   Future<int> clearTranslations(int bookId) =>
       rust.clearTranslations(bookId: bookId);

@@ -498,6 +498,12 @@ Future<TranslationOverviewResult> getTranslationOverview({
   required PlatformInt64 bookId,
 }) => RustLib.instance.api.crateApiGetTranslationOverview(bookId: bookId);
 
+/// Pages of [book_id] with a CURRENT cached translation for the active target
+/// language + provider (plan §9). The Dart queue seeds its work list from this
+/// single call instead of probing every page (an N+1 of config re-reads).
+Future<Int64List> getTranslatedPages({required PlatformInt64 bookId}) =>
+    RustLib.instance.api.crateApiGetTranslatedPages(bookId: bookId);
+
 /// Translates one page (1-indexed), streaming progress events (plan §9:
 /// the atomic per-page API the Dart queue drives). `force` re-extracts and
 /// overwrites the cache even on a hit; the default path returns the cached

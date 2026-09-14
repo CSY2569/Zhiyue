@@ -153,6 +153,23 @@
 
 **注意**：若此前已运行过卡死的旧进程，需**完全退出后重启**；`dist/` 里的 Windows 安装包（09-10）仍是旧版，如需 Windows 端请重跑 `scripts/build_packages.sh`。
 
+### 3.8 代码梳理：队列两处行为修复 + 冗余清除（2026-09-14）
+
+**行为修复（随进度模式，均为静默缺陷）**：
+1. **首批之后不再自动翻译**：`onVisiblePages` 的首批耗尽后 `_drain` 把 `running` 置回 false，但 `bookId` 保留，下一页翻页时"重新武装"分支（`bookId == null` 才触发）不再命中，工作循环在 `!running` 上立即退出——**只有第一批判页会翻译**。现改为每次批量都显式 `running = true` 再驱动。
+2. **失败页计入进度并无限重试**：页翻译出错时 `donePages` 照样 +1（进度虚高），且未缓存页每翻一次页重试一次（配置错误时热循环打满）。现失败页不计入进度、进入 `_failed` 集合不再自动重试（「翻译本页」仍可手动重试）。
+
+**逻辑简化**：
+- 队列播种从"overview + 逐页探测"（每页 2 次 KV 解析的 N+1）改为新增 API `get_translated_pages` 一次批量读取；`onVisiblePages` 同样一次读取代替每目标页探测。
+- 移除名存实亡的 `pause()`/`resume()`/`paused` 状态：切书的 `pause_resume` 行为由 `cancel` + 回书时 `resumeIfNeeded`（缓存页自动跳过）达成，旧的 paused 标志自己永远不会恢复。
+- 译文 PDF 导出进度改为**真流式**（原实现把事件缓冲到构建结束才一次性发出）；导出与单页渲染现在同样**拒绝过期抽取器缓存行**（原导出会混入 v1 旧行）。
+
+**清除的冗余**：
+- Dart：`bilingual_utils.dart` 整文件（`substituteFormulaTokens`/`paragraphStatusStyle` 均无调用方——窗格已改为 PDF 页渲染）、`PageTranslationNotifier.refresh()`、窗格头部多余的 Column 包裹。
+- Rust：`pdf_writer::translated_pdf_exists`（无调用方）、`restore_placeholders` 中的自替换空操作、`FontMetrics` 收集字符时与 `page_used_chars` 的重复块、clippy 提示（`Iterator::last`→`next_back`、连写 `replace` 合并、区间判断、`&PathBuf`→`&Path` 等 6 处），lib 警告 11 → 6（余者为 FRB 签名与 openai 存量风格提示，不在本次范围）。
+
+**验证**：Rust 121 单测 + 2 集成全绿；Flutter **203** 测试全绿（含新增回归：`a finished batch re-arms…`、`a failed page is not counted done…`）；`flutter analyze` / `cargo clippy` 无新增。产物已重建（debug 核心、release bundle、`dist/` AppImage）；`/Data/Appimage/ZhiYue.AppImage` 因应用正在运行未覆盖，关闭应用后可用 `dist/ZhiYue-x86_64.AppImage` 更新。
+
 ## 4. 后续开发方向
 
 ### 4.1 近期（补齐规格 P2 缺口）

@@ -2,7 +2,7 @@
 //! `run_translate_page` against an isolated DB, a synthetic PDF, and a mock
 //! OpenAI-compatible server -- the integration path the widget tests mock out.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use rbwa_core::db;
 use rbwa_core::pdf;
@@ -24,7 +24,7 @@ fn scratch_dir(tag: &str) -> PathBuf {
 }
 
 /// A one-page PDF with two text lines (built under the pdfium lock).
-fn make_pdf(dir: &PathBuf) -> PathBuf {
+fn make_pdf(dir: &Path) -> PathBuf {
     let path = dir.join("book.pdf");
     pdf::with_pdfium_lock(|pdfium| {
         let mut doc = pdfium.create_new_pdf()?;
@@ -139,8 +139,6 @@ async fn translate_page_end_to_end_with_mock_llm() {
     }
 
     let base = mock_llm(r#"[{\"i\":0,\"t\":\"量子世界很奇妙。\"}]"#).await;
-    // Drop the escape backslashes the raw string kept for JSON embedding.
-    let base = base;
     insert_setting(
         "ai_config",
         &format!(

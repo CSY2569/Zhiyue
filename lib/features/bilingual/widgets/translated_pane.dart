@@ -124,50 +124,46 @@ class _Header extends ConsumerWidget {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 4, 4),
-      child: Column(
+      child: Row(
         children: [
-          Row(
-            children: [
-              Icon(Icons.translate, size: 16, color: theme.colorScheme.primary),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  '对照阅读',
-                  style: theme.textTheme.titleSmall,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Chip(
-                label: Text(targetLang, style: theme.textTheme.labelSmall),
-                visualDensity: VisualDensity.compact,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              const Spacer(),
-              if (configured && bookId != null) ...[
-                IconButton(
-                  icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-                  tooltip: '导出译文 PDF',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () => _exportPdf(context, ref, bookId!, targetLang),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.download_done_outlined, size: 18),
-                  tooltip: '整本翻译',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () => _startWholeBook(context, ref, bookId!),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close, size: 18),
-                  tooltip: '关闭对照阅读',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () =>
-                      ref.read(translationPaneProvider.notifier).close(),
-                ),
-              ],
-            ],
+          Icon(Icons.translate, size: 16, color: theme.colorScheme.primary),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              '对照阅读',
+              style: theme.textTheme.titleSmall,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
+          const SizedBox(width: 6),
+          Chip(
+            label: Text(targetLang, style: theme.textTheme.labelSmall),
+            visualDensity: VisualDensity.compact,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          const Spacer(),
+          if (configured && bookId != null) ...[
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+              tooltip: '导出译文 PDF',
+              visualDensity: VisualDensity.compact,
+              onPressed: () => _exportPdf(context, ref, bookId!, targetLang),
+            ),
+            IconButton(
+              icon: const Icon(Icons.download_done_outlined, size: 18),
+              tooltip: '整本翻译',
+              visualDensity: VisualDensity.compact,
+              onPressed: () => _startWholeBook(context, ref, bookId!),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, size: 18),
+              tooltip: '关闭对照阅读',
+              visualDensity: VisualDensity.compact,
+              onPressed: () =>
+                  ref.read(translationPaneProvider.notifier).close(),
+            ),
+          ],
         ],
       ),
     );

@@ -146,6 +146,9 @@ class FakeTranslationRepo extends TranslationRepository {
       );
 
   @override
+  Future<Set<int>> getTranslatedPages(int bookId) async => cache.keys.toSet();
+
+  @override
   Future<int> clearTranslations(int bookId) async {
     cleared.add(bookId);
     cache.clear();

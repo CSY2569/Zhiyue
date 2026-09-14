@@ -393,7 +393,7 @@ mod tests {
         // Build a small PDF on disk, then extract from several threads.
         let path = std::env::temp_dir().join(format!("rbwa_conc_{}.pdf", std::process::id()));
         {
-            let doc = with_pdfium_lock(|p| {
+            with_pdfium_lock(|p| {
                 let mut d = p.create_new_pdf()?;
                 let font = d.fonts_mut().helvetica();
                 let mut page = d
@@ -408,7 +408,7 @@ mod tests {
                     PdfPoints::new(12.0),
                 )?;
                 d.save_to_file(&path)?;
-                Ok(d)
+                Ok(())
             })
             .expect("build pdf");
         }

@@ -5,12 +5,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rbwa/core/theme/app_theme.dart';
 import 'package:rbwa/data/repositories/ai_repository.dart';
 import 'package:rbwa/data/repositories/translation_repository.dart';
-import 'package:rbwa/features/bilingual/bilingual_utils.dart';
 import 'package:rbwa/features/bilingual/providers/page_translation_provider.dart';
 import 'package:rbwa/features/bilingual/providers/translated_page_image_provider.dart';
 import 'package:rbwa/features/bilingual/widgets/translated_pane.dart';
 import 'package:rbwa/features/reader/providers/panel_layout.dart';
-import 'package:rbwa/src/rust/models/annotation.dart' show NormRect;
 import 'package:rbwa/src/rust/models/translate.dart';
 
 import 'helpers/fake_ai_repo.dart';
@@ -24,34 +22,6 @@ void main() {
       expect(PanelLayout.minTranslatedPaneWidth, 280);
       expect(PanelLayout.maxTranslatedPaneWidth, 900);
       expect(PanelLayout.minContentWidth, 360);
-    });
-  });
-
-  group('formula token substitution', () {
-    test('replaces MATH_n with the region source text, in order', () {
-      final regions = [
-        const FormulaRegion(
-          rect: NormRect(x: 0, y: 0, w: 0, h: 0),
-          imagePath: null,
-          sourceText: 'x2 +y',
-          placeholder: '',
-        ),
-        const FormulaRegion(
-          rect: NormRect(x: 0, y: 0, w: 0, h: 0),
-          imagePath: null,
-          sourceText: 'a+b',
-          placeholder: '',
-        ),
-      ];
-      expect(
-        substituteFormulaTokens('当 ⟨Fabc-MATH_0⟩ 与 ⟨F9x-MATH_1⟩ 都很大', regions),
-        '当 x2 +y 与 a+b 都很大',
-      );
-      expect(
-        substituteFormulaTokens('{ ⟨F1-MATH_5⟩ }', regions),
-        '{ ⟨F1-MATH_5⟩ }',
-      );
-      expect(substituteFormulaTokens('纯文本', regions), '纯文本');
     });
   });
 

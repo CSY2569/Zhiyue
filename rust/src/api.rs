@@ -1807,6 +1807,16 @@ pub fn get_translation_overview(book_id: i64) -> TranslationOverviewResult {
     }
 }
 
+/// Pages of [book_id] with a CURRENT cached translation for the active target
+/// language + provider (plan §9). The Dart queue seeds its work list from this
+/// single call instead of probing every page (an N+1 of config re-reads).
+pub fn get_translated_pages(book_id: i64) -> Vec<i64> {
+    let (lang, provider) = crate::translate::cache_key();
+    let conn = db::db();
+    crate::db::repository::translate::translated_pages(&conn, book_id, &lang, &provider)
+        .unwrap_or_default()
+}
+
 /// Translates one page (1-indexed), streaming progress events (plan §9:
 /// the atomic per-page API the Dart queue drives). `force` re-extracts and
 /// overwrites the cache even on a hit; the default path returns the cached
@@ -1855,20 +1865,20 @@ pub async fn build_translated_pdf(
     sink: StreamSink<crate::models::translate::TranslationProgressEvent>,
 ) {
     // pdfium document building + font embedding is synchronous CPU/IO work:
-    // run it on a blocking thread so the FRB worker is not stalled.
-    let result = tokio::task::spawn_blocking(move || {
-        let mut events = Vec::new();
-        let path = crate::translate::build_translated_pdf(book_id, &target_lang, |ev| {
-            events.push(ev);
-        })?;
-        Ok::<_, AppError>((path, events))
-    })
-    .await;
-    match result {
-        Ok(Ok((path, events))) => {
-            for ev in events {
-                let _ = sink.add(ev);
-            }
+    // run it on a blocking thread and forward progress events AS THEY ARRIVE
+    // (buffering them until completion left the UI showing nothing for the
+    // whole build).
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let handle = tokio::task::spawn_blocking(move || {
+        crate::translate::build_translated_pdf(book_id, &target_lang, |ev| {
+            let _ = tx.send(ev);
+        })
+    });
+    while let Some(ev) = rx.recv().await {
+        let _ = sink.add(ev);
+    }
+    match handle.await {
+        Ok(Ok(path)) => {
             tracing::info!(%path, "translated pdf built");
         }
         Ok(Err(e)) => {

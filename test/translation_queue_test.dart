@@ -181,4 +181,46 @@ void main() {
     expect(repo.translateCalls, isNotEmpty,
         reason: '随进度 must enqueue once the config resolves');
   });
+
+  /// Regression: a finished batch set `running=false` but kept `bookId`, so
+  /// the next page turn skipped the re-arm branch and `_drain` exited on
+  /// `!running` immediately -- only the FIRST batch ever translated.
+  test('a finished batch re-arms when the visible pages change again',
+      () async {
+    final repo = FakeTranslationRepo();
+    final c = _container(repo);
+    c.read(translationConfigProvider.notifier).state =
+        AsyncData(_config(mode: TranslationMode.withProgress));
+
+    // Batch 1: pages 1-3 translate.
+    await c.read(translationQueueProvider.notifier).onVisiblePages(1, [1]);
+    expect(repo.translateCalls.map((e) => e.$2).toSet(), {1, 2, 3});
+
+    // Batch 2 (page turn): page 4 must still be enqueued.
+    await c.read(translationQueueProvider.notifier).onVisiblePages(1, [2]);
+    expect(repo.translateCalls.map((e) => e.$2), contains(4),
+        reason: 'the queue must re-arm for every page turn, not just the first');
+  });
+
+  /// Regression: a failed page used to count as done (progress lied) and was
+  /// re-enqueued on every page turn (hot-loop on a persistent error). It must
+  /// be parked until the user retries manually.
+  test('a failed page is not counted done and is not auto-retried',
+      () async {
+    final repo = FakeTranslationRepo()..failTranslate = true;
+    final c = _container(repo);
+    c.read(translationConfigProvider.notifier).state =
+        AsyncData(_config(mode: TranslationMode.withProgress));
+
+    await c.read(translationQueueProvider.notifier).onVisiblePages(1, [1]);
+    expect(repo.translateCalls.map((e) => e.$2).toSet(), {1, 2, 3});
+    expect(c.read(translationQueueProvider).donePages, 0,
+        reason: 'failed pages must not count as done');
+
+    // The failure clears; new pages go out but the failed ones stay parked.
+    repo.failTranslate = false;
+    await c.read(translationQueueProvider.notifier).onVisiblePages(1, [5]);
+    expect(repo.translateCalls.map((e) => e.$2).toSet(), {1, 2, 3, 5, 6, 7});
+    expect(c.read(translationQueueProvider).donePages, 3);
+  });
 }
