@@ -986,6 +986,57 @@ pub fn count_cjk(s: &str) -> usize {
         .count()
 }
 
+/// Comma-separated slots of a paren group's chars.
+fn slots(inner: &[char]) -> usize {
+    inner
+        .split(|c| *c == ',')
+        .filter(|s| s.iter().any(|c| !c.is_whitespace()))
+        .count()
+}
+
+/// Whether [text] shows "symbol gaps": parenthesized groups that contain no
+/// alphabetic characters at all (e.g. "(, )", "(1, 1)", "()"). This is the
+/// signature of math glyphs the PDF cannot map back to text (math fonts
+/// without a ToUnicode table): the symbols existed in the original line but
+/// are unrecoverable, so the paragraph must keep its ORIGINAL pixels instead
+/// of being whitened and re-drawn with holes the translation cannot fill.
+pub fn text_has_symbol_gaps(text: &str) -> bool {
+    let bytes: Vec<char> = text.chars().collect();
+    let mut depth = 0usize;
+    let mut start = 0usize;
+    for (i, c) in bytes.iter().enumerate() {
+        match c {
+            '(' | '（' | '[' | '【' => {
+                if depth == 0 {
+                    start = i;
+                }
+                depth += 1;
+            }
+            ')' | '）' | ']' | '】' if depth > 0 => {
+                depth -= 1;
+                if depth == 0 {
+                    let inner = &bytes[start + 1..i];
+                    // No letters inside the group: "(, )", "(1, 1)" and "()"
+                    // are unrecoverable math remnants. A single numeric
+                    // reference like "(10)" is a normal prose citation and
+                    // stays translatable.
+                    if inner.iter().any(|c| c.is_alphabetic()) {
+                        continue;
+                    }
+                    let has_content = inner.iter().any(|c| !c.is_whitespace());
+                    let has_alnum =
+                        inner.iter().any(|c| c.is_ascii_alphanumeric());
+                    if !has_content || slots(inner) >= 2 || !has_alnum {
+                        return true;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
 /// CJK fraction of a text (drives source-language detection, plan §4.5).
 pub fn cjk_ratio(s: &str) -> f64 {
     let total = s.chars().filter(|c| !c.is_whitespace()).count();
@@ -1245,7 +1296,7 @@ mod tests {
             let y = 0.3 + li as f64 * 0.03;
             let mut x = 0.36;
             for c in line.chars() {
-                let font = if matches!(c, 'σ' | 'σ' | '′' | '⊢' | '¬' | '∧' | '(' | ')' | ',' | ':' | '=') {
+                let font = if matches!(c, 'σ' | '′' | '⊢' | '¬' | '∧' | '(' | ')' | ',' | ':' | '=') {
                     "CMSY10"
                 } else {
                     "Times"
@@ -1376,6 +1427,28 @@ mod tests {
         assert!(!is_noise(header, Some(NormRect { x: 0.3, y: 0.3, w: 0.4, h: 0.02 }), &[]));
         // Margin text that is neither a page number nor repeated stays.
         assert!(!is_noise("Some unique footnote-ish line", Some(NormRect { x: 0.2, y: 0.97, w: 0.6, h: 0.02 }), &[]));
+    }
+
+    #[test]
+    fn symbol_gaps_detect_unrecoverable_math() {
+        // Math letters the PDF cannot map back to text: holes in parens.
+        for s in [
+            "It can be understood as a pair (, ), where:",
+            "For every (1, 1), ⋯, (, ) applied in order",
+            "define track on pairs ():",
+            "state () = (, id):",
+        ] {
+            assert!(text_has_symbol_gaps(s), "{s:?}");
+        }
+        // Real prose / real math text has letters inside the parens.
+        for s in [
+            "Given a context Γ, define its effect context as:",
+            "For every (γ, φ) ∈ ∂Γ and every pair (f, g)",
+            "track(f, g) transforms γ by f",
+            "代入式 (10) 得到结果", // single-slot numeric reference stays
+        ] {
+            assert!(!text_has_symbol_gaps(s), "{s:?}");
+        }
     }
 
     #[test]

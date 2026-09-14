@@ -312,10 +312,17 @@ async fn translate_page_inner(
     let source_hash = extract::stamp_source_hash(&crate::translate::source_hash(&texts));
 
     // --- segments: text paragraphs only (formulas stay as images) --------
+    // Paragraphs with symbol gaps ("(, )", "(1, 1)" — math glyphs the PDF
+    // cannot map back to text) keep their original pixels: translating the
+    // broken text only produces holes the LLM guesses at.
     let segment_idx: Vec<usize> = paragraphs
         .iter()
         .enumerate()
-        .filter(|(_, p)| p.kind == ParagraphKind::Text && !p.text.trim().is_empty())
+        .filter(|(_, p)| {
+            p.kind == ParagraphKind::Text
+                && !p.text.trim().is_empty()
+                && !extract::text_has_symbol_gaps(&p.text)
+        })
         .map(|(i, _)| i)
         .collect();
     let segments: Vec<Segment> = segment_idx

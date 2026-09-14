@@ -52,6 +52,21 @@ const LINE_SPACING: f32 = 1.45;
 /// Paragraph spacing in points.
 const PARA_SPACING: f32 = 6.0;
 /// Cap on background-render pixels (the overlay's page raster).
+/// Direct glyph id for [c], following the fallback chain when the font
+/// lacks the char (bounded depth: a target may itself be missing).
+fn probe_gid(face: &ttf_parser::Face, c: char, depth: usize) -> Option<u16> {
+    if depth > 3 {
+        return None;
+    }
+    match face.glyph_index(c).map(|g| g.0) {
+        Some(g) => Some(g),
+        None => FALLBACK_GLYPHS
+            .iter()
+            .find(|(from, _)| *from == c)
+            .and_then(|(_, to)| probe_gid(face, *to, depth + 1)),
+    }
+}
+
 /// Math operators the bundled CJK font lacks, mapped to a present lookalike
 /// (a blank glyph would silently drop the symbol from the translation).
 const FALLBACK_GLYPHS: &[(char, char)] = &[
@@ -61,6 +76,85 @@ const FALLBACK_GLYPHS: &[(char, char)] = &[
     ('↦', '→'),
     ('⇀', '→'),
     ('↼', '←'),
+    // Composite / binary operators the CJK font lacks.
+    ('∘', '○'),
+    ('≀', '⊗'),
+    ('∙', '·'),
+    ('⋆', '*'),
+    ('∖', '\\'),
+    ('⊛', '*'),
+    // Mid / vertical ellipses.
+    ('⋯', '…'),
+    ('⋮', ':'),
+    ('⋰', '…'),
+    ('⋱', '…'),
+    // Union / intersection family (∪ ∩ exist in the font).
+    ('⊔', '∪'),
+    ('⊓', '∩'),
+    ('⊎', '∪'),
+    ('⊟', '-'),
+    ('⊞', '+'),
+    ('⊠', '×'),
+    ('⊡', '·'),
+    // Equivalence variants (≈ ≤ ≥ ≠ ∈ → are present).
+    ('≂', '≈'),
+    ('≊', '≈'),
+    ('≍', '≈'),
+    ('≎', '≈'),
+    ('≏', '≈'),
+    ('≅', '≈'),
+    ('⊀', '∉'),
+    ('⊁', '∉'),
+    ('≺', '<'),
+    ('≻', '>'),
+    ('≼', '≤'),
+    ('≽', '≥'),
+    ('≾', '≤'),
+    ('≿', '≥'),
+    ('⊭', '≠'),
+    ('⊮', '≠'),
+    ('≉', '≠'),
+    ('≹', '≠'),
+    ('∤', '≠'),
+    // Letter-like symbols (drawn as the base letter).
+    ('ℕ', 'N'),
+    ('ℤ', 'Z'),
+    ('ℚ', 'Q'),
+    ('ℝ', 'R'),
+    ('ℂ', 'C'),
+    ('ℙ', 'P'),
+    ('𝔽', 'F'),
+    // Long / double arrows (short ones exist).
+    ('⟶', '→'),
+    ('⟵', '←'),
+    ('⟸', '⇐'),
+    ('⟹', '⇒'),
+    ('⟺', '⇔'),
+    ('↠', '→'),
+    ('↪', '→'),
+    ('↩', '←'),
+    ('⇉', '→'),
+    // Frown / smile (retraction / section marks).
+    ('⌢', '~'),
+    ('⌣', '~'),
+    // End-of-proof.
+    ('∎', '□'),
+    // Variant Greek (base forms exist).
+    ('ϑ', 'θ'),
+    ('ϕ', 'φ'),
+    ('ϖ', 'π'),
+    ('ϱ', 'ρ'),
+    ('ϵ', 'ε'),
+    ('ϰ', 'κ'),
+    // Sub / superscripts (base digit or letter).
+    ('₀', '0'),
+    ('₁', '1'),
+    ('₂', '2'),
+    ('ₙ', 'n'),
+    ('¹', '1'),
+    ('²', '2'),
+    ('³', '3'),
+    ('ⁿ', 'n'),
 ];
 const BG_MAX_PIXELS: f64 = 24_000_000.0;
 /// JPEG quality of the overlay page background (photos/figures tolerate 88;
@@ -185,7 +279,10 @@ fn load_cached_translation(book_id: i64, page: i64) -> Option<PageTranslation> {
 /// subset always covers the page's own content.
 fn page_used_chars(cached: Option<&PageTranslation>, target_lang: &str) -> Vec<char> {
     let mut used: Vec<char> = Vec::new();
-    used.extend("原书第页尚未翻译　译本p.".chars());
+    // Anchors / placeholder text + the separators they contain (spaces and
+    // the fullwidth colon are easy to forget and draw as tofu when absent).
+    used.extend("原书第 页尚未翻译　译本：p. —".chars());
+    used.push(' ');
     used.extend("0123456789".chars());
     used.extend(target_lang.chars());
     if let Some(t) = cached {
@@ -433,9 +530,11 @@ fn whiten_paragraphs(img: &mut image::RgbaImage, t: &PageTranslation) {
     // formula looks broken.
     let pad_y = 0.004;
     for para in &t.paragraphs {
-        // Whole-paragraph formulas keep their original pixels; everything
-        // else (inline-formula paragraphs included) is replaced.
-        if para.kind != ParagraphKind::Text {
+        // Mirror the draw rule: formulas and symbol-gap paragraphs keep
+        // their original pixels.
+        if para.kind != ParagraphKind::Text
+            || crate::translate::extract::text_has_symbol_gaps(&para.source)
+        {
             continue;
         }
         for r in &para.rects {
@@ -527,12 +626,15 @@ impl FontMetrics {
         let upem = face.units_per_em().max(1) as f32;
 
         // Collect the original glyph ids actually needed (0 = .notdef always).
+        // A char the font lacks resolves through FALLBACK_GLYPHS, so the
+        // lookalike TARGET glyph must be subset too or the remap misses it.
+        let resolve = |c: char| -> Option<u16> { probe_gid(&face, c, 0) };
         let mut old_gids: Vec<u16> = vec![0];
         let mut seen: HashMap<u16, ()> = HashMap::new();
         for &c in used {
-            if let Some(g) = face.glyph_index(c) {
-                if seen.insert(g.0, ()).is_none() {
-                    old_gids.push(g.0);
+            if let Some(g) = resolve(c) {
+                if seen.insert(g, ()).is_none() {
+                    old_gids.push(g);
                 }
             }
         }
@@ -596,9 +698,7 @@ impl FontMetrics {
     /// math operators the CJK font lacks are drawn via a present lookalike
     /// instead of disappearing.
     fn gid(&self, c: char) -> u16 {
-        let probe = |ch: char| self.face.glyph_index(ch).map(|g| g.0);
-        let old = probe(c).or_else(|| FALLBACK_GLYPHS.iter().find(|(from, _)| *from == c).map(|(_, to)| *to).and_then(probe));
-        match old {
+        match probe_gid(&self.face, c, 0) {
             Some(old) => self.remap.get(&old).copied().unwrap_or(0),
             None => 0,
         }
@@ -805,7 +905,11 @@ fn write_overlay_page(
         // background -- nothing to draw. Inline-formula paragraphs are drawn
         // with the tokens substituted by their source text (user decision:
         // they must be translated; the whiten padding covers tall glyphs).
-        if para.kind != ParagraphKind::Text {
+        // Symbol-gap paragraphs (unrecoverable math glyphs) keep their
+        // original pixels too -- drawing text with holes is worse.
+        if para.kind != ParagraphKind::Text
+            || crate::translate::extract::text_has_symbol_gaps(&para.source)
+        {
             continue;
         }
         let text = display_text(para);
@@ -1161,6 +1265,15 @@ mod tests {
         assert_eq!(m2.gid('⊢'), m2.gid('|'));
         assert_eq!(m2.gid('↦'), m2.gid('→'));
         assert_eq!(m2.gid('⊨'), m2.gid('='));
+
+        // The full operator battery resolves directly or via fallback --
+        // none may draw as .notdef (blank = silently dropped content).
+        let battery = "∘∙⋆∖≀⋯⋮⋰⋱⊔⊓⊎⊟⊞⊠⊛≂≊≍≎≏≅⊀⊁≺≻≼≽≾≿⊭⊮≉≹ℕℤℚℝℂℙ𝔽⟶⟵⟸⟹⟺↠↪↩⇉⌢⌣∎ϑϕϖϱϵϰ₀₁₂ₙ¹²³ⁿ";
+        let m3 = FontMetrics::prepare(&battery.chars().collect::<Vec<_>>())
+            .expect("font parses");
+        for c in battery.chars() {
+            assert!(m3.gid(c) != 0, "{c} resolves to .notdef");
+        }
     }
 
     #[test]
