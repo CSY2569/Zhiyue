@@ -52,10 +52,20 @@ const LINE_SPACING: f32 = 1.45;
 /// Paragraph spacing in points.
 const PARA_SPACING: f32 = 6.0;
 /// Cap on background-render pixels (the overlay's page raster).
+/// Math operators the bundled CJK font lacks, mapped to a present lookalike
+/// (a blank glyph would silently drop the symbol from the translation).
+const FALLBACK_GLYPHS: &[(char, char)] = &[
+    ('⊢', '|'),
+    ('⊣', '|'),
+    ('⊨', '='),
+    ('↦', '→'),
+    ('⇀', '→'),
+    ('↼', '←'),
+];
 const BG_MAX_PIXELS: f64 = 24_000_000.0;
 /// JPEG quality of the overlay page background (photos/figures tolerate 88;
 /// keeps whole-book exports at ~100-250 KB per page instead of ~1 MB).
-const JPEG_QUALITY: u8 = 88;
+const JPEG_QUALITY: u8 = 90;
 /// Smallest font the shrink-to-fit loop may pick for an overlay paragraph.
 const MIN_OVERLAY_SIZE: f32 = 5.5;
 /// Background render scale for whole-book exports (in-app passes the live
@@ -418,11 +428,14 @@ fn whiten_paragraphs(img: &mut image::RgbaImage, t: &PageTranslation) {
     // Padding in normalized page units: a bit of vertical slack covers
     // ascenders/descenders beyond the tight line box.
     let pad_x = 0.0015;
-    let pad_y = 0.0025;
+    // Generous vertical padding: inline math (fractions, sums, limits)
+    // extends well above/below the tight text-line box, and a sliced
+    // formula looks broken.
+    let pad_y = 0.004;
     for para in &t.paragraphs {
-        // Mirror the overlay draw rule: formulas and inline-formula
-        // paragraphs keep their original pixels.
-        if para.kind != ParagraphKind::Text || !para.formula_regions.is_empty() {
+        // Whole-paragraph formulas keep their original pixels; everything
+        // else (inline-formula paragraphs included) is replaced.
+        if para.kind != ParagraphKind::Text {
             continue;
         }
         for r in &para.rects {
@@ -579,10 +592,14 @@ impl FontMetrics {
         })
     }
 
-    /// NEW glyph id for a char (0 = .notdef when the font lacks it).
+    /// NEW glyph id for a char (0 = .notdef when the font lacks it). A few
+    /// math operators the CJK font lacks are drawn via a present lookalike
+    /// instead of disappearing.
     fn gid(&self, c: char) -> u16 {
-        match self.face.glyph_index(c) {
-            Some(old) => self.remap.get(&old.0).copied().unwrap_or(0),
+        let probe = |ch: char| self.face.glyph_index(ch).map(|g| g.0);
+        let old = probe(c).or_else(|| FALLBACK_GLYPHS.iter().find(|(from, _)| *from == c).map(|(_, to)| *to).and_then(probe));
+        match old {
+            Some(old) => self.remap.get(&old).copied().unwrap_or(0),
             None => 0,
         }
     }
@@ -784,13 +801,11 @@ fn write_overlay_page(
     );
 
     for para in &t.paragraphs {
-        // Whole-paragraph formulas AND paragraphs containing inline formula
-        // regions keep their ORIGINAL pixels: whitening the tight line rects
-        // would slice through tall math (fractions, sums) and the flat
-        // re-draw loses the layout.
-        if para.kind != ParagraphKind::Text
-            || !para.formula_regions.is_empty()
-        {
+        // Whole-paragraph formulas keep their ORIGINAL pixels in the
+        // background -- nothing to draw. Inline-formula paragraphs are drawn
+        // with the tokens substituted by their source text (user decision:
+        // they must be translated; the whiten padding covers tall glyphs).
+        if para.kind != ParagraphKind::Text {
             continue;
         }
         let text = display_text(para);
@@ -1126,6 +1141,26 @@ mod tests {
             formula_regions: Vec::new(),
             rects: Vec::new(),
         }
+    }
+
+    /// The bundled font must cover the symbols translations echo back
+    /// (Greek letters, common math operators) -- a missing glyph draws as
+    /// blank and silently drops content. Operators the CJK font lacks are
+    /// remapped to a present lookalike by FALLBACK_GLYPHS.
+    #[test]
+    fn bundled_font_covers_translation_symbols() {
+        let battery = "ΓγφσΣκμη∂∑∈∫→′≤≥≠×…·—";
+        let m = FontMetrics::prepare(&battery.chars().collect::<Vec<_>>())
+            .expect("font parses");
+        for c in battery.chars() {
+            assert!(m.gid(c) != 0, "{c} missing from the bundled font");
+        }
+        // Lookalike fallbacks resolve to real glyphs.
+        let m2 = FontMetrics::prepare(&"⊢⊣⊨↦⇀↼|→=".chars().collect::<Vec<_>>())
+            .expect("font parses");
+        assert_eq!(m2.gid('⊢'), m2.gid('|'));
+        assert_eq!(m2.gid('↦'), m2.gid('→'));
+        assert_eq!(m2.gid('⊨'), m2.gid('='));
     }
 
     #[test]
