@@ -900,6 +900,7 @@ fn write_flow_page(
 
 /// Embeds a JPEG as an image XObject (DCTDecode -- no recompression) and
 /// appends the `Do` operator drawing it at (x, y) sized (w_pt, h_pt).
+#[allow(clippy::too_many_arguments)] // low-level emit helper: source px + dest rect
 fn emit_image_jpeg(
     content: &mut String,
     xobjects: &mut Vec<(String, ObjectId)>,

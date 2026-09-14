@@ -278,7 +278,10 @@ fn cluster_lines(chars: &[PageChar]) -> Vec<Line> {
 }
 
 /// Merges clustered lines into paragraphs: gap + first-line-indent rules,
-/// with an optional two-column split (plan §3.1 回退路径).
+/// with an optional two-column split (plan §3.1 回退路径). Display-math lines
+/// (narrow, horizontally centered) are split off into their own paragraphs so
+/// the formula classifier sees them standalone instead of merged into the
+/// surrounding prose.
 fn fallback_paragraphs(chars: &[PageChar], page: i64) -> Vec<Paragraph> {
     let lines = cluster_lines(chars);
     if lines.is_empty() {
@@ -287,6 +290,22 @@ fn fallback_paragraphs(chars: &[PageChar], page: i64) -> Vec<Paragraph> {
     let ordered = order_for_reading(&lines);
     let mut heights: Vec<f64> = ordered.iter().map(|l| l.rect.h).collect();
     let median_h = median(&mut heights).unwrap_or(0.02).max(0.005);
+
+    // Wide-line reference + per-line display-math flag (same shape rule as
+    // is_whole_paragraph_formula rule 3).
+    let mut line_ws: Vec<f64> = ordered.iter().map(|l| l.rect.w).filter(|w| *w > 0.0).collect();
+    line_ws.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let wide_p95 = line_ws
+        .get(line_ws.len().saturating_sub(1).min(line_ws.len() * 95 / 100))
+        .copied()
+        .unwrap_or(1.0);
+    let display_flag = |l: &Line| -> (bool, f64) {
+        let cx = l.rect.x + l.rect.w / 2.0;
+        let centered = [0.25, 0.5, 0.75]
+            .iter()
+            .any(|c| (cx - c).abs() <= 0.06);
+        (l.rect.w <= wide_p95 * 0.7 && centered, cx)
+    };
 
     let mut paragraphs: Vec<Paragraph> = Vec::new();
     let mut current: Vec<Line> = Vec::new();
@@ -309,10 +328,16 @@ fn fallback_paragraphs(chars: &[PageChar], page: i64) -> Vec<Paragraph> {
     };
 
     for line in ordered {
+        let (narrow, cx) = display_flag(&line);
         if let Some(prev) = current.last() {
+            let (prev_narrow, prev_cx) = display_flag(prev);
             let gap = line.rect.y - (prev.rect.y + prev.rect.h);
             let indented = line.rect.x > prev.rect.x + 0.03;
-            if gap > median_h * 0.7 || (indented && gap > -median_h * 0.2) {
+            // Break on the usual gap/indent rules, on a prose<->display-math
+            // transition, or between two different display blocks.
+            let math_boundary = narrow != prev_narrow
+                || (narrow && (cx - prev_cx).abs() > 0.05);
+            if gap > median_h * 0.7 || (indented && gap > -median_h * 0.2) || math_boundary {
                 flush(&mut current, &mut paragraphs);
             }
         }
@@ -697,19 +722,34 @@ fn detect_formula_regions(chars: &[PageChar], signals: &MathSignals) -> Vec<(Nor
 }
 
 /// Attaches formula regions to paragraphs and marks whole-paragraph
-/// formulas (>= 80% of the chars inside the paragraph rect are math).
+/// formulas (see [is_whole_paragraph_formula] for the classification).
 fn attach_formulas(
     mut paragraphs: Vec<Paragraph>,
     chars: &[PageChar],
     signals: &MathSignals,
     regions: &[(NormRect, String)],
 ) -> Vec<Paragraph> {
+    // Page-wide line-width reference for the "centered short block" signal:
+    // display equations are narrow relative to the column's full lines.
+    let mut line_ws: Vec<f64> = paragraphs
+        .iter()
+        .flat_map(|p| p.rects.iter().map(|r| r.w))
+        .filter(|w| *w > 0.0)
+        .collect();
+    line_ws.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let wide_p95 = line_ws
+        .get(line_ws.len().saturating_sub(1).min(line_ws.len() * 95 / 100))
+        .copied()
+        .unwrap_or(1.0);
+
     for p in &mut paragraphs {
         let Some(rect) = paragraph_rect(p) else {
             continue;
         };
         let mut inside = 0usize;
         let mut math_inside = 0usize;
+        let mut alpha_inside = 0usize;
+        let mut math_alpha_inside = 0usize;
         for c in chars {
             if c.ch.trim().is_empty() {
                 continue;
@@ -722,17 +762,31 @@ fn attach_formulas(
                 && cy <= rect.y + rect.h;
             if contains {
                 inside += 1;
-                if is_math_char(c, signals) {
+                let math = is_math_char(c, signals);
+                if math {
                     math_inside += 1;
+                }
+                if c.ch.chars().next().is_some_and(|ch| ch.is_alphabetic()) {
+                    alpha_inside += 1;
+                    if math {
+                        math_alpha_inside += 1;
+                    }
                 }
             }
         }
-        if inside > 0
-            && math_inside as f64 / inside as f64 >= 0.8
-            && text_looks_like_formula(&p.text)
-        {
+        let math_ratio = if inside > 0 {
+            math_inside as f64 / inside as f64
+        } else {
+            0.0
+        };
+        let math_alpha_ratio = if alpha_inside > 0 {
+            math_alpha_inside as f64 / alpha_inside as f64
+        } else {
+            0.0
+        };
+        if is_whole_paragraph_formula(p, math_ratio, math_alpha_ratio, wide_p95) {
             p.kind = ParagraphKind::Formula;
-            // Whole-formula paragraphs keep their regions for image capture.
+            // Whole-formula paragraphs keep their regions for token mapping.
             p.formula_regions = regions
                 .iter()
                 .filter(|(r, _)| rects_overlap(r, &rect))
@@ -759,6 +813,128 @@ fn attach_formulas(
         }
     }
     paragraphs
+}
+
+/// Runs of at least [min_len] alphabetic characters in [text].
+fn count_alpha_runs(text: &str, min_len: usize) -> usize {
+    let mut runs = 0usize;
+    let mut cur = 0usize;
+    for c in text.chars() {
+        if c.is_alphabetic() {
+            cur += 1;
+        } else {
+            if cur >= min_len {
+                runs += 1;
+            }
+            cur = 0;
+        }
+    }
+    if cur >= min_len {
+        runs += 1;
+    }
+    runs
+}
+
+/// Whether a paragraph is a DISPLAY FORMULA and must keep its original
+/// pixels (never whitened, never machine-translated). Three signals, any of
+/// which classifies it as math:
+///
+/// 1. classic: >= 80% of its chars are math signals AND the text has no
+///    ordinary word (pure symbol equations like "E = mc2");
+/// 2. math letters: >= 60% of its ALPHABETIC chars are set in math fonts or
+///    sub/superscript-scaled, and the raw text has at most one long word --
+///    catches "Γ ⊢ t : T_effect" where the subscript word "effect" would
+///    otherwise read as prose;
+/// 3. centered short block with math content: display equations sit on
+///    narrow, horizontally centered lines (vs the column's full-width prose
+///    lines) -- catches multi-line case environments whose condition words
+///    ("activating if σ ⊬ d ...") are set in the text font.
+///
+/// The long-word guard in rule 1 and the width of rule 3 are what keep a
+/// LaTeX paper's BODY text -- often set in Computer-Modern-derived families
+/// -- classified as prose (the original regression).
+fn is_whole_paragraph_formula(
+    p: &Paragraph,
+    math_ratio: f64,
+    math_alpha_ratio: f64,
+    wide_p95: f64,
+) -> bool {
+    // Paragraphs with no measurable chars cannot be math (the ratio callers
+    // pass 0.0 for them, so only rule 3 could fire; require a non-empty rect).
+    if p.text.trim().is_empty() || p.rects.is_empty() {
+        return false;
+    }
+    // Rule 1: pure symbol equations.
+    if math_ratio >= 0.8 && text_looks_like_formula(&p.text) {
+        return true;
+    }
+    // Rule 2: math-font letters dominate the paragraph's alphabet.
+    if math_alpha_ratio >= 0.6 && count_alpha_runs(&p.text, 4) <= 1 {
+        return true;
+    }
+    // Rule 3: centered short block carrying math content. A trailing
+    // equation number "(2)" widens the line rightward, so such lines get a
+    // looser center tolerance.
+    let (union, max_line_w) = union_and_max_line(p);
+    let cx = union.x + union.w / 2.0;
+    let tol = if ends_with_eq_number(&p.text) { 0.16 } else { 0.06 };
+    let centered_short = max_line_w <= wide_p95 * 0.7
+        && [0.25, 0.5, 0.75]
+            .iter()
+            .any(|c| (cx - c).abs() <= tol);
+    if centered_short && (math_ratio >= 0.12 || text_looks_like_formula(&p.text)) {
+        return true;
+    }
+    false
+}
+
+/// Whether [text] ends with an equation-number marker like "(2)".
+fn ends_with_eq_number(text: &str) -> bool {
+    let t = text.trim_end();
+    if !t.ends_with(')') {
+        return false;
+    }
+    let Some(open) = t.rfind('(') else {
+        return false;
+    };
+    let inner = &t[open + 1..t.len() - 1];
+    !inner.is_empty() && inner.chars().all(|c| c.is_ascii_digit())
+}
+
+/// Union of the paragraph's line rects plus its widest line.
+fn union_and_max_line(p: &Paragraph) -> (NormRect, f64) {
+    let mut x0 = f64::MAX;
+    let mut y0 = f64::MAX;
+    let mut x1 = 0.0f64;
+    let mut y1 = 0.0f64;
+    let mut max_w = 0.0f64;
+    for r in &p.rects {
+        x0 = x0.min(r.x);
+        y0 = y0.min(r.y);
+        x1 = x1.max(r.x + r.w);
+        y1 = y1.max(r.y + r.h);
+        max_w = max_w.max(r.w);
+    }
+    if p.rects.is_empty() {
+        return (
+            NormRect {
+                x: 0.0,
+                y: 0.0,
+                w: 0.0,
+                h: 0.0,
+            },
+            0.0,
+        );
+    }
+    (
+        NormRect {
+            x: x0,
+            y: y0,
+            w: (x1 - x0).max(0.0),
+            h: (y1 - y0).max(0.0),
+        },
+        max_w,
+    )
 }
 
 fn rects_overlap(a: &NormRect, b: &NormRect) -> bool {
@@ -983,6 +1159,144 @@ mod tests {
             "prose in a math font must not become Formula");
         assert!(out[0].formula_regions.is_empty(),
             "prose must not produce formula regions: {:?}", out[0].formula_regions);
+    }
+
+    /// Display equation with a subscript WORD ("Γ ⊢ t : T_effect"): the
+    /// subscript reads as prose in the raw text, but its letters are math
+    /// fonts -> rule 2 classifies the paragraph as a display formula so the
+    /// overlay keeps the original pixels.
+    #[test]
+    fn display_equation_with_subscript_word_is_formula() {
+        let mut chars = Vec::new();
+        // A full-width prose sibling anchors the page's wide-line reference.
+        for (i, c) in "Ordinary prose fills the whole column here".chars().enumerate() {
+            chars.push(char(&c.to_string(), 0.1 + i as f64 * 0.012, 0.1, 0.01, 0.02, "Helvetica"));
+        }
+        // The equation: centered, narrow, math fonts; "effect" subscript is
+        // CMMI at 0.7 scale.
+        let eq = "Γ ⊢ t : T";
+        for (i, c) in eq.chars().enumerate() {
+            chars.push(char(&c.to_string(), 0.42 + i as f64 * 0.012, 0.3, 0.01, 0.02, "CMMI10"));
+        }
+        for (i, c) in "effect".chars().enumerate() {
+            let mut ch = char(&c.to_string(), 0.54 + i as f64 * 0.007, 0.315, 0.007, 0.014, "CMMI10");
+            ch.scaled_size = 8.4;
+            ch.unscaled_size = 12.0;
+            chars.push(ch);
+        }
+        let paras = vec![
+            Paragraph {
+                text: "Ordinary prose fills the whole column here".into(),
+                rects: vec![NormRect { x: 0.09, y: 0.09, w: 0.62, h: 0.022 }],
+                page: 1,
+                kind: ParagraphKind::Text,
+                confidence: 1.0,
+                formula_regions: Vec::new(),
+            },
+            Paragraph {
+                text: "Γ ⊢ t : Teffect".into(),
+                rects: vec![NormRect { x: 0.41, y: 0.29, w: 0.2, h: 0.03 }],
+                page: 1,
+                kind: ParagraphKind::Text,
+                confidence: 1.0,
+                formula_regions: Vec::new(),
+            },
+        ];
+        let signals = math_signals(&chars);
+        let regions = detect_formula_regions(&chars, &signals);
+        let out = attach_formulas(paras, &chars, &signals, &regions);
+        assert_eq!(out[1].kind, ParagraphKind::Formula, "display eq must be kept: {:?}", out[1].text);
+        assert_eq!(out[0].kind, ParagraphKind::Text);
+    }
+
+    /// A centered multi-line case environment whose condition words are set
+    /// in the TEXT font ("activating if σ ⊬ d ...") is still a display
+    /// formula (rule 3: centered short block with some math content).
+    #[test]
+    fn centered_cases_block_with_words_is_formula() {
+        let mut chars = Vec::new();
+        for (i, c) in "Ordinary prose fills the whole column here".chars().enumerate() {
+            chars.push(char(&c.to_string(), 0.1 + i as f64 * 0.012, 0.1, 0.01, 0.02, "Helvetica"));
+        }
+        // Three centered lines; words in Times, symbols in CMSY10.
+        let lines = [
+            "notify(σ, σ′) := activating if σ",
+            "deactivating if σ ⊢ d",
+            "neutral otherwise",
+        ];
+        for (li, line) in lines.iter().enumerate() {
+            let y = 0.3 + li as f64 * 0.03;
+            let mut x = 0.36;
+            for c in line.chars() {
+                let font = if matches!(c, 'σ' | 'σ' | '′' | '⊢' | '¬' | '∧' | '(' | ')' | ',' | ':' | '=') {
+                    "CMSY10"
+                } else {
+                    "Times"
+                };
+                chars.push(char(&c.to_string(), x, y, 0.01, 0.02, font));
+                x += 0.012;
+            }
+        }
+        let paras = vec![
+            Paragraph {
+                text: "Ordinary prose fills the whole column here".into(),
+                rects: vec![NormRect { x: 0.09, y: 0.09, w: 0.62, h: 0.022 }],
+                page: 1,
+                kind: ParagraphKind::Text,
+                confidence: 1.0,
+                formula_regions: Vec::new(),
+            },
+            Paragraph {
+                text: lines.join(" ").as_str().into(),
+                rects: lines.iter().enumerate().map(|(li, _)| NormRect {
+                    x: 0.35, y: 0.29 + li as f64 * 0.03, w: 0.24, h: 0.022,
+                }).collect(),
+                page: 1,
+                kind: ParagraphKind::Text,
+                confidence: 1.0,
+                formula_regions: Vec::new(),
+            },
+        ];
+        let signals = math_signals(&chars);
+        let regions = detect_formula_regions(&chars, &signals);
+        let out = attach_formulas(paras, &chars, &signals, &regions);
+        assert_eq!(out[1].kind, ParagraphKind::Formula, "cases block must be kept: {:?}", out[1].text);
+        assert_eq!(out[0].kind, ParagraphKind::Text);
+    }
+
+    /// A left-aligned short heading is NOT a display formula even though it
+    /// is narrower than the column (rule 3 requires a centered line).
+    #[test]
+    fn left_aligned_short_heading_stays_text() {
+        let mut chars = Vec::new();
+        for (i, c) in "Ordinary prose fills the whole column here".chars().enumerate() {
+            chars.push(char(&c.to_string(), 0.1 + i as f64 * 0.012, 0.1, 0.01, 0.02, "Helvetica"));
+        }
+        for (i, c) in "2.1. Effects".chars().enumerate() {
+            chars.push(char(&c.to_string(), 0.1 + i as f64 * 0.012, 0.3, 0.01, 0.02, "Helvetica"));
+        }
+        let paras = vec![
+            Paragraph {
+                text: "Ordinary prose fills the whole column here".into(),
+                rects: vec![NormRect { x: 0.09, y: 0.09, w: 0.62, h: 0.022 }],
+                page: 1,
+                kind: ParagraphKind::Text,
+                confidence: 1.0,
+                formula_regions: Vec::new(),
+            },
+            Paragraph {
+                text: "2.1. Effects".into(),
+                rects: vec![NormRect { x: 0.09, y: 0.29, w: 0.15, h: 0.022 }],
+                page: 1,
+                kind: ParagraphKind::Text,
+                confidence: 1.0,
+                formula_regions: Vec::new(),
+            },
+        ];
+        let signals = math_signals(&chars);
+        let regions = detect_formula_regions(&chars, &signals);
+        let out = attach_formulas(paras, &chars, &signals, &regions);
+        assert_eq!(out[1].kind, ParagraphKind::Text);
     }
 
     #[test]

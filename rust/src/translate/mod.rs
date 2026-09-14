@@ -96,7 +96,9 @@ pub fn source_hash(texts: &[&str]) -> String {    let mut hasher = Sha256::new()
 /// made whole books untranslatable, then stayed masked by their cache).
 /// v3: cached rows also carry per-paragraph line rects (the overlay writer's
 /// positioning input); older rows are re-translated to gain them.
-pub const EXTRACTOR_VERSION: u32 = 3;
+/// v4: broader display-formula classification (math-letter ratio + centered
+/// short blocks) so equations keep their original pixels in the overlay.
+pub const EXTRACTOR_VERSION: u32 = 4;
 
 /// Stamps a source hash with the current extractor version.
 pub fn stamp_source_hash(hash: &str) -> String {
