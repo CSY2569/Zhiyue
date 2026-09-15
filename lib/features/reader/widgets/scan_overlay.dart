@@ -26,6 +26,7 @@ class ScanOverlay extends ConsumerWidget {
     final theme = Theme.of(context);
 
     switch (state.phase) {
+      // hasText already returned above (no bar).
       case ScanPhase.hasText:
         return const SizedBox.shrink();
       case ScanPhase.dismissed:

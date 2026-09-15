@@ -11,19 +11,12 @@ import 'package:rbwa/features/reader/providers/panel_layout.dart';
 import 'package:rbwa/src/rust/models/ai.dart';
 
 import 'helpers/fake_ai_repo.dart';
-
-/// Settings stub so the layout provider can hydrate without Rust.
-class _FakeSettings extends SettingsRepository {
-  @override
-  Future<String?> getSetting(String key) async => null;
-  @override
-  Future<int> setSetting(String key, String value) async => 1;
-}
+import 'helpers/fake_settings.dart';
 
 ProviderScope _scope(FakeAiRepo repo) => ProviderScope(
       overrides: [
         aiRepositoryProvider.overrideWithValue(repo),
-        settingsRepositoryProvider.overrideWithValue(_FakeSettings()),
+        settingsRepositoryProvider.overrideWithValue(FakeSettings()),
       ],
       // Wide enough for the default 440px card.
       child: const MaterialApp(

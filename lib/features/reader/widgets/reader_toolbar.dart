@@ -31,8 +31,7 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
     final state = ref.watch(viewerProvider);
     final notifier = ref.read(viewerProvider.notifier);
     final theme = Theme.of(context);
-    final targetLang =
-        ref.watch(aiConfigProvider).valueOrNull?.translateTargetLang ?? '中文';
+    final targetLang = ref.watch(translateTargetLangProvider);
 
     return Container(
       height: 48,

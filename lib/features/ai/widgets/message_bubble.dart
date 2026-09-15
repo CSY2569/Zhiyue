@@ -86,22 +86,8 @@ class AiMessageBubble extends StatelessWidget {
   }
 
   /// Chinese label for the action that originated this turn.
-  String get _actionLabel {
-    switch (actionType) {
-      case AiActionType.translate:
-        return '翻译';
-      case AiActionType.explain:
-        return '解释';
-      case AiActionType.search:
-        return '搜索';
-      case AiActionType.chat:
-        return '聊天';
-      case AiActionType.vision:
-        return '识图';
-      case null:
-        return '';
-    }
-  }
+  String get _actionLabel =>
+      actionType == null ? '' : aiActionLabel(actionType!);
 
   /// "YYYY年MM月DD日 HH:MM" from the DB's "YYYY-MM-DD HH:MM:SS" string,
   /// or null when the timestamp is missing/empty.
@@ -214,6 +200,23 @@ class AiMessageBubble extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Chinese label for the action that originated a turn (annotation rows /
+/// copied conversations).
+String aiActionLabel(AiActionType action) {
+  switch (action) {
+    case AiActionType.translate:
+      return '翻译';
+    case AiActionType.explain:
+      return '解释';
+    case AiActionType.search:
+      return '搜索';
+    case AiActionType.chat:
+      return '聊天';
+    case AiActionType.vision:
+      return '识图';
   }
 }
 

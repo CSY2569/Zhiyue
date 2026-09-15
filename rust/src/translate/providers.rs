@@ -391,13 +391,9 @@ async fn deepl_translate(
     }
     // Glossary (plan §4.4): DeepL glossaries are per language pair and the
     // pair must match the request; auto-detection cannot carry one.
-    if !ctx.glossary.is_empty() {
-        if let (Some(src), Some(glossary_id)) = (
-            source.as_deref(),
-            deepl_glossary_id(base_url, api_key, target, ctx).await?,
-        ) {
+    if source.is_some() && !ctx.glossary.is_empty() {
+        if let Some(glossary_id) = deepl_glossary_id(base_url, api_key, target, ctx).await? {
             body["glossary_id"] = json!(glossary_id);
-            let _ = src;
         }
     }
 
@@ -707,10 +703,9 @@ fn parse_alignment(
 mod tests {
     use super::*;
     use crate::models::annotation::NormRect;
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    use tokio::net::TcpListener;
+    use crate::test_http::mock_server;
 
-    fn formula(_placeholder_index: usize, source: &str) -> FormulaRegion {
+    fn formula(source: &str) -> FormulaRegion {
         FormulaRegion {
             rect: NormRect { x: 0.1, y: 0.5, w: 0.2, h: 0.02 },
             image_path: None,
@@ -722,7 +717,7 @@ mod tests {
     #[test]
     fn protect_and_restore_llm_tokens_roundtrip_exactly_once() {
         let text = "when ⟨F1-MATH_0⟩ is large, x2 +y diverges"; // lookalike forgery attempt
-        let formulas = vec![formula(0, "x2 +y")];
+        let formulas = vec![formula("x2 +y")];
         let prefix = "Fabc";
         let (protected, subs) = protect_segment(text, &formulas, prefix, false);
         // The forged token was neutralized; the real one substituted.
@@ -751,7 +746,7 @@ mod tests {
     #[test]
     fn protect_deepl_wraps_xml_ignore_tags() {
         let text = "for a < b and x2 +y holds";
-        let formulas = vec![formula(0, "x2 +y")];
+        let formulas = vec![formula("x2 +y")];
         let (protected, subs) = protect_segment(text, &formulas, "Fx", true);
         // Source XML-escaped, formula wrapped in an ignore-tag pair.
         assert!(protected.contains("<m0>x2 +y</m0>"), "{protected}");
@@ -835,63 +830,6 @@ mod tests {
             Provider::Llm { model, .. } => assert_eq!(model, "translator-xl"),
             _ => panic!("expected llm"),
         }
-    }
-
-    /// Serve N HTTP responses on a loopback port; returns the endpoint and a
-    /// receiver for each raw request (openai.rs test pattern).
-    async fn mock_server(
-        responses: Vec<(&'static str, String)>,
-    ) -> (String, tokio::sync::mpsc::Receiver<String>) {
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let (tx, rx) = tokio::sync::mpsc::channel(responses.len());
-        tokio::spawn(async move {
-            for (status_line, body) in responses {
-                let Ok((mut sock, _)) = listener.accept().await else {
-                    return;
-                };
-                let req = read_request(&mut sock).await;
-                let _ = tx.send(req).await;
-                let resp = format!(
-                    "HTTP/1.1 {status_line}\r\nContent-Type: application/json\r\n\
-                     Content-Length: {}\r\nConnection: close\r\n\r\n{}",
-                    body.len(),
-                    body
-                );
-                let _ = sock.write_all(resp.as_bytes()).await;
-            }
-        });
-        (format!("http://127.0.0.1:{port}"), rx)
-    }
-
-    async fn read_request(sock: &mut tokio::net::TcpStream) -> String {
-        let mut buf: Vec<u8> = Vec::new();
-        let mut chunk = [0u8; 4096];
-        loop {
-            let n = sock.read(&mut chunk).await.unwrap();
-            if n == 0 {
-                break;
-            }
-            buf.extend_from_slice(&chunk[..n]);
-            if let Some(sep) = buf
-                .windows(4)
-                .position(|w| w == b"\r\n\r\n")
-            {
-                let head = String::from_utf8_lossy(&buf[..sep]).to_string();
-                let len = head
-                    .lines()
-                    .find_map(|l| {
-                        l.to_ascii_lowercase()
-                            .strip_prefix("content-length:")
-                            .and_then(|v| v.trim().parse::<usize>().ok())
-                    })
-                    .unwrap_or(0);
-                if buf.len() >= sep + 4 + len {
-                    break;
-                }
-            }
-        }
-        String::from_utf8_lossy(&buf).to_string()
     }
 
     fn ctx() -> BatchContext {
@@ -1014,7 +952,7 @@ mod tests {
             api_key: "k".into(),
         };
         let segments = vec![
-            Segment { text: "when x2 +y is big".into(), formulas: vec![formula(0, "x2 +y")] },
+            Segment { text: "when x2 +y is big".into(), formulas: vec![formula("x2 +y")] },
             Segment { text: "second".into(), formulas: vec![] },
         ];
         let out = provider.translate_segments(&segments, &ctx()).await.unwrap();

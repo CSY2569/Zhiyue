@@ -25,12 +25,6 @@ class TranslationPaneState {
 
   /// View mode to restore on close (null = the reader was already single-page).
   final ViewMode? modeBefore;
-
-  TranslationPaneState copyWith({bool? open, ViewMode? modeBefore}) =>
-      TranslationPaneState(
-        open: open ?? this.open,
-        modeBefore: modeBefore ?? this.modeBefore,
-      );
 }
 
 class TranslationPaneNotifier extends Notifier<TranslationPaneState> {
@@ -73,15 +67,11 @@ class PageTranslationState {
     this.translation,
     this.loading = false,
     this.error,
-    this.progressDone = 0,
-    this.progressTotal = 0,
   });
 
   final PageTranslation? translation;
   final bool loading;
   final String? error;
-  final int progressDone;
-  final int progressTotal;
 
   bool get hasTranslation => translation != null;
 
@@ -89,8 +79,6 @@ class PageTranslationState {
     PageTranslation? translation,
     bool? loading,
     String? error,
-    int? progressDone,
-    int? progressTotal,
     bool clearError = false,
     bool clearTranslation = false,
   }) =>
@@ -99,8 +87,6 @@ class PageTranslationState {
             clearTranslation ? null : (translation ?? this.translation),
         loading: loading ?? this.loading,
         error: clearError ? null : (error ?? this.error),
-        progressDone: progressDone ?? this.progressDone,
-        progressTotal: progressTotal ?? this.progressTotal,
       );
 }
 
@@ -138,8 +124,6 @@ class PageTranslationNotifier
     state = AsyncData(current.copyWith(
       loading: true,
       clearError: true,
-      progressDone: 0,
-      progressTotal: 0,
     ));
     final completer = Completer<void>();
     String? streamError;
@@ -152,8 +136,6 @@ class PageTranslationNotifier
         if (ev.error != null) streamError = ev.error;
         state = AsyncData(s.copyWith(
           loading: !ev.finished,
-          progressDone: ev.doneParagraphs,
-          progressTotal: ev.totalParagraphs,
           error: ev.error,
           clearError: ev.error == null,
         ));

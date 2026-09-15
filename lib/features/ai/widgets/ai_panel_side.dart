@@ -28,12 +28,10 @@ class AiPanelSide extends ConsumerStatefulWidget {
 
 class _AiPanelSideState extends ConsumerState<AiPanelSide> {
   final _input = TextEditingController();
-  final _inputFocus = FocusNode();
 
   @override
   void dispose() {
     _input.dispose();
-    _inputFocus.dispose();
     super.dispose();
   }
 
@@ -135,7 +133,6 @@ class _AiPanelSideState extends ConsumerState<AiPanelSide> {
                 onKeyEvent: _onInputKey,
                 child: TextField(
                   controller: _input,
-                  focusNode: _inputFocus,
                   minLines: 1,
                   maxLines: 4,
                   enabled: inputEnabled,

@@ -28,7 +28,7 @@
 | 7.1.10–7.1.12 OCR 精度三件套 | 图像预处理增强（低对比度拉伸 / 模糊锐化，干净页零副作用）/ 90° 页面自适应重扫矫正（坐标映射回原图）/ 180° cls 内置矫正 / 四边形透视矫正验证 | ✅ 完成（2026-08-08） |
 | 7.1.6 置信度展示 | 低置信度 OCR 行（confidence < 0.8）页面半透明标记 + 扫描条计数提示 | ✅ 完成（2026-08-10） |
 | 7.1.7 OCR 手动修正 | 点击低置信度行编辑文本 → 回存 OCR 缓存 → 重入全文搜索索引 → 文本层与计数同步刷新 | ✅ 完成（2026-08-10） |
-| M7 对照阅读（双语阅读） | 阅读页「对照阅读」按钮 + 译文窗格（像素宽度可拖拽、双页同显、空态引导、整本进度）/ 段落级抽取（基线聚行+断字还原+噪声剔除+字体元数据公式识别，全程独立 pdfium 句柄）/ DeepL + OpenAI 兼容翻译（严格对齐、占位符防伪造与回填校验、限流退避、术语表）/ 三种翻译方式（整本 / 随进度 / 手动）+ Dart 队列编排与续传 / 术语表与固定保留设置 / 按需导出译文 PDF（1..N 顺序、占位页、p.N 锚点、原页尺寸、可选中文本、公式小图、运行时字体子集化）/ 2GB LRU + 删书级联 | ✅ 完成（2026-09-11） |
+| M7 对照阅读（双语阅读） | 阅读页「对照阅读」按钮 → 阅读区内 50/50 左右分栏（左原文 / 右译文，随翻页联动、视图模式自动切单页并恢复）/ 段落级抽取（基线聚行+断字还原+噪声剔除+四信号公式识别，全程独立 pdfium 句柄）/ DeepL + OpenAI 兼容翻译（严格对齐、占位符防伪造与回填校验、限流退避、术语表）/ 三种翻译方式（整本 / 随进度 / 手动）+ Dart 队列编排与续传 / 术语表与固定保留设置 / 按需导出译文 PDF（1..N 顺序、占位页、原页锚点、原页尺寸、版式保留覆盖、可选中文本、运行时字体子集化）/ 2GB LRU + 删书级联 | ✅ 完成（2026-09-11，09-14 体验改版） |
 
 ## 3. 当前技术状态（关键数据）
 
@@ -38,8 +38,8 @@
 | 空闲内存（release，未扫描时） | RSS ~294MB（OCR 引擎懒加载，扫描时按模式 +35~300MB） |
 | 存储占用 | ~790MB（文档 570 + 模型 210 + DB ~9.5MB 含搜索索引 2.9MB） |
 | 全文检索性能 | FTS5 查询 <10ms，命中高亮 <1ms/帧（缓存复用） |
-| 测试规模 | Rust 单测 117 个 + OCR e2e 6 个（真实模型，`--ignored`）+ Flutter widget 测试 192 个，全部通过 |
-| 静态检查 | clippy 零新增警告；flutter analyze 零问题 |
+| 测试规模 | Rust 单测 130 个 + OCR e2e 6 个（真实模型，`--ignored`）+ 集成 2 个 + Flutter widget 测试 202 个，全部通过 |
+| 静态检查 | clippy 零警告；flutter analyze 零问题 |
 
 ### 3.1 今日实现：OCR 精度三件套（54ae7ae）- **7.1.10 预处理增强**：识别前按油墨亮度中位数（>80 判"墨是灰的"）触发百分位拉伸、按强边缘比例（<1e-4 判"边缘是软的"）触发 unsharpen 锐化。门限为**密度无关**指标，稀疏文本页不会误触发；干净页像素级不变
   - 过程中修复一个隐蔽 bug：原 1%/99% 百分位指标在油墨覆盖率 <1% 的页面上会把整页拉成纯黑（1% 分位落在白底上）
@@ -259,6 +259,26 @@
 
 **排障注记**：首次视觉验收判官（纯像素统计、无图像输入）将公式区域误判为"被涂白重绘"，与缓存数据矛盾；以提取文本 + 条带差值定论。mock LLM 起初只应答 i=0——请求体的 segments 是**转义后的 JSON 字符串**（字节为 `\"i\":`），按裸串计数恒为 0，改为解析 JSON 后按实际索引应答。
 
+### 3.15 代码梳理（第三轮）：死代码清除 + 重复逻辑合并 + clippy 清零（2026-09-14）
+
+**背景**：3.13/3.14 两轮反转后积累的残余（公式截图管线、写死不读的字段），加上长期存在的重复实现与 clippy 基线警告。三个探索代理全库交叉核对后按 9 个阶段执行，**全部为行为保持的删除/合并**。
+
+**Rust**：
+1. **死代码删除（~90 行）**：`FormulaRegion.image_path` 生产端恒 `None`（截图管线已废），随之删除 `para_image_height`（恒返 0）、`emit_formula`（恒返 false）、`write_flow_page` 中永不可达的公式图片分支（公式段经 `display_text` 回退原文，行为等价）；同步修正 8 处"公式小图"陈旧注释与 `FormulaRegion` 字段文档（字段保留为缓存兼容，标 VESTIGE）。
+2. **重复逻辑合并**：`build_translated_pdf` 内联缓存读取 → `load_cached_translation_with`（沿用 `*_with` 模式保住键外提的性能）；`dir_size` 双实现合一（db 侧 `pub(crate)`）；extract.rs 提取 `p95_width` / `is_centered_short` 共享（原三处各写一份）；`attach_formulas` 双分支逐字重复的 regions 赋值合一（`Text` 守卫恒真）；删 `extract_page` 冗余 `_pg` 取得、`union_and_max_line` 不可达空分支；`get_translated_pdf_path` 改调 `translated_pdf_path`（原重复实现 `sanitize_lang`）；write_overlay_page 消除 f32/f64 `pw,ph` 遮蔽（改 `page_w/page_h`）。
+3. **clippy 6 → 0**：`stream_chat/stream_vision` 的 `manual_async_fn` 加 allow（RPITIT `+ Send` 是 FRB 执行器必需，trait 文档已注明）；4 处 `too_many_arguments` 加 allow（api.rs 两处为 FFI 签名，db 两处与既有 `update` 的 allow 对齐）。
+4. **Cargo.toml 瘦身**：删未用的 `tokio "fs"`、`rusqlite "blob"`、`pdfium-render "paragraph"` feature 与注释掉的 async-openai 残行（依赖本身全部在用，逐一核对）。
+5. **测试去重**：`src/test_http.rs`（`#[cfg(all(test, feature="ai"))]`）共享 loopback mock server（JSON 与 SSE 两种变体）与 `read_request`，openai.rs / providers.rs 两套重复实现合一；`tests/common/mod.rs` 共享 scratch-dir 与 settings upsert；删 overview 回归里的死绑定与 e2e 的调试 eprintln 脚手架。
+
+**Dart**：
+1. **死代码删除**：`TranslationQueueState.estimatedRemaining/currentPage`（零引用/只写不读）、`PageTranslationState.progressDone/progressTotal`（只写不读）、`TranslationRepository.extractPageParagraphs/clearTranslations/clearTranslationArtifacts`（零调用方，fake 配套字段一并删）、`TranslationPaneState.copyWith`、`MarkToolNotifier.toggleTool`（生产只用 `setTool`，测试同步调整）、两个从未 requestFocus 的 FocusNode、`PanelResizeHandle.cursor` 参数、scan_overlay 冗余 case 标注；pubspec 删 `path` 与 `cupertino_icons`（全库零 import）。
+2. **逻辑优化**：`aiActionLabel` 共享（原 result_card / message_bubble 各一份 switch）；`_rightOrder` 单元素列表机制删除（`_aiPanelSub` 唯一职责即维护它，一并删除，钳制逻辑直接化）；LRU 触碰+驱逐三份拷贝 → `lib/core/lru.dart` 的 `lruTouch`；目标语言默认值三处 → `translateTargetLangProvider` 派生。
+3. **测试去重**：`test/helpers/fake_settings.dart`（取最全的 map 版实现）替换 5 个私有 `_FakeSettings`；integration_test 的机器相关用例加"本机调试专用"文档头。
+
+**文档对齐**：bilingual_workflow.html 修正 3.14 反转后自相矛盾的"整段保留原文/公式小图/v6 版本戳/测试基线"描述；IMPLEMENTATION_STATUS 里程碑表与"当前技术状态"计数更新；FEATURES 7.4.2 公式"原页小图"→"原页背景像素"；ARCHITECTURE 模块表补 translate/export、删不存在的 `PdfService`/`SearchIndex` trait、async-openai → 手写 SSE、仓储约束改为与现状一致；TECH_ROADMAP / BILINGUAL_READING_PLAN 加"历史文档"头部注记；README M0–M6 → M0–M7；.gitignore 删未用的 `/assets/models/`；setup.sh 去掉一次性会话措辞。
+
+**验证**：Rust 130 单测 + 2 集成全绿；**clippy 全 target 0 警告**（此前基线 6）；全 feature 构建通过；`flutter analyze` 0 问题；Flutter 202 测试全绿（-1 为删除的 toggleTool 测试，其行为已由 setTool 用例覆盖）。产物重建部署（debug 核心 / release bundle / `dist/` 与 `/Data/Appimage/ZhiYue.AppImage`）。
+
 ## 4. 后续开发方向
 
 ### 4.1 近期（补齐规格 P2 缺口）
@@ -289,7 +309,7 @@
 
 ### 4.4 工程债与维护
 
-- `rust/examples/` 与部分调试脚本清理
+- FRB 死字段清理（`FormulaRegion.image_path/placeholder`、`ParagraphKind::Noise` 等已无生产写入，删除需一次 codegen + Dart 再生成）
 - FRB 生成代码勿手改（统一 codegen 后提交）
 - 持续补充 Rust 单测覆盖（db/repository、pdf 模块）
 - 性能回归基准（OCR 页级耗时、搜索延迟）固化到文档

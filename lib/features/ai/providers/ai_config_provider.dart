@@ -19,3 +19,8 @@ class AiConfigNotifier extends AsyncNotifier<AiConfig> {
 /// AI configuration for the app (defaults until the user saves).
 final aiConfigProvider =
     AsyncNotifierProvider<AiConfigNotifier, AiConfig>(AiConfigNotifier.new);
+
+/// The 翻译目标语言 shown across the UI (reader toolbar, 对照 pane, settings):
+/// the configured value, or 中文 while the config is still loading.
+final translateTargetLangProvider = Provider<String>((ref) =>
+    ref.watch(aiConfigProvider).valueOrNull?.translateTargetLang ?? '中文');

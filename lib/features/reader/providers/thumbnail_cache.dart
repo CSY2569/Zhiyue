@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/core/lru.dart';
 import 'package:rbwa/data/repositories/reader_repository.dart';
 import 'package:rbwa/features/reader/providers/image_decoder.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
@@ -53,14 +54,8 @@ class ThumbnailCache extends Notifier<Map<int, ui.Image>> {
       final image =
           await decodeRgbaImage(result.width, result.height, result.rgba);
       if (image == null) return null;
-      // Re-insert at the tail to keep insertion order = LRU order.
-      final next = Map<int, ui.Image>.from(state)
-        ..remove(page)
-        ..[page] = image;
-      while (next.length > _maxEntries) {
-        next.remove(next.keys.first);
-      }
-      state = next;
+      // Touch in the LRU (re-inserted at the tail).
+      state = lruTouch(state, page, image, _maxEntries);
       return image;
     } catch (_) {
       return null;

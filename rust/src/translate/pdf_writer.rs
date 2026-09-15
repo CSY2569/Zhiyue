@@ -9,9 +9,10 @@
 //!   - each page takes the ORIGINAL page's dimensions;
 //!   - body text is real text (selectable / searchable) written as CID glyph
 //!     runs against an embedded Noto Sans SC;
-//!   - whole-paragraph formulas are embedded as the captured region PNG
-//!     (visual fidelity); physical page count may differ from the original
-//!     when translations run long (plan §2 物理页码 ≠ 原书页码).
+//!   - whole-paragraph formulas keep their ORIGINAL pixels via the
+//!     page-raster background (visual fidelity); physical page count may
+//!     differ from the original when translations run long (plan §2 物理页码
+//!     ≠ 原书页码).
 //!
 //! ## Why lopdf (plan §6 fallback, chosen after the first-step verification)
 //!
@@ -51,7 +52,6 @@ const MARGIN: f32 = 48.0;
 const LINE_SPACING: f32 = 1.45;
 /// Paragraph spacing in points.
 const PARA_SPACING: f32 = 6.0;
-/// Cap on background-render pixels (the overlay's page raster).
 /// Direct glyph id for [c], following the fallback chain when the font
 /// lacks the char (bounded depth: a target may itself be missing).
 fn probe_gid(face: &ttf_parser::Face, c: char, depth: usize) -> Option<u16> {
@@ -156,9 +156,10 @@ const FALLBACK_GLYPHS: &[(char, char)] = &[
     ('³', '3'),
     ('ⁿ', 'n'),
 ];
+/// Cap on background-render pixels (the overlay's page raster).
 const BG_MAX_PIXELS: f64 = 24_000_000.0;
-/// JPEG quality of the overlay page background (photos/figures tolerate 88;
-/// keeps whole-book exports at ~100-250 KB per page instead of ~1 MB).
+/// JPEG quality of the overlay page background (q90 keeps text crisp while
+/// whole-book exports stay at ~100-250 KB per page instead of ~1 MB).
 const JPEG_QUALITY: u8 = 90;
 /// Smallest font the shrink-to-fit loop may pick for an overlay paragraph.
 const MIN_OVERLAY_SIZE: f32 = 5.5;
@@ -180,20 +181,9 @@ pub fn build_translated_pdf(
     let (lang_key, provider) = crate::translate::cache_key();
 
     // --- pass A: gather every page's cached translation + original size ----
-    // Stale rows (old extractor stamp) count as untranslated, matching the
-    // pane's page renderer -- an export must never mix old-extractor
-    // paragraphs with fresh ones.
     let mut plans: Vec<PagePlan> = Vec::with_capacity(page_count as usize);
     for page in 1..=page_count {
-        let cached = {
-            let conn = crate::db::db();
-            crate::db::repository::translate::get_page_translation(
-                &conn, book_id, page, &lang_key, &provider, false,
-            )
-            .ok()
-            .flatten()
-            .filter(|t| crate::translate::is_current_source_hash(&t.source_hash))
-        };
+        let cached = load_cached_translation_with(book_id, page, &lang_key, &provider);
         let (pw, ph) = page_size(&book, page)?;
         plans.push(PagePlan {
             page,
@@ -263,11 +253,26 @@ pub fn build_translated_pdf(
 /// Reads the cached translation for one page using the current cache key
 /// (configured target lang + provider). A row stamped by an older extractor
 /// is treated as untranslated (see [`crate::translate::is_current_source_hash`]).
+/// The page's cached translation for the CURRENTLY configured key, ignoring
+/// stale rows (old extractor stamp). Stale rows count as untranslated,
+/// matching the pane's page renderer -- an export must never mix
+/// old-extractor paragraphs with fresh ones.
 fn load_cached_translation(book_id: i64, page: i64) -> Option<PageTranslation> {
     let (lang_key, provider) = crate::translate::cache_key();
+    load_cached_translation_with(book_id, page, &lang_key, &provider)
+}
+
+/// [load_cached_translation] with a pre-fetched cache key, so whole-book
+/// callers can hoist the settings read out of the per-page loop.
+fn load_cached_translation_with(
+    book_id: i64,
+    page: i64,
+    lang_key: &str,
+    provider: &str,
+) -> Option<PageTranslation> {
     let conn = crate::db::db();
     crate::db::repository::translate::get_page_translation(
-        &conn, book_id, page, &lang_key, &provider, false,
+        &conn, book_id, page, lang_key, provider, false,
     )
     .ok()
     .flatten()
@@ -282,7 +287,6 @@ fn page_used_chars(cached: Option<&PageTranslation>, target_lang: &str) -> Vec<c
     // Anchors / placeholder text + the separators they contain (spaces and
     // the fullwidth colon are easy to forget and draw as tofu when absent).
     used.extend("原书第 页尚未翻译　译本：p. —…".chars());
-    used.push(' ');
     used.extend("0123456789".chars());
     used.extend(target_lang.chars());
     if let Some(t) = cached {
@@ -913,18 +917,21 @@ fn write_overlay_page(
         let Some(rect) = union_rect(&para.rects) else {
             continue;
         };
-        let (pw, ph) = (plan.pw as f64, plan.ph as f64);
-        let col_w = ((rect.w * pw - 2.0).max(20.0)) as f32;
-        let max_h = ((rect.h * ph + ph * 0.03).max(ph * 0.02)) as f32;
+        // f64 copies for the normalized-rect math (the f32 pair feeds the
+        // page box unchanged).
+        let (page_w, page_h) = (plan.pw as f64, plan.ph as f64);
+        let col_w = ((rect.w * page_w - 2.0).max(20.0)) as f32;
+        let max_h = ((rect.h * page_h + page_h * 0.03).max(page_h * 0.02)) as f32;
         // Font-size hint: the paragraph's median line height is a good proxy
         // for its em size (headings stay big, body stays body).
         let mut heights: Vec<f64> = para.rects.iter().map(|r| r.h).collect();
-        let hint = crate::translate::extract::median(&mut heights).unwrap_or(0.012) * ph * 0.82;
+        let hint =
+            crate::translate::extract::median(&mut heights).unwrap_or(0.012) * page_h * 0.82;
         let (size, lines) = fit_paragraph(&text, col_w, max_h, m, hint as f32);
 
         // rects are top-left origin; PDF y is bottom-up.
-        let top = (ph - rect.y * ph) as f32;
-        let bottom = (ph - (rect.y + rect.h) * ph) as f32;
+        let top = (page_h - rect.y * page_h) as f32;
+        let bottom = (page_h - (rect.y + rect.h) * page_h) as f32;
         let line_h = size * LINE_SPACING;
         let mut y = top - size * 0.95;
         for (i, line) in lines.iter().enumerate() {
@@ -940,7 +947,7 @@ fn write_overlay_page(
             if i + 1 < lines.len() && y - line_h < bottom - size * 0.25 {
                 drawn.push('…');
             }
-            emit_line(&mut content, m, (rect.x * pw + 1.0) as f32, y, size, &drawn);
+            emit_line(&mut content, m, (rect.x * page_w + 1.0) as f32, y, size, &drawn);
             y -= line_h;
         }
     }
@@ -949,8 +956,7 @@ fn write_overlay_page(
 }
 
 /// COMPACT reflow layout (fallback + placeholder pages): anchor line, then
-/// every paragraph re-flowed into a single column; formulas embedded as the
-/// captured region images when available.
+/// every paragraph re-flowed into a single column.
 fn write_flow_page(
     doc: &mut Document,
     pages_id: ObjectId,
@@ -961,7 +967,7 @@ fn write_flow_page(
 ) -> AppResult<ObjectId> {
     let (pw, ph) = (plan.pw, plan.ph);
     let mut content = String::new();
-    let mut xobjects: Vec<(String, ObjectId)> = Vec::new();
+    let xobjects: Vec<(String, ObjectId)> = Vec::new();
     let mut y = ph - MARGIN;
     let line_h = BODY_SIZE * LINE_SPACING;
 
@@ -991,22 +997,10 @@ fn write_flow_page(
         }
         Some(t) => {
             for para in &t.paragraphs {
-                if para.kind == ParagraphKind::Formula {
-                    let h = para_image_height(para, max_w);
-                    if h > 0.0 && emit_formula(&mut content, &mut xobjects, para, doc, MARGIN, y, max_w) {
-                        y -= h + PARA_SPACING;
-                    } else {
-                        for line in wrap_text(&para.source, max_w, BODY_SIZE, m) {
-                            if y < MARGIN {
-                                break;
-                            }
-                            emit_line(&mut content, m, MARGIN, y, BODY_SIZE, &line);
-                            y -= line_h;
-                        }
-                        y -= PARA_SPACING;
-                    }
-                    continue;
-                }
+                // Formula paragraphs have an empty translation, so
+                // display_text falls back to their source -- the flow layout
+                // shows them as text like everything else (only the overlay
+                // layout keeps their original pixels).
                 let text = display_text(para);
                 for line in wrap_text(&text, max_w, BODY_SIZE, m) {
                     if y < MARGIN {
@@ -1061,66 +1055,6 @@ fn emit_image_jpeg(
     xobjects.push((nm, id));
 }
 
-/// Height the formula image will occupy (0 when no image is usable).
-fn para_image_height(para: &TranslatedParagraph, max_w: f32) -> f32 {
-    if let Some(path) = para.formula_regions.iter().find_map(|r| r.image_path.as_deref()) {
-        if let Ok((iw, ih)) = image::image_dimensions(path) {
-            let scale = (max_w / iw as f32).min(1.0);
-            return ih as f32 * scale;
-        }
-    }
-    0.0
-}
-
-/// Draws a formula image as an XObject; returns false when none could be used.
-fn emit_formula(
-    content: &mut String,
-    xobjects: &mut Vec<(String, ObjectId)>,
-    para: &TranslatedParagraph,
-    doc: &mut Document,
-    x: f32,
-    y: f32,
-    max_w: f32,
-) -> bool {
-    let Some(path) = para.formula_regions.iter().find_map(|r| r.image_path.as_deref()) else {
-        return false;
-    };
-    let Ok(img) = image::open(path) else {
-        return false;
-    };
-    let rgb = img.to_rgb8();
-    let (iw, ih) = (rgb.width(), rgb.height());
-    if iw == 0 || ih == 0 {
-        return false;
-    }
-    let mut stream = Stream::new(
-        dictionary! {
-            "Type" => name("XObject"),
-            "Subtype" => name("Image"),
-            "Width" => Object::Integer(iw as i64),
-            "Height" => Object::Integer(ih as i64),
-            "ColorSpace" => name("DeviceRGB"),
-            "BitsPerComponent" => Object::Integer(8),
-        },
-        rgb.into_raw(),
-    );
-    if stream.compress().is_err() {
-        return false;
-    }
-    let scale = (max_w / iw as f32).min(1.0);
-    let (w, h) = (iw as f32 * scale, ih as f32 * scale);
-    if y - h < MARGIN {
-        return false;
-    }
-    let id = doc.add_object(stream);
-    let name = format!("Im{}", xobjects.len());
-    content.push_str(&format!(
-        "q {w:.2} 0 0 {h:.2} {x:.2} {y:.2} cm /{name} Do Q\n"
-    ));
-    xobjects.push((name, id));
-    true
-}
-
 /// Appends one text line as an Identity-H glyph run.
 fn emit_line(content: &mut String, m: &FontMetrics, x: f32, y: f32, size: f32, text: &str) {
     let hex = hex_gids(text, m);
@@ -1134,7 +1068,7 @@ fn emit_line(content: &mut String, m: &FontMetrics, x: f32, y: f32, size: f32, t
 
 /// The text actually rendered for a paragraph: the translation with inline
 /// formula tokens replaced by their source text (the pane does the same;
-/// whole-paragraph formulas are images).
+/// formula paragraphs have no translation, so they fall back to source).
 fn display_text(para: &TranslatedParagraph) -> String {
     let mut text = para.translated.clone();
     if text.trim().is_empty() {

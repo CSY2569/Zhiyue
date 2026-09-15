@@ -255,26 +255,23 @@ impl ParagraphStatus {
     }
 }
 
-/// A formula region detected from font metadata (plan §3.4): the rect on the
-/// original page, the captured image (PNG under `translated/{book_id}/
-/// formulas/`, may be absent when capture failed) and the placeholder token
-/// that substitutes the formula text during translation.
+/// A formula region detected from font metadata (plan §3.4): the rect on
+/// the original page plus the raw formula text. `image_path`/`placeholder`
+/// are VESTIGES of the retired region-image pipeline: extraction never
+/// sets them anymore (whole-paragraph formulas keep their original page
+/// pixels; inline tokens are built dynamically by the translation layer).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FormulaRegion {
     /// Normalized rect (top-left origin, Flutter space), same convention as
     /// annotation rects.
     pub rect: NormRect,
-    /// Absolute path of the captured region image (PNG under
-    /// `{data_dir}/translated/{book_id}/formulas/`, empty when capture
-    /// failed). Stored absolute so the Flutter pane + PDF writer can read it
-    /// without resolving the app data dir.
+    /// Always `None` since the region-image pipeline was removed; kept for
+    /// cache-row compatibility.
     pub image_path: Option<String>,
     /// The raw formula text as it appeared on the page.
     pub source_text: String,
-    /// Placeholder token substituted for the formula during translation
-    /// (random-prefixed, plan §4.3; e.g. `⟨F3a9-MATH_0⟩`). The translated
-    /// text keeps the token; consumers substitute it with the original text
-    /// (pane) or the embedded image (PDF).
+    /// Always empty since the region-image pipeline was removed; kept for
+    /// cache-row compatibility.
     pub placeholder: String,
 }
 
@@ -295,13 +292,13 @@ pub struct Paragraph {
 }
 
 /// A paragraph with its translation (plan §4-5). `translated` still contains
-/// the formula placeholder tokens: the pane substitutes them with
-/// [FormulaRegion::source_text], the PDF writer with the captured image.
+/// the formula placeholder tokens: consumers substitute them with
+/// [FormulaRegion::source_text].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TranslatedParagraph {
     pub source: String,
     /// Machine translation with `⟨..MATH_n⟩` tokens still in place (may be
-    /// empty for whole-paragraph formulas, which are kept as images).
+    /// empty for whole-paragraph formulas, which keep their original pixels).
     pub translated: String,
     pub kind: ParagraphKind,
     pub status: ParagraphStatus,
@@ -350,8 +347,8 @@ pub struct TranslationOverview {
 pub struct TranslationProgressEvent {
     /// 1-indexed page the event belongs to.
     pub page: i64,
-    /// Paragraphs finished on the page (0 for build events, which are
-    /// page-granular).
+    /// Paragraphs finished on the page (translate events). Build events are
+    /// page-granular: this echoes the page number as the pages-done count.
     pub done_paragraphs: i64,
     pub total_paragraphs: i64,
     /// Page coverage fraction (translate events).
@@ -469,7 +466,7 @@ mod tests {
                 confidence: 1.0,
                 formula_regions: vec![FormulaRegion {
                     rect: NormRect { x: 0.1, y: 0.2, w: 0.3, h: 0.05 },
-                    image_path: Some("translated/1/formulas/p12_f0.png".into()),
+                    image_path: None,
                     source_text: "x^2".into(),
                     placeholder: "⟨F1-MATH_0⟩".into(),
                 }],
@@ -491,9 +488,6 @@ mod tests {
         )
         .unwrap();
         assert!(legacy.rects.is_empty());
-        assert_eq!(
-            back.paragraphs[0].formula_regions[0].image_path.as_deref(),
-            Some("translated/1/formulas/p12_f0.png")
-        );
+        assert_eq!(back.paragraphs[0].formula_regions[0].image_path, None);
     }
 }

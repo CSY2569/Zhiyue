@@ -10,13 +10,6 @@ import 'package:rbwa/src/rust/models/translate.dart';
 /// `Stream<TranslationProgressEvent>`; cancelling the subscription stops the
 /// work on the Rust side.
 class TranslationRepository {
-  /// Paragraphs of one page (1-indexed) for inspection.
-  Future<rust.ExtractParagraphsResult> extractPageParagraphs(
-    int bookId,
-    int page,
-  ) =>
-      rust.extractPageParagraphs(bookId: bookId, page: page);
-
   /// Translates one page, streaming progress. [force] re-extracts and
   /// overwrites the cache even on a hit.
   Stream<TranslationProgressEvent> translatePage({
@@ -44,10 +37,6 @@ class TranslationRepository {
       (await rust.getTranslatedPages(bookId: bookId))
           .map((p) => p.toInt())
           .toSet();
-
-  /// Deletes every cached translation + artifact of a book.
-  Future<int> clearTranslations(int bookId) =>
-      rust.clearTranslations(bookId: bookId);
 
   /// Reads the 对照阅读 config (KV `translation_config`).
   Future<TranslationConfig> getTranslationConfig() =>
@@ -117,11 +106,6 @@ class TranslationRepository {
         targetLang: targetLang,
         dpiScale: dpiScale,
       );
-
-  /// Deletes a book's translated artifacts (PDF + formula images). The cache
-  /// rows are removed by the FK cascade on book delete.
-  Future<int> clearTranslationArtifacts(int bookId) =>
-      rust.clearTranslationArtifacts(bookId: bookId);
 }
 
 /// Riverpod provider for the singleton [TranslationRepository].

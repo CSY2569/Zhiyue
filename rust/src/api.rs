@@ -916,6 +916,7 @@ pub fn list_image_annotations(book_id: i64) -> Vec<ImageAnnotation> {
 
 /// Create an image-layer mark (brush / shape / sticky / stamp). `payload`
 /// and `style` are kind-specific JSON strings (FEATURES 5.1-5.5).
+#[allow(clippy::too_many_arguments)] // FFI signature mirrored by generated Dart
 pub fn create_image_annotation(
     book_id: i64,
     page: i64,
@@ -943,6 +944,7 @@ pub fn create_image_annotation(
 /// Update an image-layer mark in full (position / payload / style -- marks
 /// are selectable, movable and editable, FEATURES 5.1-5.5). Returns 1 on
 /// success.
+#[allow(clippy::too_many_arguments)] // FFI signature mirrored by generated Dart
 pub fn update_image_annotation(
     annotation_id: i64,
     x: f64,
@@ -1893,12 +1895,7 @@ pub async fn build_translated_pdf(
 /// Absolute path the translated PDF for [book_id] + [target_lang] would be
 /// (or is) written to; the UI opens it after a build completes.
 pub fn get_translated_pdf_path(book_id: i64, target_lang: String) -> String {
-    let safe: String = target_lang
-        .chars()
-        .map(|c| if c.is_alphanumeric() { c } else { '_' })
-        .collect();
-    crate::translate::translated_dir(book_id)
-        .join(format!("{safe}.pdf"))
+    crate::translate::pdf_writer::translated_pdf_path(book_id, &target_lang)
         .to_string_lossy()
         .to_string()
 }
@@ -1962,7 +1959,7 @@ pub async fn render_translated_page(
     }
 }
 
-/// Deletes a book's translated artifacts (PDF + formula images); the cache
+/// Deletes a book's translated artifacts (the translated PDF); the cache
 /// rows are removed by the FK cascade on book delete. Returns 1 on success.
 pub fn clear_translation_artifacts(book_id: i64) -> i32 {
     crate::translate::clear_translation_artifacts(book_id)

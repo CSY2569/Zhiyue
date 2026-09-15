@@ -138,24 +138,26 @@ pub fn books_by_recency(conn: &Connection) -> AppResult<Vec<(i64, String)>> {
     Ok(out)
 }
 
+/// Recursive on-disk size of [dir] in bytes (unreadable entries count as 0).
+pub(crate) fn dir_size(dir: &std::path::Path) -> u64 {
+    let mut total = 0;
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_dir() {
+                total += dir_size(&p);
+            } else if let Ok(md) = entry.metadata() {
+                total += md.len();
+            }
+        }
+    }
+    total
+}
+
 /// Total on-disk translation cache size in bytes: the `translated/`
 /// directories of all books (the cache rows themselves are tiny and are
 /// intentionally not counted; plan §7 counts the produced artifacts).
 pub fn translated_dir_size() -> u64 {
-    fn dir_size(dir: &std::path::Path) -> u64 {
-        let mut total = 0;
-        if let Ok(entries) = std::fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                let p = entry.path();
-                if p.is_dir() {
-                    total += dir_size(&p);
-                } else if let Ok(md) = entry.metadata() {
-                    total += md.len();
-                }
-            }
-        }
-        total
-    }
     let root = crate::db::app_data_dir()
         .unwrap_or_default()
         .join("translated");

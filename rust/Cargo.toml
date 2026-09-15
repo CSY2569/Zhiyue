@@ -24,25 +24,24 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 flutter_rust_bridge = "=2.12.0"
 
 # Async runtime
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "fs"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
 tokio-stream = "0.1"
 futures-core = "0.3"
 futures-util = "0.3"
 
 # Database - bundled SQLite (WAL) + FTS5
-rusqlite = { version = "0.32", features = ["bundled", "blob"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
 
-# PDF rendering / text extraction (M2). `paragraph` is kept enabled for the
-# bilingual reading milestone (M7); NOTE: pdfium-render 0.9.3/0.9.4 compiles
-# the module but does not re-export PdfParagraph outside the crate, so the
-# baseline clustering in translate/extract.rs is the primary path.
-pdfium-render = { version = "0.9", features = ["image_latest", "thread_safe", "paragraph"], optional = true }
+# PDF rendering / text extraction (M2). The baseline clustering in
+# translate/extract.rs is the primary text path: pdfium-render 0.9.3/0.9.4
+# does not re-export PdfParagraph outside the crate, so its optional
+# `paragraph` feature is not enabled.
+pdfium-render = { version = "0.9", features = ["image_latest", "thread_safe"], optional = true }
 
 # AI client - OpenAI-compatible streaming + vision (M4).
 # Transport is a hand-written reqwest SSE client (TECH_ROADMAP fallback:
 # async-openai's request types serialize fields providers reject, e.g.
 # `image_url.detail: null`), so only reqwest is needed.
-# async-openai = { version = "0.27", optional = true }
 
 # Image processing - thumbnails (M2)
 image = { version = "0.25", optional = true }

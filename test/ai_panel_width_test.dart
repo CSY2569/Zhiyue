@@ -10,19 +10,7 @@ import 'package:rbwa/features/ai/widgets/message_bubble.dart';
 import 'package:rbwa/src/rust/models/ai.dart';
 
 import 'helpers/fake_ai_repo.dart';
-
-/// Settings stub that reports a chosen AI panel width.
-class _FakeSettings extends SettingsRepository {
-  _FakeSettings(this.panelWidth);
-  final double panelWidth;
-
-  @override
-  Future<String?> getSetting(String key) async =>
-      key == 'panel_width_ai' ? panelWidth.toString() : null;
-
-  @override
-  Future<int> setSetting(String key, String value) async => 1;
-}
+import 'helpers/fake_settings.dart';
 
 Future<ProviderContainer> _pumpPanel(
   WidgetTester tester,
@@ -32,7 +20,8 @@ Future<ProviderContainer> _pumpPanel(
   await tester.pumpWidget(ProviderScope(
     overrides: [
       aiRepositoryProvider.overrideWithValue(repo),
-      settingsRepositoryProvider.overrideWithValue(_FakeSettings(width)),
+      settingsRepositoryProvider.overrideWithValue(
+          FakeSettings({'panel_width_ai': width.toString()})),
     ],
     child: const MaterialApp(
       home: Scaffold(

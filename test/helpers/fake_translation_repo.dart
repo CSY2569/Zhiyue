@@ -2,12 +2,7 @@ import 'dart:typed_data';
 
 import 'package:rbwa/data/repositories/translation_repository.dart';
 import 'package:rbwa/src/rust/api.dart'
-    show
-        ExtractParagraphsResult,
-        GlossaryResult,
-        PageTranslationResult,
-        TranslatedPageBitmap,
-        TranslationOverviewResult;
+    show GlossaryResult, PageTranslationResult, TranslatedPageBitmap, TranslationOverviewResult;
 import 'package:rbwa/src/rust/models/translate.dart';
 
 /// Fake translation repository for widget tests: no Rust, in-memory cache
@@ -34,7 +29,6 @@ class FakeTranslationRepo extends TranslationRepository {
   /// page -> cached translation.
   final cache = <int, PageTranslation>{};
   final translateCalls = <(int, int, bool)>[];
-  final cleared = <int>[];
   final started = <int>[];
   final cancelled = <int>[];
 
@@ -150,13 +144,6 @@ class FakeTranslationRepo extends TranslationRepository {
   Future<Set<int>> getTranslatedPages(int bookId) async => cache.keys.toSet();
 
   @override
-  Future<int> clearTranslations(int bookId) async {
-    cleared.add(bookId);
-    cache.clear();
-    return 1;
-  }
-
-  @override
   Future<int> startBookTranslation(int bookId) async {
     started.add(bookId);
     return 1;
@@ -167,10 +154,6 @@ class FakeTranslationRepo extends TranslationRepository {
     cancelled.add(bookId);
     return 1;
   }
-
-  @override
-  Future<ExtractParagraphsResult> extractPageParagraphs(int bookId, int page) async =>
-      const ExtractParagraphsResult(paragraphs: [], error: null);
 
   @override
   Future<GlossaryResult> listGlossary() async =>

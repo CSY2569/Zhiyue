@@ -14,6 +14,10 @@ import 'package:rbwa/src/rust/api.dart' as rust;
 /// must carry a scan state (prompt or success) -- never be left blank.
 /// Requires the user's real database + the Rust core; run with:
 ///   flutter test -d linux integration_test/scan_middle_page_test.dart
+///
+/// 本机调试专用: hard-coded to this developer machine's real library
+/// (《鸟哥的Linux私房菜》, book 8), so it cannot run elsewhere. The
+/// fake-driven equivalent for CI is test/scan_open_middle_test.dart.
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 

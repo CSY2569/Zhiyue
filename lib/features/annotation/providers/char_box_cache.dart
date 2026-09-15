@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/core/lru.dart';
 import 'package:rbwa/data/repositories/reader_repository.dart';
 import 'package:rbwa/features/ai/providers/ai_config_provider.dart';
 import 'package:rbwa/features/reader/providers/ocr_helpers.dart';
@@ -43,14 +44,8 @@ class CharBoxCache extends Notifier<Map<int, List<CharBox>>> {
       boxes = const <CharBox>[];
     }
 
-    // Re-insert at the tail to keep insertion order = LRU order.
-    final next = Map<int, List<CharBox>>.from(state)
-      ..remove(page)
-      ..[page] = boxes;
-    while (next.length > _maxPages) {
-      next.remove(next.keys.first);
-    }
-    state = next;
+    // Touch in the LRU (re-inserted at the tail).
+    state = lruTouch(state, page, boxes, _maxPages);
     return boxes;
   }
 

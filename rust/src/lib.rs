@@ -33,6 +33,11 @@ pub mod pdf;
 pub mod search;
 pub mod translate;
 
+/// Loopback mock HTTP server shared by the ai/translate provider tests
+/// (only compiled for test builds that include the HTTP stack).
+#[cfg(all(test, feature = "ai"))]
+pub(crate) mod test_http;
+
 // flutter_rust_bridge generated bindings (created by `flutter_rust_bridge_codegen`).
 // The `frb_generated` mod is generated into src/frb_generated.rs; declared here
 // so the crate compiles once codegen has run.

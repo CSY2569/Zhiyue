@@ -23,14 +23,8 @@ use rbwa_core::models::translate::{
 };
 use rbwa_core::translate;
 
-fn set(conn: &rusqlite::Connection, key: &str, value: &str) {
-    conn.execute(
-        "INSERT INTO settings (key, value, updated_at) VALUES (?1, ?2, datetime('now')) \
-         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        rusqlite::params![key, value],
-    )
-    .unwrap();
-}
+mod common;
+use common::{scratch_dir, upsert_setting};
 
 fn translated(page: i64, effective_lang: &str, text: &str) -> PageTranslation {
     PageTranslation {
@@ -53,12 +47,10 @@ fn translated(page: i64, effective_lang: &str, text: &str) -> PageTranslation {
 
 #[test]
 fn overview_no_deadlock_and_bilingual_cache_key_roundtrip() {
-    let dir = std::env::temp_dir().join(format!("rbwa_ovw_{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = scratch_dir("ovw");
     db::init_database_at(&dir.join("rbwa.db")).unwrap();
 
-    let (key_lang, provider) = {
+    let (key_lang, _) = {
         let conn = db::db();
         conn.execute(
             "INSERT INTO books (id, title, original_path, stored_path, file_type, page_count) \
@@ -68,8 +60,8 @@ fn overview_no_deadlock_and_bilingual_cache_key_roundtrip() {
         .unwrap();
         // A valid book is essential: a NotFound early-return would dodge the
         // re-lock in translation_overview and hide the deadlock.
-        set(&conn, "ai_config", r#"{"translate_target_lang":"中英互译"}"#);
-        set(&conn, "translation_config", r#"{"provider":"ReuseAi"}"#);
+        upsert_setting(&conn, "ai_config", r#"{"translate_target_lang":"中英互译"}"#);
+        upsert_setting(&conn, "translation_config", r#"{"provider":"ReuseAi"}"#);
         translate::cache_key_with(&conn)
     };
     assert_eq!(key_lang, "中英互译");
@@ -128,6 +120,5 @@ fn overview_no_deadlock_and_bilingual_cache_key_roundtrip() {
     assert_eq!(col_lang, "中英互译", "key column must hold the configured key");
     assert!(payload.contains("英文"), "payload must keep the effective language");
 
-    let _ = provider;
     let _ = std::fs::remove_dir_all(&dir);
 }

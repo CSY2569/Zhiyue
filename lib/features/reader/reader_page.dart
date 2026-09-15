@@ -53,15 +53,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   late final ProviderSubscription _selectionSub;
   late final ProviderSubscription _viewerSub;
   late final ProviderSubscription _aiSub;
-  late final ProviderSubscription _aiPanelSub;
   late final ProviderSubscription _queueSub;
 
-  /// The AI panel was opened before or after the left sidebar; when panels
-  /// squeeze the reading area below its minimum, the EARLIER-opened one is
-  /// clamped first (plan §1 v4.2 后开启者优先 -- the later keeps its width).
-  /// The 对照 view is NOT here: it lives inside the content area as a 50/50
-  /// split and needs no clamping.
-  final List<String> _rightOrder = [];
   bool _sidebarCollapseNotified = false;
   int? _lastQueuedBookId;
 
@@ -98,15 +91,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _aiSub = ref.listenManual(
       aiProvider.select((s) => s.cardVisible),
       (prev, next) => _setVisible(_aiCardController, next),
-    );
-
-    // Track the open order of the AI panel vs the left sidebar (plan §1 v4.2).
-    _aiPanelSub = ref.listenManual(
-      aiProvider.select((s) => s.aiPanelOpen),
-      (prev, next) {
-        if (next && !(prev ?? false)) _rightOrder.add('ai');
-        if (!next) _rightOrder.remove('ai');
-      },
     );
 
     // Book / zoom / mode / page changes invalidate the current selection
@@ -180,16 +164,14 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       final notifier = ref.read(panelLayoutProvider.notifier);
       var deficit = PanelLayout.minContentWidth - content;
 
-      // The later-opened panel keeps its width; reduce earlier ones first.
-      for (final which in _rightOrder.reversed) {
-        if (deficit <= 0) break;
-        if (which == 'ai' && aiOpen) {
-          final cur = ref.read(panelLayoutProvider);
-          final next = (cur.aiPanelWidth - deficit)
-              .clamp(PanelLayout.minAiPanelWidth, cur.aiPanelWidth);
-          deficit -= cur.aiPanelWidth - next;
-          notifier.clampAiPanel(next);
-        }
+      // The AI panel is the only right-side panel: it gives way to the
+      // reading minimum first (the sidebar collapses below if still tight).
+      if (aiOpen && deficit > 0) {
+        final cur = ref.read(panelLayoutProvider);
+        final next = (cur.aiPanelWidth - deficit)
+            .clamp(PanelLayout.minAiPanelWidth, cur.aiPanelWidth);
+        deficit -= cur.aiPanelWidth - next;
+        notifier.clampAiPanel(next);
       }
       if (deficit != PanelLayout.minContentWidth - content) notifier.commit();
 
@@ -214,7 +196,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _selectionSub.close();
     _viewerSub.close();
     _aiSub.close();
-    _aiPanelSub.close();
     _queueSub.close();
     // NOTE: cannot call ref.read() here -- Riverpod forbids using `ref` after
     // the widget is disposed. The ViewerNotifier's own dispose() cancels the

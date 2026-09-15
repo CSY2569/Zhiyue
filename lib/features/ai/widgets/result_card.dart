@@ -5,9 +5,9 @@ import 'package:rbwa/core/widgets/toolbar_icon_button.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
 import 'package:rbwa/features/ai/widgets/ai_utils.dart';
 import 'package:rbwa/features/ai/widgets/message_bubble.dart'
-    show AiMessageBubble;
+    show AiMessageBubble, aiActionLabel;
 import 'package:rbwa/features/reader/providers/panel_layout.dart';
-import 'package:rbwa/src/rust/models/ai.dart' show AiActionType, AiRole;
+import 'package:rbwa/src/rust/models/ai.dart' show AiRole;
 
 /// Floating AI result card (FEATURES 6.4): shows the active thread's full
 /// conversation -- every prior turn stays visible across follow-ups (6.5.2),
@@ -209,7 +209,7 @@ class ResultCard extends ConsumerWidget {
       final label = m.role == AiRole.user ? '用户' : 'AI';
       final parts = <String>[];
       if (m.actionType != null) {
-        parts.add('指令：${_actionLabel(m.actionType!)}');
+        parts.add('指令：${aiActionLabel(m.actionType!)}');
       }
       if (m.createdAt != null && m.createdAt!.isNotEmpty) {
         parts.add('时间：${m.createdAt}');
@@ -222,21 +222,6 @@ class ResultCard extends ConsumerWidget {
       sb.writeln('AI：$streamingTail');
     }
     return sb.toString().trim();
-  }
-
-  static String _actionLabel(AiActionType action) {
-    switch (action) {
-      case AiActionType.translate:
-        return '翻译';
-      case AiActionType.explain:
-        return '解释';
-      case AiActionType.search:
-        return '搜索';
-      case AiActionType.chat:
-        return '聊天';
-      case AiActionType.vision:
-        return '识图';
-    }
   }
 }
 
@@ -259,12 +244,10 @@ class _CardInput extends ConsumerStatefulWidget {
 
 class _CardInputState extends ConsumerState<_CardInput> {
   final _input = TextEditingController();
-  final _focus = FocusNode();
 
   @override
   void dispose() {
     _input.dispose();
-    _focus.dispose();
     super.dispose();
   }
 
@@ -296,7 +279,6 @@ class _CardInputState extends ConsumerState<_CardInput> {
         onKeyEvent: _onKey,
         child: TextField(
           controller: _input,
-          focusNode: _focus,
           minLines: 1,
           maxLines: 3,
           enabled: !widget.streaming,

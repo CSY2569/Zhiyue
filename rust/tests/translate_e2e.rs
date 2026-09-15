@@ -12,16 +12,8 @@ use pdfium_render::prelude::*;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
-fn scratch_dir(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "rbwa_pipe_e2e_{}_{}",
-        std::process::id(),
-        tag
-    ));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
-}
+mod common;
+use common::scratch_dir;
 
 /// A one-page PDF with two text lines (built under the pdfium lock).
 fn make_pdf(dir: &Path) -> PathBuf {
@@ -125,13 +117,7 @@ async fn read_request(sock: &mut tokio::net::TcpStream) -> String {
 }
 
 fn insert_setting(key: &str, value: &str) {
-    let conn = db::db();
-    conn.execute(
-        "INSERT INTO settings (key, value, updated_at) VALUES (?1, ?2, datetime('now')) \
-         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        rusqlite::params![key, value],
-    )
-    .unwrap();
+    common::upsert_setting(&db::db(), key, value);
 }
 
 #[tokio::test]
@@ -168,21 +154,11 @@ async fn translate_page_end_to_end_with_mock_llm() {
 
     // First, confirm extraction sees the page's text at all.
     let paras = rbwa_core::translate::pipeline::extract_paragraphs(1, 1).unwrap();
-    eprintln!("EXTRACTED {} paragraphs: {:?}", paras.len(), paras.iter().map(|p| &p.text).collect::<Vec<_>>());
     assert!(!paras.is_empty(), "extraction found no paragraphs");
 
-    let mut events = Vec::new();
-    let result = run_translate_page(1, 1, false, |ev| events.push(ev)).await;
-    match &result {
-        Ok(t) => {
-            eprintln!("OK paragraphs={} coverage={}", t.paragraphs.len(), t.coverage);
-            for p in &t.paragraphs {
-                eprintln!("  src={:?} translated={:?} status={:?}", p.source, p.translated, p.status);
-            }
-        }
-        Err(e) => eprintln!("ERR {e}"),
-    }
-    let t = result.expect("translation must succeed");
+    let t = run_translate_page(1, 1, false, |_| {})
+        .await
+        .expect("translation must succeed");
     // The cached row must carry the current extractor stamp (so an algorithm
     // fix is never masked by a stale cache entry).
     assert!(

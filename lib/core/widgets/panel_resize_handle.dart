@@ -12,7 +12,6 @@ class PanelResizeHandle extends StatefulWidget {
     super.key,
     required this.onResize,
     this.onResizeEnd,
-    this.cursor = SystemMouseCursors.resizeLeftRight,
   });
 
   /// Horizontal drag delta in logical pixels (right positive).
@@ -20,9 +19,6 @@ class PanelResizeHandle extends StatefulWidget {
 
   /// Called when the drag gesture ends (persist the resulting size).
   final VoidCallback? onResizeEnd;
-
-  /// Mouse cursor while hovering the handle.
-  final MouseCursor cursor;
 
   @override
   State<PanelResizeHandle> createState() => _PanelResizeHandleState();
@@ -35,7 +31,7 @@ class _PanelResizeHandleState extends State<PanelResizeHandle> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return MouseRegion(
-      cursor: widget.cursor,
+      cursor: SystemMouseCursors.resizeLeftRight,
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: GestureDetector(

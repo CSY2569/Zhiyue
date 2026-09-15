@@ -482,6 +482,9 @@ async fn web_search_at(
 }
 
 impl AiClient for OpenAiClient {
+    // `impl Future + Send` instead of `async fn`: the trait documents that
+    // FRB's `wrap_async` requires the Send bound (ai/mod.rs).
+    #[allow(clippy::manual_async_fn)]
     fn stream_chat(
         &self,
         config: &AiConfig,
@@ -512,6 +515,8 @@ impl AiClient for OpenAiClient {
         }
     }
 
+    // See stream_chat: the explicit `+ Send` bound is required.
+    #[allow(clippy::manual_async_fn)]
     fn stream_vision(
         &self,
         config: &AiConfig,
@@ -537,60 +542,11 @@ impl AiClient for OpenAiClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    use tokio::net::{TcpListener, TcpStream};
-
-    /// Serve one HTTP response on a loopback port. Returns the endpoint and a
-    /// receiver for the raw request text the client sent.
-    async fn mock_server(
-        status_line: &'static str,
-        body: &'static str,
-    ) -> (String, tokio::sync::mpsc::Receiver<String>) {
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let (tx, rx) = tokio::sync::mpsc::channel(1);
-        tokio::spawn(async move {
-            let (mut sock, _) = listener.accept().await.unwrap();
-            let req = read_request(&mut sock).await;
-            let _ = tx.send(req).await;
-            let resp = format!(
-                "HTTP/1.1 {status_line}\r\nContent-Type: application/json\r\n\
-                 Content-Length: {}\r\nConnection: close\r\n\r\n{}",
-                body.len(),
-                body
-            );
-            let _ = sock.write_all(resp.as_bytes()).await;
-        });
-        (format!("http://127.0.0.1:{port}/v1/web-search"), rx)
-    }
-
-    /// Read the full HTTP request (headers + Content-Length body).
-    async fn read_request(sock: &mut TcpStream) -> String {
-        let mut buf: Vec<u8> = Vec::new();
-        let mut chunk = [0u8; 4096];
-        loop {
-            let n = sock.read(&mut chunk).await.unwrap();
-            if n == 0 {
-                break;
-            }
-            buf.extend_from_slice(&chunk[..n]);
-            if let Some(sep) = find_subslice(&buf, b"\r\n\r\n") {
-                let head = String::from_utf8_lossy(&buf[..sep]).to_string();
-                let len = head
-                    .lines()
-                    .find_map(|l| {
-                        l.to_ascii_lowercase()
-                            .strip_prefix("content-length:")
-                            .and_then(|v| v.trim().parse::<usize>().ok())
-                    })
-                    .unwrap_or(0);
-                if buf.len() >= sep + 4 + len {
-                    break;
-                }
-            }
-        }
-        String::from_utf8_lossy(&buf).to_string()
-    }
+    use crate::test_http::{mock_server, read_request};
+    // The fallback test below routes per-request responses itself and needs
+    // the raw socket pieces.
+    use tokio::io::AsyncWriteExt;
+    use tokio::net::TcpListener;
 
     #[test]
     fn search_endpoint_resolves_default_and_custom() {
@@ -735,22 +691,10 @@ mod tests {
         events: &'static str,
         status: &'static str,
     ) -> (String, tokio::sync::mpsc::Receiver<String>) {
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let (tx, rx) = tokio::sync::mpsc::channel(1);
-        tokio::spawn(async move {
-            let (mut sock, _) = listener.accept().await.unwrap();
-            let req = read_request(&mut sock).await;
-            let _ = tx.send(req).await;
-            let resp = format!(
-                "HTTP/1.1 {status}\r\nContent-Type: text/event-stream\r\n\
-                 Content-Length: {}\r\nConnection: close\r\n\r\n{}",
-                events.len(),
-                events
-            );
-            let _ = sock.write_all(resp.as_bytes()).await;
-        });
-        (format!("http://127.0.0.1:{port}/v1"), rx)
+        let (base, rx) =
+            crate::test_http::mock_server_with(vec![(status, "text/event-stream", events.into())])
+                .await;
+        (format!("{base}/v1"), rx)
     }
 
     #[tokio::test]
@@ -1032,11 +976,13 @@ data: [DONE]
     }
 
     #[tokio::test]
-    async fn web_search_formats_bocha_results() {        let body = r#"{"code":200,"data":{"webPages":{"value":[
+    async fn web_search_formats_bocha_results() {
+        let body = r#"{"code":200,"data":{"webPages":{"value":[
             {"name":"Rust 官网","url":"https://www.rust-lang.org/","snippet":"Rust 是一门系统编程语言"},
             {"name":"Rust 中文社区","url":"https://rustcc.cn/","snippet":"Rust 中文学习资源"}
         ]}}}"#;
-        let (endpoint, mut req_rx) = mock_server("200 OK", body).await;
+        let (base, mut req_rx) = mock_server(vec![("200 OK", body.into())]).await;
+        let endpoint = format!("{base}/v1/web-search");
         let http = OpenAiClient::http_client().unwrap();
         let out = web_search_at(http, endpoint, "test-key", "rust 语言").await.unwrap();
         assert!(out.contains("Rust 官网"));
@@ -1055,11 +1001,12 @@ data: [DONE]
 
     #[tokio::test]
     async fn web_search_surfaces_non_2xx_body() {
-        let (endpoint, _rx) = mock_server(
+        let (base, _rx) = mock_server(vec![(
             "401 Unauthorized",
-            r#"{"code":401,"msg":"API Key 无效"}"#,
-        )
+            r#"{"code":401,"msg":"API Key 无效"}"#.into(),
+        )])
         .await;
+        let endpoint = format!("{base}/v1/web-search");
         let http = OpenAiClient::http_client().unwrap();
         let err = web_search_at(http, endpoint, "bad-key", "q").await.unwrap_err();
         let msg = err.to_string();
@@ -1069,8 +1016,12 @@ data: [DONE]
 
     #[tokio::test]
     async fn web_search_empty_results_is_an_error() {
-        let (endpoint, _rx) =
-            mock_server("200 OK", r#"{"code":200,"data":{"webPages":{"value":[]}}}"#).await;
+        let (base, _rx) = mock_server(vec![(
+            "200 OK",
+            r#"{"code":200,"data":{"webPages":{"value":[]}}}"#.into(),
+        )])
+        .await;
+        let endpoint = format!("{base}/v1/web-search");
         let http = OpenAiClient::http_client().unwrap();
         let err = web_search_at(http, endpoint, "k", "q").await.unwrap_err();
         assert!(err.to_string().contains("no results"), "{err}");

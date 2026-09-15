@@ -49,6 +49,7 @@ pub fn list(conn: &Connection, book_id: i64) -> AppResult<Vec<TextAnnotation>> {
 }
 
 /// Insert a new annotation; returns the new row id.
+#[allow(clippy::too_many_arguments)] // mirrors the annotation's column set
 pub fn create(
     conn: &Connection,
     book_id: i64,

@@ -27,10 +27,6 @@ dependencies:
   # Rendering (AI answers: Markdown)
   flutter_markdown: ^0.7.4+3
 
-  # Path utilities (app data dir)
-  path: ^1.9.0
-
-  cupertino_icons: ^1.0.8
   flutter_math_fork: ^0.7.4
   markdown: ^7.3.1
 

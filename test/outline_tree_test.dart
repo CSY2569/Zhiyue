@@ -8,6 +8,7 @@ import 'package:rbwa/features/reader/widgets/sidebars/outline_tree.dart';
 import 'package:rbwa/src/rust/api.dart' as rust;
 import 'package:rbwa/src/rust/pdf/types.dart';
 
+import 'helpers/fake_settings.dart';
 import 'helpers/widget_harness.dart';
 
 /// Two-level outline: Chapter 1 with two sections, used to observe whether
@@ -29,25 +30,12 @@ class _FakeRepo extends ReaderRepository {
       );
 }
 
-/// Settings KV stub: returns the value configured for the outline key.
-class _FakeSettings extends SettingsRepository {
-  _FakeSettings(this._value);
-  final String? _value;
-
-  @override
-  Future<String?> getSetting(String key) async =>
-      key == 'outline_expand_all' ? _value : null;
-
-  @override
-  Future<int> setSetting(String key, String value) async => 1;
-}
-
 Widget _tree({required bool expandAll}) => ProviderScope(
       overrides: [
         defaultViewer(),
         readerRepositoryProvider.overrideWithValue(_FakeRepo()),
-        settingsRepositoryProvider
-            .overrideWithValue(_FakeSettings(expandAll ? 'true' : 'false')),
+        settingsRepositoryProvider.overrideWithValue(
+            FakeSettings({'outline_expand_all': expandAll ? 'true' : 'false'})),
       ],
       child: const MaterialApp(
         home: Scaffold(

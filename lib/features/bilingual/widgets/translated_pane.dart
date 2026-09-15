@@ -24,9 +24,7 @@ class TranslatedColumn extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final viewer = ref.watch(viewerProvider);
     final bookId = viewer.book?.id;
-    final targetLang =
-        ref.watch(aiConfigProvider).valueOrNull?.translateTargetLang ??
-            '中文';
+    final targetLang = ref.watch(translateTargetLangProvider);
     final configured = _isConfigured(ref);
     final configLoading = ref.watch(translationConfigProvider).isLoading;
     final queue = ref.watch(translationQueueProvider);

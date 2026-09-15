@@ -15,46 +15,31 @@ class TranslationQueueState {
     this.totalPages = 0,
     this.donePages = 0,
     this.error,
-    this.currentPage,
   });
 
   final int? bookId;
   final bool running;
   final int totalPages;
   final int donePages;
-
-  /// The page a running task is currently on (pane header hint).
-  final int? currentPage;
   final String? error;
 
   double get progress =>
       totalPages == 0 ? 0 : (donePages / totalPages).clamp(0.0, 1.0);
-
-  /// Rough remaining-time estimate: ~4 s/page (plan §7: DeepL 1-2 s, LLM
-  /// 3-10 s per page; the pane shows the value as approximate).
-  Duration? get estimatedRemaining {
-    if (!running || totalPages == 0) return null;
-    final remaining = (totalPages - donePages).clamp(0, totalPages);
-    return Duration(seconds: remaining * 4);
-  }
 
   TranslationQueueState copyWith({
     int? bookId,
     bool? running,
     int? totalPages,
     int? donePages,
-    int? currentPage,
     String? error,
     bool clearBook = false,
     bool clearError = false,
-    bool clearPage = false,
   }) =>
       TranslationQueueState(
         bookId: clearBook ? null : (bookId ?? this.bookId),
         running: running ?? this.running,
         totalPages: totalPages ?? this.totalPages,
         donePages: donePages ?? this.donePages,
-        currentPage: clearPage ? null : (currentPage ?? this.currentPage),
         error: clearError ? null : (error ?? this.error),
       );
 }
@@ -170,7 +155,6 @@ class TranslationQueueNotifier extends Notifier<TranslationQueueState> {
     state = state.copyWith(
       running: false,
       clearBook: true,
-      clearPage: true,
     );
   }
 
@@ -285,7 +269,7 @@ class TranslationQueueNotifier extends Notifier<TranslationQueueState> {
     }
     if (!_disposed && gen == _generation) {
       await repo.cancelTranslation(bookId);
-      state = state.copyWith(running: false, clearPage: true);
+      state = state.copyWith(running: false);
     }
   }
 
@@ -315,7 +299,6 @@ class TranslationQueueNotifier extends Notifier<TranslationQueueState> {
       }
       state = state.copyWith(
         donePages: state.donePages + 1,
-        currentPage: page,
         clearError: true,
       );
       // Invalidate rendered page images so an open pane shows this page.

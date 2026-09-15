@@ -52,6 +52,7 @@ pub fn list(conn: &Connection, book_id: i64) -> AppResult<Vec<ImageAnnotation>> 
 }
 
 /// Insert a new image-layer mark; returns the new row id.
+#[allow(clippy::too_many_arguments)] // mirrors the mark's column set (update below has the same allow)
 pub fn create(
     conn: &Connection,
     book_id: i64,

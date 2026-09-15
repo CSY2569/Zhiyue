@@ -122,8 +122,7 @@ class _TranslationSettingsSectionState
     final theme = Theme.of(context);
     final config = ref.watch(translationConfigProvider).valueOrNull;
     _hydrate(config);
-    final targetLang =
-        ref.watch(aiConfigProvider).valueOrNull?.translateTargetLang ?? '中文';
+    final targetLang = ref.watch(translateTargetLangProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

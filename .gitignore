@@ -62,7 +62,6 @@ app.*.map.json
 *.so
 *.dylib
 *.dll
-/assets/models/
 
 # ---------------------------------------------------------------------------
 # Runtime data (never commit user data / DBs / logs)

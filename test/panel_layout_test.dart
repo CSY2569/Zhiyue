@@ -8,24 +8,9 @@ import 'package:rbwa/features/reader/providers/panel_layout.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart'
     show SidebarType;
 
-/// In-memory settings KV that records writes.
-class _FakeSettings extends SettingsRepository {
-  _FakeSettings([Map<String, String>? seed]) : _values = {...?seed};
-  final Map<String, String> _values;
-  final writes = <String, String>{};
+import 'helpers/fake_settings.dart';
 
-  @override
-  Future<String?> getSetting(String key) async => _values[key];
-
-  @override
-  Future<int> setSetting(String key, String value) async {
-    _values[key] = value;
-    writes[key] = value;
-    return 1;
-  }
-}
-
-ProviderContainer _container(_FakeSettings settings) {
+ProviderContainer _container(FakeSettings settings) {
   final c = ProviderContainer(overrides: [
     settingsRepositoryProvider.overrideWithValue(settings),
   ]);
@@ -35,7 +20,7 @@ ProviderContainer _container(_FakeSettings settings) {
 
 void main() {
   test('defaults match the previous hardcoded sizes', () {
-    final c = _container(_FakeSettings());
+    final c = _container(FakeSettings());
     final layout = c.read(panelLayoutProvider);
     expect(layout.thumbnailsWidth, 180);
     expect(layout.outlineWidth, 240);
@@ -46,7 +31,7 @@ void main() {
   });
 
   test('resizeSidebar accumulates and clamps per sidebar', () {
-    final c = _container(_FakeSettings());
+    final c = _container(FakeSettings());
     final n = c.read(panelLayoutProvider.notifier);
     n.resizeSidebar(SidebarType.outline, 60);
     expect(c.read(panelLayoutProvider).outlineWidth, 300);
@@ -62,7 +47,7 @@ void main() {
   });
 
   test('resizeAiPanel accumulates and clamps', () {
-    final c = _container(_FakeSettings());
+    final c = _container(FakeSettings());
     final n = c.read(panelLayoutProvider.notifier);
     n.resizeAiPanel(-40);
     expect(c.read(panelLayoutProvider).aiPanelWidth, 280);
@@ -72,7 +57,7 @@ void main() {
   });
 
   test('resizeCard changes width and height independently, clamped', () {
-    final c = _container(_FakeSettings());
+    final c = _container(FakeSettings());
     final n = c.read(panelLayoutProvider.notifier);
     n.resizeCard(const Offset(80, -60));
     expect(c.read(panelLayoutProvider).cardSize, const Size(520, 300));
@@ -82,7 +67,7 @@ void main() {
   });
 
   test('commit persists every size to the KV store', () async {
-    final settings = _FakeSettings();
+    final settings = FakeSettings();
     final c = _container(settings);
     final n = c.read(panelLayoutProvider.notifier);
     n.resizeSidebar(SidebarType.thumbnails, 20);
@@ -100,7 +85,7 @@ void main() {
   });
 
   test('hydrates saved sizes from the KV store', () async {
-    final settings = _FakeSettings({
+    final settings = FakeSettings({
       'panel_width_outline': '300.0',
       'panel_width_thumbnails': '220.0',
       'panel_width_annotations': '280.0',
@@ -122,7 +107,7 @@ void main() {
 
   test('hydrate ignores malformed values and clamps out-of-range ones',
       () async {
-    final settings = _FakeSettings({
+    final settings = FakeSettings({
       'panel_width_outline': 'not-a-number',
       'panel_width_ai': '99999', // clamped
       'card_size': 'broken',

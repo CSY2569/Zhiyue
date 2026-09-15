@@ -9,18 +9,8 @@ import 'package:rbwa/data/repositories/translation_repository.dart';
 import 'package:rbwa/features/settings/settings_page.dart';
 
 import 'helpers/fake_ai_repo.dart';
+import 'helpers/fake_settings.dart';
 import 'helpers/fake_translation_repo.dart';
-
-class _FakeSettings extends SettingsRepository {
-  final _values = <String, String>{};
-  @override
-  Future<String?> getSetting(String key) async => _values[key];
-  @override
-  Future<int> setSetting(String key, String value) async {
-    _values[key] = value;
-    return 1;
-  }
-}
 
 void main() {
   for (final width in [560.0, 700.0, 900.0, 1400.0]) {
@@ -37,7 +27,7 @@ void main() {
             aiRepositoryProvider.overrideWithValue(FakeAiRepo()),
             translationRepositoryProvider
                 .overrideWithValue(FakeTranslationRepo()),
-            settingsRepositoryProvider.overrideWithValue(_FakeSettings()),
+            settingsRepositoryProvider.overrideWithValue(FakeSettings()),
           ],
           child: MaterialApp(
             theme: AppTheme.light(),

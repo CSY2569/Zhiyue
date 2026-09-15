@@ -59,8 +59,8 @@ pub fn translating_books() -> Vec<i64> {
     translating().lock().unwrap().iter().copied().collect()
 }
 
-/// `{data_dir}/translated/{book_id}` -- translated PDFs + formula images
-/// (plan §6/§7). Sibling of `covers/` / `ai_images/`.
+/// `{data_dir}/translated/{book_id}` -- translated PDFs (plan §6/§7).
+/// Sibling of `covers/` / `ai_images/`.
 pub fn translated_dir(book_id: i64) -> PathBuf {
     db::app_data_dir()
         .unwrap_or_default()
@@ -71,7 +71,8 @@ pub fn translated_dir(book_id: i64) -> PathBuf {
 /// SHA-256 over the page's paragraph texts: the cache freshness guard
 /// (plan §2 -- a re-extracted page whose text changed invalidates the
 /// cached translation).
-pub fn source_hash(texts: &[&str]) -> String {    let mut hasher = Sha256::new();
+pub fn source_hash(texts: &[&str]) -> String {
+    let mut hasher = Sha256::new();
     for t in texts {
         hasher.update(t.as_bytes());
         hasher.update([0]);
@@ -352,7 +353,7 @@ pub fn page_has_translation(book_id: i64, page: i64) -> bool {
     .unwrap_or(false)
 }
 
-/// Deletes a book's translated artifacts (PDF + formula images) without
+/// Deletes a book's translated artifacts (the translated PDF) without
 /// touching the cache rows (used by delete_book, which cascades the rows).
 pub fn clear_translation_artifacts(book_id: i64) -> AppResult<()> {
     let dir = translated_dir(book_id);
@@ -382,7 +383,7 @@ pub fn pinned_books() -> Vec<i64> {
 
 /// Enforces the translation cache budget (plan §7): when `translated/`
 /// exceeds `cache_limit_mb`, the least-recently-used books' ARTIFACTS are
-/// deleted (PDF + formula images); the tiny paragraph cache rows stay so
+/// deleted (the translated PDFs); the tiny paragraph cache rows stay so
 /// translation can be rebuilt instantly. Pinned books, the currently-open
 /// book and books with in-flight work are skipped. Runs quietly at startup
 /// and after an export build.
@@ -412,28 +413,13 @@ pub fn enforce_cache_limit() -> AppResult<u64> {
             continue;
         }
         let dir = translated_dir(book_id);
-        let before = dir_size(&dir);
+        let before = crate::db::repository::translate::dir_size(&dir);
         if dir.exists() {
             std::fs::remove_dir_all(&dir)?;
         }
         used = used.saturating_sub(before);
     }
     Ok(used)
-}
-
-fn dir_size(dir: &std::path::Path) -> u64 {
-    let mut total = 0;
-    if let Ok(entries) = std::fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let p = entry.path();
-            if p.is_dir() {
-                total += dir_size(&p);
-            } else if let Ok(md) = entry.metadata() {
-                total += md.len();
-            }
-        }
-    }
-    total
 }
 
 #[cfg(test)]

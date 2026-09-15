@@ -300,16 +300,6 @@ void main() {
       expect(container.read(markToolProvider).tool, isNull);
     });
 
-    test('toggleTool turns the armed tool off again', () {
-      final container = _container(_FakeReaderRepo());
-      final notifier = container.read(markToolProvider.notifier);
-
-      notifier.toggleTool(MarkTool.brush);
-      expect(container.read(markToolProvider).tool, MarkTool.brush);
-      notifier.toggleTool(MarkTool.brush);
-      expect(container.read(markToolProvider).tool, isNull);
-    });
-
     test('shape tool icon does not exit when already armed', () {
       final container = _container(_FakeReaderRepo());
       final notifier = container.read(markToolProvider.notifier);

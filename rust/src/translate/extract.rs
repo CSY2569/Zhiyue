@@ -16,8 +16,9 @@
 //!   2. noise removal: margin-positioned short lines that look like page
 //!      numbers or repeat on adjacent pages (headers/footers);
 //!   3. formula detection from font metadata (math font families, symbolic
-//!      fonts, sub/superscript scaling, rotation) with region images
-//!      captured from the original page;
+//!      fonts, sub/superscript scaling, rotation); whole-paragraph formulas
+//!      keep their original page pixels downstream (no region images are
+//!      captured);
 //!   4. OCR line merging for scanned pages (the caller runs the engine and
 //!      feeds [OcrLine]s into [ocr_lines_to_paragraphs]).
 //!
@@ -128,8 +129,7 @@ pub fn extract_page(
     page: i64,
     neighbors: &[String],
 ) -> AppResult<ExtractOutcome> {
-    // Kept for the page-range validation (out-of-range pages error here).
-    let _pg = doc.pages().get((page - 1) as PdfPageIndex)?;
+    // collect_page_chars validates the page range (out-of-range errors there).
     let chars = collect_page_chars(doc, page)?;
     if chars.iter().all(|c| c.ch.trim().is_empty()) {
         return Ok(ExtractOutcome {
@@ -277,6 +277,25 @@ fn cluster_lines(chars: &[PageChar]) -> Vec<Line> {
     lines
 }
 
+/// 95th-percentile line width -- the "wide line" reference that display
+/// equations (narrow, centered) are compared against. Shared by the line
+/// splitter and the whole-paragraph formula classifier.
+fn p95_width(mut widths: Vec<f64>) -> f64 {
+    widths.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    widths
+        .get(widths.len().saturating_sub(1).min(widths.len() * 95 / 100))
+        .copied()
+        .unwrap_or(1.0)
+}
+
+/// Whether a line/block of width [w] centered at [cx] is a narrow,
+/// horizontally centered display construct. Column centers sit at the
+/// quarter positions; [tol] widens the center match (a trailing equation
+/// number "(2)" pushes the line's center off-column).
+fn is_centered_short(w: f64, cx: f64, wide_p95: f64, tol: f64) -> bool {
+    w <= wide_p95 * 0.7 && [0.25, 0.5, 0.75].iter().any(|c| (cx - c).abs() <= tol)
+}
+
 /// Merges clustered lines into paragraphs: gap + first-line-indent rules,
 /// with an optional two-column split (plan §3.1 回退路径). Display-math lines
 /// (narrow, horizontally centered) are split off into their own paragraphs so
@@ -293,18 +312,10 @@ fn fallback_paragraphs(chars: &[PageChar], page: i64) -> Vec<Paragraph> {
 
     // Wide-line reference + per-line display-math flag (same shape rule as
     // is_whole_paragraph_formula rule 3).
-    let mut line_ws: Vec<f64> = ordered.iter().map(|l| l.rect.w).filter(|w| *w > 0.0).collect();
-    line_ws.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-    let wide_p95 = line_ws
-        .get(line_ws.len().saturating_sub(1).min(line_ws.len() * 95 / 100))
-        .copied()
-        .unwrap_or(1.0);
+    let wide_p95 = p95_width(ordered.iter().map(|l| l.rect.w).filter(|w| *w > 0.0).collect());
     let display_flag = |l: &Line| -> (bool, f64) {
         let cx = l.rect.x + l.rect.w / 2.0;
-        let centered = [0.25, 0.5, 0.75]
-            .iter()
-            .any(|c| (cx - c).abs() <= 0.06);
-        (l.rect.w <= wide_p95 * 0.7 && centered, cx)
+        (is_centered_short(l.rect.w, cx, wide_p95, 0.06), cx)
     };
 
     let mut paragraphs: Vec<Paragraph> = Vec::new();
@@ -742,16 +753,13 @@ fn attach_formulas(
 ) -> Vec<Paragraph> {
     // Page-wide line-width reference for the "centered short block" signal:
     // display equations are narrow relative to the column's full lines.
-    let mut line_ws: Vec<f64> = paragraphs
-        .iter()
-        .flat_map(|p| p.rects.iter().map(|r| r.w))
-        .filter(|w| *w > 0.0)
-        .collect();
-    line_ws.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-    let wide_p95 = line_ws
-        .get(line_ws.len().saturating_sub(1).min(line_ws.len() * 95 / 100))
-        .copied()
-        .unwrap_or(1.0);
+    let wide_p95 = p95_width(
+        paragraphs
+            .iter()
+            .flat_map(|p| p.rects.iter().map(|r| r.w))
+            .filter(|w| *w > 0.0)
+            .collect(),
+    );
 
     for p in &mut paragraphs {
         let Some(rect) = paragraph_rect(p) else {
@@ -797,31 +805,19 @@ fn attach_formulas(
         };
         if is_whole_paragraph_formula(p, math_ratio, math_alpha_ratio, wide_p95) {
             p.kind = ParagraphKind::Formula;
-            // Whole-formula paragraphs keep their regions for token mapping.
-            p.formula_regions = regions
-                .iter()
-                .filter(|(r, _)| rects_overlap(r, &rect))
-                .map(|(r, t)| FormulaRegion {
-                    rect: *r,
-                    image_path: None,
-                    source_text: t.clone(),
-                    placeholder: String::new(),
-                })
-                .collect();
-            continue;
         }
-        if p.kind == ParagraphKind::Text {
-            p.formula_regions = regions
-                .iter()
-                .filter(|(r, _)| rects_overlap(r, &rect))
-                .map(|(r, t)| FormulaRegion {
-                    rect: *r,
-                    image_path: None,
-                    source_text: t.clone(),
-                    placeholder: String::new(),
-                })
-                .collect();
-        }
+        // Whole-formula and text paragraphs alike keep their regions for
+        // token mapping.
+        p.formula_regions = regions
+            .iter()
+            .filter(|(r, _)| rects_overlap(r, &rect))
+            .map(|(r, t)| FormulaRegion {
+                rect: *r,
+                image_path: None,
+                source_text: t.clone(),
+                placeholder: String::new(),
+            })
+            .collect();
     }
     paragraphs
 }
@@ -889,11 +885,9 @@ fn is_whole_paragraph_formula(
     let (union, max_line_w) = union_and_max_line(p);
     let cx = union.x + union.w / 2.0;
     let tol = if ends_with_eq_number(&p.text) { 0.16 } else { 0.06 };
-    let centered_short = max_line_w <= wide_p95 * 0.7
-        && [0.25, 0.5, 0.75]
-            .iter()
-            .any(|c| (cx - c).abs() <= tol);
-    if centered_short && (math_ratio >= 0.12 || text_looks_like_formula(&p.text)) {
+    if is_centered_short(max_line_w, cx, wide_p95, tol)
+        && (math_ratio >= 0.12 || text_looks_like_formula(&p.text))
+    {
         return true;
     }
     // Rule 4: all-math operator equations. When >= 90% of the paragraph's
@@ -963,17 +957,6 @@ fn union_and_max_line(p: &Paragraph) -> (NormRect, f64) {
         x1 = x1.max(r.x + r.w);
         y1 = y1.max(r.y + r.h);
         max_w = max_w.max(r.w);
-    }
-    if p.rects.is_empty() {
-        return (
-            NormRect {
-                x: 0.0,
-                y: 0.0,
-                w: 0.0,
-                h: 0.0,
-            },
-            0.0,
-        );
     }
     (
         NormRect {

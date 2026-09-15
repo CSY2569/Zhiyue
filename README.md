@@ -2,7 +2,7 @@
 
 原生 AI 集成的本地阅读器：阅读 PDF（文字版 / 扫描版）与图片文件，选中文字即可翻译、解释、搜索；支持文本层与图像层标记；内置完全离线的本地 OCR 与多模态识图。
 
-> **当前阶段：M0–M6 全部核心功能已完成。** 书库管理、PDF 管线、选区与文本层标记、AI 对话与识图、整页 OCR 与图像层标记、全文搜索均已实现，另有 OCR 精度增强（7.1.x 系列）。详见 [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md)。
+> **当前阶段：M0–M7 全部核心功能已完成。** 书库管理、PDF 管线、选区与文本层标记、AI 对话与识图、整页 OCR 与图像层标记、全文搜索、对照阅读（双语翻译）均已实现，另有 OCR 精度增强（7.1.x 系列）。详见 [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md)。
 
 ## 架构
 

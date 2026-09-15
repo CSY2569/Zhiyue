@@ -311,7 +311,7 @@ async fn translate_page_inner(
     let texts: Vec<&str> = paragraphs.iter().map(|p| p.text.as_str()).collect();
     let source_hash = extract::stamp_source_hash(&crate::translate::source_hash(&texts));
 
-    // --- segments: text paragraphs only (formulas stay as images) --------
+    // --- segments: text paragraphs only (formulas keep original pixels) --
     let segment_idx: Vec<usize> = paragraphs
         .iter()
         .enumerate()
