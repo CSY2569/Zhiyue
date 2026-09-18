@@ -96,7 +96,15 @@
 <header class="hero">
   <h1>对照阅读(双语翻译)— 完整工作流程与技术栈</h1>
   <p>左页原文 · 右页译文(版式保留覆盖)· 整本 / 随进度 / 手动三种模式 · 可选中文本的译文 PDF 导出</p>
-  <div class="meta">
+  <div class="note" style="margin-top:10px">
+  <b>⚠ 本文档描述的自研管线已退役（2026-09-18）。</b>
+  抽取/Provider/覆盖式写入器与页级缓存已整体移除；翻译改由用户可选下载的
+  <b>BabelDOC</b> 引擎承担（设置 → 翻译引擎，约 1.5GB，独立进程集成，
+  AGPL-3.0）。实测（本机镜像配置）：安装 18–103 秒、约 1.5GB；排版产物
+  页数 1:1、矢量文本保留、dual 为同页左右并排。删除与安装器细节见
+  <code>docs/IMPLEMENTATION_STATUS.md</code> §3.16。以下内容保留作为管线设计的历史记录。
+</div>
+<div class="meta">
     对应实现:commit a436fe5 及之后(2026-09)· 架构:Flutter(Dart 编排)+ Rust 核心(flutter_rust_bridge 2.12)
     · 文档生成时测试基线:Rust 130 单测 + 2 集成 / Flutter 202
   </div>

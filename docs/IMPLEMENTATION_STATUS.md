@@ -279,6 +279,26 @@
 
 **验证**：Rust 130 单测 + 2 集成全绿；**clippy 全 target 0 警告**（此前基线 6）；全 feature 构建通过；`flutter analyze` 0 问题；Flutter 202 测试全绿（-1 为删除的 toggleTool 测试，其行为已由 setTool 用例覆盖）。产物重建部署（debug 核心 / release bundle / `dist/` 与 `/Data/Appimage/ZhiYue.AppImage`）。
 
+### 3.16 重构：移除自研翻译管线 + 设置内可选下载 BabelDOC 引擎（2026-09-18）
+
+**决策**：自研逐页翻译管线（抽取→provider→覆盖式写入器 + 页级缓存）在十余轮修复后已触及启发式天花板（涂白重绘使每个抽取错误都可见、公式分类四规则军备竞赛、无 ToUnicode 符号空洞等结构性缺陷）。改由 **BabelDOC**（经 `pdf2zh-next`）承担翻译，用户可在设置中自行选择是否下载该引擎（约 1.5GB，不随包分发）。
+
+**① 删除管线**（回滚点 tag `pre-babeldoc-replacement`，commit 46c625c / 26c77c6）：
+- Rust 删除 `translate/{extract,pipeline,providers,pdf_writer}.rs` 约 4.5k 行（含测试）与两个集成测试；`mod.rs` 仅保留引擎无关簿记（在飞注册表、`translated/` 目录、配置 KV、产物 LRU）；`api.rs` 移除 10 个管线 FFI
+- 页级模型（Paragraph/PageTranslation/FormulaRegion 等）删除；**schema v7→v8 迁移 DROP `page_translation_cache`**（术语表保留）；LRU 驱逐候选改按产物目录 mtime 排序
+- Cargo 移除 lopdf/subsetter/ttf-parser 与内嵌 NotoSansSC 字体（17MB）——**librbwa_core.so 从 ~55MB 降至 ~36MB**
+- Dart 删除队列/位图 provider、bilingual_actions 与相关测试；对照窗格改为引擎引导占位；工具栏保留「对照阅读」开关；`flutter analyze` 0、测试 190 绿
+
+**② 引擎下载器**（commit 9815651 / ff8cbdd）：
+- Rust `translate/engine.rs`：五步幂等安装（uv → `uv venv --python 3.12` → `uv pip install pdf2zh-next==2.9.0` → `babeldoc --warmup` → `engine.json` 清单），状态机 + 流式事件 + 取消（轮询杀子进程）+ 失败终事件；卸载保护：安装中/翻译中拒卸，**仅删除由我们创建的资产缓存**（既有 `~/.cache/babeldoc` 保留）
+- 设置卡片「翻译引擎」：开关 + 体积/许可披露 + 确认框 + 进度/取消 + 失败重试 + 卸载；`EngineController` 驱动
+- **真实安装冒烟**（本机，镜像配置）：**热装 18s / 冷装 103s，实占约 1.5GB**（venv 1.2GB + 资产 337MB）；跑通 `--skip-translation` 排版管线（零 API）：用户书库论文 mono/dual PDF 产出，**页数严格 1:1**、矢量文本可提取、dual 同页左右并排
+- 冒烟暴露并修复四个真实缺陷（均有回归测试）：GitHub release 资产源在本机被完全阻断（改用 PyPI simple 索引，uv wheel 内含二进制）；镜像相对链接 `../../packages/...` 未消解且选中了最旧的 0.0.5；无 User-Agent 被清华镜像 403；`uv venv` 以尚不存在的目录为 cwd 导致 ENOENT
+- 足迹治理：uv 以 `--no-cache` 运行且 `UV_PYTHON_INSTALL_DIR`/`UV_CACHE_DIR` 内收进引擎目录（首测曾在用户 `~/.cache/uv` 留下 9.7GB）；步骤失败附可操作的镜像提示（已验证南大 python-build-standalone 镜像与清华 PyPI 镜像）
+- 许可：新增 [`docs/THIRD_PARTY.md`](THIRD_PARTY.md)，登记 BabelDOC（AGPL-3.0，独立进程集成，不链接）
+
+**当前状态**：对照阅读显示引擎引导占位（未安装）或等待接入（已安装）；侧车任务/分块渲染/译文回填是下一阶段。
+
 ## 4. 后续开发方向
 
 ### 4.1 近期（补齐规格 P2 缺口）
