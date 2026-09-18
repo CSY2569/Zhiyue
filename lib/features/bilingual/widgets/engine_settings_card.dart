@@ -6,7 +6,7 @@ import 'package:rbwa/src/rust/models/translate.dart';
 
 /// 「翻译引擎」 settings card: the opt-in BabelDOC download.
 ///
-/// The engine is a separate open-source component (AGPL-3.0) about 1GB in
+/// The engine is a separate open-source component (AGPL-3.0) about 1.5GB in
 /// size, installed into the app data directory on request; nothing ships in
 /// the app bundle. Translation features stay dormant until it is installed.
 class EngineSettingsCard extends ConsumerWidget {
@@ -38,7 +38,7 @@ class EngineSettingsCard extends ConsumerWidget {
             const SizedBox(height: 4),
             Text(
               '对照阅读由 BabelDOC 开源引擎驱动（独立组件，AGPL-3.0）。'
-              '引擎不随应用分发，首次启用需下载约 1GB（Python 环境 + 模型资产）。',
+              '引擎不随应用分发，首次启用需下载约 1.5GB（Python 环境 + 模型资产）。',
               style: theme.textTheme.bodySmall
                   ?.copyWith(color: theme.colorScheme.outline),
             ),
@@ -103,7 +103,7 @@ class EngineSettingsCard extends ConsumerWidget {
         title: const Text('下载翻译引擎'),
         content: const Text(
           '将下载并安装 BabelDOC 翻译引擎：\n\n'
-          '• 体积约 1GB（Python 运行时经 uv 管理，模型资产下载自公开镜像）\n'
+          '• 体积约 1.5GB（Python 运行时经 uv 管理，模型资产下载自公开镜像）\n'
           '• 安装位置为应用数据目录，可随时在此卸载\n'
           '• BabelDOC 为 AGPL-3.0 开源组件，与本应用独立运行\n\n'
           '安装需要网络连接，耗时取决于网速。',
@@ -131,7 +131,7 @@ class EngineSettingsCard extends ConsumerWidget {
       builder: (ctx) => AlertDialog(
         title: const Text('卸载翻译引擎'),
         content: const Text(
-          '将删除已下载的引擎环境与模型资产（约 1GB）。\n'
+          '将删除已下载的引擎环境与模型资产（约 1.5GB）。\n'
           '已翻译的书籍产物不受影响；再次使用需重新下载。',
         ),
         actions: [

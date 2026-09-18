@@ -32,7 +32,7 @@ void main() {
     expect(find.text('翻译引擎'), findsOneWidget);
     expect(find.text('未安装'), findsOneWidget);
     expect(find.text('未启用'), findsOneWidget);
-    expect(find.textContaining('约 1GB'), findsOneWidget);
+    expect(find.textContaining('约 1.5GB'), findsOneWidget);
     expect(find.textContaining('AGPL-3.0'), findsOneWidget);
     expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
   });

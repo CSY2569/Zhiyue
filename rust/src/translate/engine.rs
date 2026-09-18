@@ -28,12 +28,16 @@ use sha2::{Digest, Sha256};
 use crate::error::{AppError, AppResult};
 use crate::models::translate::{EngineInstallEvent, EngineStatus, EngineStatusKind};
 
-/// Pinned uv release (the installer's only direct download).
-const UV_VERSION: &str = "0.12.16";
 /// Pinned pdf2zh-next (its BabelDOC dependency is pinned by the package).
+/// uv itself is fetched as the newest x86_64 Linux wheel from the PyPI simple
+/// index -- it is only a bootstrap tool and mirrors stay in sync.
 const PDF2ZH_NEXT_VERSION: &str = "2.9.0";
 /// Python the engine environment runs on (BabelDOC requires >=3.10,<3.14).
 const PYTHON_VERSION: &str = "3.12";
+
+/// Explicit User-Agent: some mirrors (e.g. pypi.tuna.tsinghua.edu.cn) answer
+/// 403 to requests WITHOUT one, and reqwest sends none by default.
+const USER_AGENT: &str = concat!("rbwa-core/", env!("CARGO_PKG_VERSION"));
 
 /// Install-phase progress bands (whole-install fraction).
 const P_UV_START: f64 = 0.0;
@@ -41,12 +45,6 @@ const P_UV_SPAN: f64 = 0.10;
 const P_VENV: f64 = 0.12;
 const P_PIP: f64 = 0.25;
 const P_WARMUP: f64 = 0.60;
-
-fn uv_asset_url() -> String {
-    format!(
-        "https://github.com/astral-sh/uv/releases/download/{UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz"
-    )
-}
 
 /// Test/dry-run override for the engine directory (set once per process,
 /// mirroring `db::connection::DATA_DIR_OVERRIDE`) -- the env var below serves
@@ -109,6 +107,10 @@ pub struct EngineManifest {
     /// when we created it, so a pre-existing cache is never nuked.
     #[serde(default)]
     pub cache_preexisting: bool,
+    /// The uv wheel the bootstrap step downloaded (traceability; the version
+    /// follows the configured index).
+    #[serde(default)]
+    pub uv_wheel: Option<String>,
 }
 
 fn read_manifest() -> Option<EngineManifest> {
@@ -134,6 +136,8 @@ static CANCEL: AtomicBool = AtomicBool::new(false);
 /// Whether BabelDOC's asset cache existed before this install started
 /// (recorded in the manifest; uninstall then leaves a pre-existing cache).
 static CACHE_PREEXISTING: AtomicBool = AtomicBool::new(false);
+/// The uv wheel filename this install actually used (manifest traceability).
+static UV_WHEEL: OnceLock<String> = OnceLock::new();
 
 fn state() -> &'static Mutex<EngineStatus> {
     INSTALL_STATE.get_or_init(|| Mutex::new(probe_status()))
@@ -297,11 +301,37 @@ fn emit(
 }
 
 fn run_install(on_event: &mut impl FnMut(EngineInstallEvent)) -> AppResult<()> {
-    // Dry-run hook: CI / smoke runs replace all real steps with a script.
+    // Dry-run hook: CI / smoke runs replace the download/install steps with
+    // a script; the manifest step below always stays ours, so the dry run
+    // exercises the same state transitions as a real install.
     if let Ok(script) = std::env::var("RBWA_BABELDOC_MOCK_SCRIPT") {
-        return run_mock(&script, on_event);
+        run_mock(&script, on_event)?;
+    } else {
+        run_steps(on_event)?;
     }
 
+    // --- manifest ----------------------------------------------------------
+    let manifest = EngineManifest {
+        pdf2zh_next: PDF2ZH_NEXT_VERSION.to_string(),
+        installed_at: chrono_now(),
+        cache_preexisting: CACHE_PREEXISTING.load(Ordering::SeqCst),
+        uv_wheel: UV_WHEEL.get().cloned(),
+    };
+    std::fs::write(manifest_path(), serde_json::to_string_pretty(&manifest)?)?;
+    emit(on_event, "完成", 1.0, "翻译引擎安装完成");
+    on_event(EngineInstallEvent {
+        phase: "完成".into(),
+        progress: 1.0,
+        detail: String::new(),
+        finished: true,
+        error: None,
+    });
+    Ok(())
+}
+
+/// The real download/install steps (1-4). Idempotent: each skips when its
+/// output exists.
+fn run_steps(on_event: &mut impl FnMut(EngineInstallEvent)) -> AppResult<()> {
     std::fs::create_dir_all(engine_dir())?;
 
     // --- step 1: uv binary -------------------------------------------------
@@ -321,16 +351,26 @@ fn run_install(on_event: &mut impl FnMut(EngineInstallEvent)) -> AppResult<()> {
     // --- step 2: python environment ---------------------------------------
     if !venv_python().exists() {
         emit(on_event, "创建 Python 环境", P_VENV, "uv venv (Python 3.12)…");
+        let venv_path = venv_dir();
         run_child(
             &uv_binary(),
-            &["venv", "--python", PYTHON_VERSION],
+            &["--no-cache", "venv", "--python", PYTHON_VERSION],
+            // Target dir as an ARG (not cwd): spawning with a cwd that does
+            // not exist yet fails with ENOENT before uv ever runs.
+            &[venv_path.to_string_lossy().as_ref()],
             &[],
-            &[],
-            Some(venv_dir().as_path()),
+            None,
             "创建 Python 环境",
             P_VENV,
             on_event,
-        )?;
+        )
+        .map_err(|e| {
+            with_mirror_hint(
+                e,
+                "UV_PYTHON_INSTALL_MIRROR",
+                "无法直连 GitHub 时设置 UV_PYTHON_INSTALL_MIRROR 指向 python-build-standalone 镜像（已验证可用：https://mirror.nju.edu.cn/github-release/astral-sh/python-build-standalone/）",
+            )
+        })?;
     }
     check_cancel()?;
 
@@ -345,14 +385,21 @@ fn run_install(on_event: &mut impl FnMut(EngineInstallEvent)) -> AppResult<()> {
         let spec = format!("pdf2zh-next=={PDF2ZH_NEXT_VERSION}");
         run_child(
             &uv_binary(),
-            &["pip", "install", "--python"],
+            &["--no-cache", "pip", "install", "--python"],
             &[venv_python().to_string_lossy().as_ref(), &spec],
             &[],
             None,
             "安装依赖",
             P_PIP,
             on_event,
-        )?;
+        )
+        .map_err(|e| {
+            with_mirror_hint(
+                e,
+                "UV_DEFAULT_INDEX",
+                "下载慢或失败时设置 UV_DEFAULT_INDEX 指向 PyPI 镜像（如 https://pypi.tuna.tsinghua.edu.cn/simple）",
+            )
+        })?;
     }
     check_cancel()?;
 
@@ -375,33 +422,25 @@ fn run_install(on_event: &mut impl FnMut(EngineInstallEvent)) -> AppResult<()> {
         on_event,
     )?;
     check_cancel()?;
-
-    // --- step 5: manifest --------------------------------------------------
-    let manifest = EngineManifest {
-        pdf2zh_next: PDF2ZH_NEXT_VERSION.to_string(),
-        installed_at: chrono_now(),
-        cache_preexisting: CACHE_PREEXISTING.load(Ordering::SeqCst),
-    };
-    std::fs::write(
-        manifest_path(),
-        serde_json::to_string_pretty(&manifest)?,
-    )?;
-    emit(on_event, "完成", 1.0, "翻译引擎安装完成");
-    on_event(EngineInstallEvent {
-        phase: "完成".into(),
-        progress: 1.0,
-        detail: String::new(),
-        finished: true,
-        error: None,
-    });
     Ok(())
 }
 
-/// Environment overrides passed through to BabelDOC's asset downloader
-/// (e.g. `HF_ENDPOINT` for a HuggingFace mirror on networks where
-/// huggingface.co is unreachable).
+/// Environment overrides passed through to the child steps: index/mirror
+/// settings for uv (PyPI index, CPython download mirror) and BabelDOC's asset
+/// downloader (`HF_ENDPOINT` etc. -- its multi-upstream race also picks a
+/// reachable source on its own).
 fn asset_env() -> Vec<(String, String)> {
-    const PASSTHROUGH: [&str; 3] = ["HF_ENDPOINT", "HF_HOME", "BABELDOC_ASSETS_MIRROR"];
+    const PASSTHROUGH: [&str; 7] = [
+        // BabelDOC asset downloads
+        "HF_ENDPOINT",
+        "HF_HOME",
+        "BABELDOC_ASSETS_MIRROR",
+        // uv: package index + managed-CPython source
+        "UV_DEFAULT_INDEX",
+        "UV_INDEX_URL",
+        "UV_PYTHON_INSTALL_MIRROR",
+        "PIP_INDEX_URL",
+    ];
     PASSTHROUGH
         .iter()
         .filter_map(|k| std::env::var(k).ok().map(|v| (k.to_string(), v)))
@@ -429,15 +468,17 @@ fn run_mock(
         });
         return Err(e);
     }
-    emit(on_event, "完成", 1.0, "模拟安装完成");
-    on_event(EngineInstallEvent {
-        phase: "完成".into(),
-        progress: 1.0,
-        detail: String::new(),
-        finished: true,
-        error: None,
-    });
+    emit(on_event, "模拟安装", 0.9, "模拟安装完成");
     Ok(())
+}
+
+/// Appends a mirror hint to a step failure when the relevant env var is
+/// unset (so users on restricted networks get an actionable message).
+fn with_mirror_hint(e: AppError, var: &str, hint: &str) -> AppError {
+    if std::env::var(var).is_ok() {
+        return e;
+    }
+    AppError::Internal(format!("{e}\n提示：{hint}"))
 }
 
 fn check_cancel() -> AppResult<()> {
@@ -463,6 +504,12 @@ fn run_child(
 ) -> AppResult<()> {
     let mut cmd = Command::new(program);
     cmd.args(args).args(extra_args);
+    // Contain uv's own artifacts inside the engine dir: the managed CPython
+    // install and any residual cache must die with `uninstall` (and show up
+    // in the reported footprint) instead of living in the user's home.
+    let engine = engine_dir();
+    cmd.env("UV_PYTHON_INSTALL_DIR", engine.join("python"));
+    cmd.env("UV_CACHE_DIR", engine.join("uv-cache"));
     for (k, v) in env_extra {
         cmd.env(k, v);
     }
@@ -566,25 +613,40 @@ fn chrono_now() -> String {
 fn download_uv(mut on_progress: impl FnMut(f64, u64, u64)) -> AppResult<()> {
     let bin_dir = engine_dir().join("bin");
     std::fs::create_dir_all(&bin_dir)?;
-    let url = uv_asset_url();
 
-    // Expected hash (sidecar published next to the artifact).
-    let expected = fetch_text(&format!("{url}.sha256"))?
-        .split_whitespace()
-        .next()
-        .unwrap_or_default()
-        .to_string();
+    // uv ships on PyPI; the simple index (PEP 503) is the source, NOT the
+    // GitHub release -- release assets live on a separate host that some
+    // networks block entirely. Mirrors work by pointing
+    // `RBWA_ENGINE_PYPI_INDEX` at e.g. https://pypi.tuna.tsinghua.edu.cn/simple
+    let index_url = format!("{}/uv/", pypi_index_base());
+    let html = fetch_text(&index_url)
+        .map_err(|e| AppError::Internal(format!("获取 uv 索引 {index_url} 失败: {e}")))?;
+    let (wheel_url, expected_sha) = find_uv_wheel(&html, &index_url)?;
+    let _ = UV_WHEEL.set(
+        wheel_url
+            .rsplit('/')
+            .next()
+            .unwrap_or_default()
+            .split('#')
+            .next()
+            .unwrap_or_default()
+            .to_string(),
+    );
 
     let client = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(600))
+        .timeout(Duration::from_secs(1800))
+        .user_agent(USER_AGENT)
         .build()
         .map_err(|e| AppError::Internal(format!("HTTP 客户端初始化失败: {e}")))?;
     let resp = client
-        .get(&url)
+        .get(&wheel_url)
         .send()
         .map_err(|e| AppError::Internal(format!("下载 uv 失败: {e}")))?;
     if !resp.status().is_success() {
-        return Err(AppError::Internal(format!("下载 uv 失败: HTTP {}", resp.status())));
+        return Err(AppError::Internal(format!(
+            "下载 uv 失败: HTTP {} ({wheel_url})",
+            resp.status()
+        )));
     }
     let total = resp.content_length().unwrap_or(0);
     let mut buf: Vec<u8> = Vec::with_capacity(total as usize);
@@ -610,35 +672,157 @@ fn download_uv(mut on_progress: impl FnMut(f64, u64, u64)) -> AppResult<()> {
     }
     check_cancel()?;
 
-    let got = format!("{:x}", hasher.finalize());
-    if !expected.is_empty() && got != expected {
-        return Err(AppError::Internal(format!(
-            "uv 校验失败：期望 {expected}，实际 {got}"
-        )));
-    }
-
-    // Unpack `uv-x86_64-unknown-linux-gnu/uv` from the tarball.
-    let gz = flate2::read::GzDecoder::new(std::io::Cursor::new(buf));
-    let mut archive = tar::Archive::new(gz);
-    for entry in archive.entries()? {
-        let mut entry = entry?;
-        let path = entry.path()?.to_path_buf();
-        if path.file_name().map(|n| n == "uv").unwrap_or(false) {
-            let dest = uv_binary();
-            if dest.exists() {
-                std::fs::remove_file(&dest)?;
-            }
-            entry.unpack(&dest)?;
-            set_executable(&dest)?;
-            return Ok(());
+    if let Some(expected) = expected_sha {
+        let got = format!("{:x}", hasher.finalize());
+        if got != expected {
+            return Err(AppError::Internal(format!(
+                "uv 校验失败：期望 {expected}，实际 {got}"
+            )));
         }
     }
-    Err(AppError::Internal("uv 压缩包中未找到 uv 可执行文件".into()))
+
+    // The wheel embeds the binary at `<dist>.data/scripts/uv`.
+    let reader = std::io::Cursor::new(buf);
+    let mut zip = zip::ZipArchive::new(reader)
+        .map_err(|e| AppError::Internal(format!("解析 uv wheel 失败: {e}")))?;
+    for i in 0..zip.len() {
+        let mut file = zip
+            .by_index(i)
+            .map_err(|e| AppError::Internal(format!("读取 uv wheel 失败: {e}")))?;
+        if !file.name().ends_with("/uv") && file.name() != "uv" {
+            continue;
+        }
+        let dest = uv_binary();
+        if dest.exists() {
+            std::fs::remove_file(&dest)?;
+        }
+        let mut out = std::fs::File::create(&dest)?;
+        std::io::copy(&mut file, &mut out)?;
+        drop(out);
+        set_executable(&dest)?;
+        return Ok(());
+    }
+    Err(AppError::Internal("uv wheel 中未找到 uv 可执行文件".into()))
+}
+
+/// PyPI simple-index base (`RBWA_ENGINE_PYPI_INDEX`; default pypi.org).
+fn pypi_index_base() -> String {
+    std::env::var("RBWA_ENGINE_PYPI_INDEX")
+        .unwrap_or_else(|_| "https://pypi.org/simple".to_string())
+        .trim_end_matches('/')
+        .to_string()
+}
+
+/// Finds the NEWEST x86_64 Linux uv wheel in a simple-index page (mirrors
+/// list versions oldest-first, so picking the first match would install a
+/// prehistoric uv). Returns the absolute download URL plus the `#sha256=`
+/// fragment when the index provides one (pypi.org does; some mirrors omit
+/// it).
+fn find_uv_wheel(html: &str, index_url: &str) -> AppResult<(String, Option<String>)> {
+    /// (version key, download URL, sha256)
+    type Candidate = ((u64, u64, u64), String, Option<String>);
+    let mut best: Option<Candidate> = None;
+    for href in extract_hrefs(html) {
+        let (url_part, frag) = match href.split_once('#') {
+            Some((u, f)) => (u, Some(f)),
+            None => (href.as_str(), None),
+        };
+        let name = url_part.rsplit('/').next().unwrap_or_default();
+        if !name.ends_with(".whl")
+            || !name.contains("x86_64")
+            || !name.contains("linux")
+            || name.contains("musllinux")
+        {
+            continue;
+        }
+        let Some(key) = wheel_version_key(name) else {
+            continue;
+        };
+        if best.as_ref().map(|(k, _, _)| key > *k).unwrap_or(true) {
+            let url = resolve_url(index_url, url_part);
+            let sha = frag
+                .and_then(|f| f.strip_prefix("sha256="))
+                .map(str::to_string);
+            best = Some((key, url, sha));
+        }
+    }
+    match best {
+        Some((_, url, sha)) => Ok((url, sha)),
+        None => Err(AppError::Internal(format!(
+            "索引 {index_url} 中未找到 x86_64 Linux 的 uv wheel"
+        ))),
+    }
+}
+
+/// Version key of a uv wheel filename (`uv-0.12.16-py3-none-...whl`).
+/// Pre-release suffixes (rc/beta) are ignored; fully numeric parts win.
+fn wheel_version_key(name: &str) -> Option<(u64, u64, u64)> {
+    let rest = name.strip_prefix("uv-")?;
+    let version = rest.split_once("-py3")?.0;
+    let mut nums = [0u64; 3];
+    for (i, part) in version.split('.').enumerate().take(3) {
+        let digits: String = part.chars().take_while(|c| c.is_ascii_digit()).collect();
+        nums[i] = digits.parse().ok()?;
+    }
+    Some((nums[0], nums[1], nums[2]))
+}
+
+/// Resolves a simple-index href against the index page URL, handling the
+/// `../../packages/...` relative form mirrors use and absolute paths.
+fn resolve_url(index_url: &str, href: &str) -> String {
+    if href.starts_with("http://") || href.starts_with("https://") {
+        return href.to_string();
+    }
+    let scheme_host = index_url
+        .split_once("://")
+        .and_then(|(scheme, rest)| rest.split_once('/').map(|(host, _)| format!("{scheme}://{host}")))
+        .unwrap_or_default();
+    if href.starts_with('/') {
+        return format!("{scheme_host}{href}");
+    }
+    // Resolve dot-segments against the index path (`/simple/uv/`).
+    let base_path = index_url
+        .split_once("://")
+        .map(|(_, rest)| rest.split_once('/').map(|(_, p)| format!("/{p}")).unwrap_or_else(|| "/".into()))
+        .unwrap_or_else(|| "/".into());
+    let mut segments: Vec<&str> = base_path.split('/').filter(|s| !s.is_empty()).collect();
+    for part in href.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                segments.pop();
+            }
+            other => segments.push(other),
+        }
+    }
+    format!("{scheme_host}/{}", segments.join("/"))
+}
+
+/// `href="..."` values of a simple-index page (quote style varies).
+fn extract_hrefs(html: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut rest = html;
+    while let Some(pos) = rest.find("href=") {
+        rest = &rest[pos + 5..];
+        let quote = rest.chars().next().unwrap_or('"');
+        if quote != '"' && quote != '\'' {
+            continue;
+        }
+        let inner = &rest[1..];
+        if let Some(end) = inner.find(quote) {
+            out.push(inner[..end].to_string());
+            rest = &inner[end + 1..];
+        } else {
+            break;
+        }
+    }
+    out
 }
 
 fn fetch_text(url: &str) -> AppResult<String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(60))
+        .user_agent(USER_AGENT)
         .build()
         .map_err(|e| AppError::Internal(format!("HTTP 客户端初始化失败: {e}")))?;
     let text = client
@@ -696,6 +880,7 @@ mod tests {
             pdf2zh_next: PDF2ZH_NEXT_VERSION.into(),
             installed_at: "0".into(),
             cache_preexisting: false,
+            uv_wheel: None,
         };
         std::fs::write(manifest_path(), serde_json::to_string(&m).unwrap()).unwrap();
         let s = get_engine_status();
@@ -719,6 +904,7 @@ mod tests {
             pdf2zh_next: PDF2ZH_NEXT_VERSION.into(),
             installed_at: "0".into(),
             cache_preexisting: true,
+            uv_wheel: None,
         };
         std::fs::write(manifest_path(), serde_json::to_string(&m).unwrap()).unwrap();
         uninstall_engine().unwrap();
@@ -726,5 +912,69 @@ mod tests {
         assert!(cache.exists(), "a pre-existing asset cache must be kept");
 
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// Regression: mirrors list versions oldest-first and use relative
+    /// `../../packages/...` hrefs -- the newest wheel must be picked and its
+    /// URL resolved to an absolute one (a first-match pick installed uv
+    /// 0.0.5, and the join produced `host../packages/...`).
+    #[test]
+    fn uv_wheel_pick_newest_and_resolve_relative_urls() {
+        let html = r#"
+<a href="../../packages/aa/uv-0.0.5-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=aaa">uv-0.0.5</a>
+<a href="../../packages/bb/uv-0.12.16-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl#sha256=bbb">uv-0.12.16</a>
+<a href="../../packages/cc/uv-0.12.16-py3-none-musllinux_1_1_x86_64.whl#sha256=ccc">musl</a>
+<a href="../../packages/dd/uv-0.12.16-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl">arm</a>
+"#;
+        let (url, sha) = find_uv_wheel(html, "https://pypi.tuna.tsinghua.edu.cn/simple/uv/").unwrap();
+        assert_eq!(
+            url,
+            "https://pypi.tuna.tsinghua.edu.cn/packages/bb/uv-0.12.16-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
+        );
+        assert_eq!(sha.as_deref(), Some("bbb"));
+
+        // Absolute hrefs pass through; no sha fragment stays None.
+        let abs = r#"<a href="https://files.pythonhosted.org/packages/x/uv-1.2.3-py3-none-manylinux1_x86_64.whl">x</a>"#;
+        let (url, sha) = find_uv_wheel(abs, "https://pypi.org/simple/uv/").unwrap();
+        assert!(url.starts_with("https://files.pythonhosted.org/"));
+        assert_eq!(sha, None);
+
+        assert!(find_uv_wheel("<html></html>", "https://pypi.org/simple/uv/").is_err());
+    }
+
+    /// REAL install smoke (ignored by default; run with
+    /// `cargo test --features pdf,ai engine_real_install -- --ignored --nocapture`).
+    /// Downloads ~1GB (uv + CPython + pdf2zh-next + model assets) into
+    /// `RBWA_BABELDOC_DIR`; BabelDOC's asset cache goes to its standard
+    /// `~/.cache/babeldoc` (its own multi-upstream race picks a reachable
+    /// source -- this machine cannot reach huggingface.co).
+    #[test]
+    #[ignore = "downloads ~1GB; run manually"]
+    fn engine_real_install_smoke() {
+        let started = std::time::Instant::now();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let result = install_engine(move |ev| {
+                println!(
+                    "[{:>6.2}s] {:<14} {:>5.1}%  {}",
+                    started.elapsed().as_secs_f64(),
+                    ev.phase,
+                    ev.progress * 100.0,
+                    ev.detail
+                );
+            })
+            .await;
+            println!("install result: {result:?}");
+            println!("elapsed: {:.1}s", started.elapsed().as_secs_f64());
+            let s = get_engine_status();
+            println!(
+                "status: {:?} version={} size={:.2}GB",
+                s.kind,
+                s.version,
+                s.size_bytes as f64 / 1e9
+            );
+            assert!(result.is_ok(), "install failed: {result:?}");
+            assert_eq!(s.kind, EngineStatusKind::Installed);
+        });
     }
 }
