@@ -323,6 +323,27 @@ pub fn render_thumbnail_file(path: &str, page: i64, max_size: u32) -> AppResult<
     })
 }
 
+/// Renders page [page] (0-indexed) of an arbitrary PDF FILE at [scale]x
+/// (1.0 = 72 dpi) via an INDEPENDENT document handle -- used by the
+/// translated-pane renderer to rasterize pages of the engine's mono PDF
+/// without touching the reader's open document.
+pub fn render_page_file(path: &str, page: i64, scale: f32) -> AppResult<PageBitmap> {
+    let _guard = PDFIUM_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let pdfium = pdfium()?;
+    let doc = pdfium.load_pdf_from_file(path, None)?;
+    let pg = doc.pages().get(page as PdfPageIndex)?;
+    let scale = scale.max(0.1);
+    let config = PdfRenderConfig::new()
+        .set_target_width((pg.width().value * scale).max(1.0) as i32)
+        .set_target_height((pg.height().value * scale).max(1.0) as i32);
+    let bitmap = pg.render_with_config(&config)?;
+    Ok(PageBitmap {
+        width: bitmap.width() as u32,
+        height: bitmap.height() as u32,
+        rgba: bitmap.as_rgba_bytes(),
+    })
+}
+
 /// Plain text of every page of [path] via an INDEPENDENT document (M6: the
 /// search-index builder uses this so it never touches the reader's open
 /// document -- pdfium keeps one global document and swapping it would

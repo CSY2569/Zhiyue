@@ -299,6 +299,28 @@
 
 **当前状态**：对照阅读显示引擎引导占位（未安装）或等待接入（已安装）；侧车任务/分块渲染/译文回填是下一阶段。
 
+### 3.17 内置引擎测试版 + 整本翻译通路打通（2026-09-18）
+
+**目标**：出可实测的测试版——引擎随包分发（免 1.5GB 下载），并打通"点一下翻译整本"的最小通路。
+
+**内置引擎（bundle 内 `babeldoc/`）**：
+- 运行时解析：`<exe_dir>/babeldoc/engine.json` 存在即视为**已内置**（与 OCR 模型的 `exe_dir/models` 同惯例）；`EngineStatus.bundled` 上报，设置卡片显示"已内置"并禁用卸载；`engine_dir()` 优先级 = 测试覆盖 > 内置 > `RBWA_BABELDOC_DIR` > 应用数据目录
+- 布局与运行方式（关键设计，规避 AppImage 挂载点漂移）：`python/`（uv 独立 CPython，可重定位）+ `site-packages/` + `bin/uv` + `engine.json`；运行用 `python -c "…cli()"` + `PYTHONPATH` 直连 site-packages，**不依赖 venv**（venv 的 shebang/软链是绝对路径，AppImage 每次挂载路径不同必坏）
+- 资产：`--generate-offline-assets` 生成的离线包随包内置时首用自动 `--restore-offline-assets`；本机构建以 `RBWA_SKIP_ASSETS_ZIP=1` 跳过（缓存已有 337MB 资产），无网机器可去掉该开关出可携带版
+- 打包：新增 `scripts/build_bundled_test.sh`（在 bundle 内以 uv **离线**从热缓存重建 venv 取 site-packages、含引擎自检 `--version` 门禁），产出 `dist/ZhiYue-1.0.0-with-engine-x86_64.AppImage`（**380MB**，引擎压缩后；含引擎的 bundle 1.2GB）
+
+**整本翻译通路（v1，替换被删管线的最小可用版）**：
+- Rust `translate/job.rs`：单任务 runner（复用 AI 设置的 OpenAI 兼容配置；语言码映射；`--watermark-output-mode no_watermark`；行级进度→粗阶段（解析版式/翻译中/排版输出）；取消杀进程；产物扫描（水印模式会改文件名）+ `translated/{book_id}/manifest.json`）；失败经终事件上报（哨兵模式）
+- `pdf::render_page_file` 新增（任意 PDF 文件的第 N 页光栅化）；FFI：`translate_book`(流) / `cancel_book_translation` / `get_book_translation` / `clear_book_translation` / `render_translated_page`
+- Dart：`bookTranslationProvider`（family）+ 译文页图像 provider（dpi 3.0）；**对照窗格三态**：未装引擎→下载引导；引擎就绪→「开始翻译」+ 进度 + 取消；有产物→按页渲染 mono PDF（与原文同尺寸、翻页跟随、p. 标签、重新翻译/删除译本菜单）
+
+**验证**（全零真实 API）：
+- mock LLM 对**内置引擎**（bundle 目录、python+PYTHONPATH 方式）跑真实论文 pages 10-12：产出 mono+dual，**页数 88=88=88（严格 1:1）**，dual 同页并排（1191=2×595），译文含 mock 标记（通路真的走通）
+- **意外收获**：第 11 页——当初自研管线产出 `(, )` 符号空洞、逼出十余轮修复的那一页——BabelDOC 解析出的文本**数学符号完整**（`(trackΓ(𝑓1, 𝑔1) ∘trackΓ(𝑓2, 𝑔2))(𝛾, 𝜑) = …`），即该结构性缺陷在引擎侧不复现
+- Rust 89 测试 + clippy 0；`flutter analyze` 0；Flutter 192 测试全绿（窗格三态 3 个新测试）
+
+**已知边界**：整本粒度（无分块/随进度）；进度为粗阶段（引擎的 rich 进度条非 TTY 下不可解析）；`--pages` 分块与 dual 导出 UI 待接入；引擎内置版首次翻译若缺资产会自动联网补齐。
+
 ## 4. 后续开发方向
 
 ### 4.1 近期（补齐规格 P2 缺口）

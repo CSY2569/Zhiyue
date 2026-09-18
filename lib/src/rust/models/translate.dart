@@ -6,6 +6,100 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+/// One event of the whole-book translation stream.
+class BookTranslateEvent {
+  /// Coarse phase (解析版式 / 翻译中 / 排版输出 / 完成 / 失败).
+  final String phase;
+
+  /// Latest engine output line (progress detail).
+  final String detail;
+
+  /// Whether the run has ended (success or failure).
+  final bool done;
+  final String? error;
+
+  const BookTranslateEvent({
+    required this.phase,
+    required this.detail,
+    required this.done,
+    this.error,
+  });
+
+  @override
+  int get hashCode =>
+      phase.hashCode ^ detail.hashCode ^ done.hashCode ^ error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is BookTranslateEvent &&
+          runtimeType == other.runtimeType &&
+          phase == other.phase &&
+          detail == other.detail &&
+          done == other.done &&
+          error == other.error;
+}
+
+/// A completed whole-book translation (manifest under
+/// `translated/{book_id}/manifest.json`).
+class BookTranslation {
+  final PlatformInt64 bookId;
+  final String title;
+
+  /// Display language the user configured (e.g. 中文).
+  final String targetLang;
+
+  /// BabelDOC language code used for the run (e.g. zh).
+  final String langOut;
+
+  /// Absolute paths of the produced PDFs (mono = translated pages; dual =
+  /// original + translation side by side on each page).
+  final String monoPath;
+  final String dualPath;
+  final PlatformInt64 pages;
+  final String finishedAt;
+  final String? error;
+
+  const BookTranslation({
+    required this.bookId,
+    required this.title,
+    required this.targetLang,
+    required this.langOut,
+    required this.monoPath,
+    required this.dualPath,
+    required this.pages,
+    required this.finishedAt,
+    this.error,
+  });
+
+  @override
+  int get hashCode =>
+      bookId.hashCode ^
+      title.hashCode ^
+      targetLang.hashCode ^
+      langOut.hashCode ^
+      monoPath.hashCode ^
+      dualPath.hashCode ^
+      pages.hashCode ^
+      finishedAt.hashCode ^
+      error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is BookTranslation &&
+          runtimeType == other.runtimeType &&
+          bookId == other.bookId &&
+          title == other.title &&
+          targetLang == other.targetLang &&
+          langOut == other.langOut &&
+          monoPath == other.monoPath &&
+          dualPath == other.dualPath &&
+          pages == other.pages &&
+          finishedAt == other.finishedAt &&
+          error == other.error;
+}
+
 /// One install-stream event.
 class EngineInstallEvent {
   final String phase;
@@ -66,6 +160,10 @@ class EngineStatus {
   final PlatformInt64 sizeBytes;
   final String? error;
 
+  /// Engine shipped inside the installation bundle (cannot be uninstalled;
+  /// the settings card hides the removal affordance).
+  final bool bundled;
+
   const EngineStatus({
     required this.kind,
     required this.phase,
@@ -73,6 +171,7 @@ class EngineStatus {
     required this.version,
     required this.sizeBytes,
     this.error,
+    required this.bundled,
   });
 
   @override
@@ -82,7 +181,8 @@ class EngineStatus {
       progress.hashCode ^
       version.hashCode ^
       sizeBytes.hashCode ^
-      error.hashCode;
+      error.hashCode ^
+      bundled.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -94,7 +194,8 @@ class EngineStatus {
           progress == other.progress &&
           version == other.version &&
           sizeBytes == other.sizeBytes &&
-          error == other.error;
+          error == other.error &&
+          bundled == other.bundled;
 }
 
 /// Lifecycle of the downloadable translation engine (BabelDOC + pdf2zh-next

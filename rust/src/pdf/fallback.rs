@@ -13,6 +13,11 @@ pub fn open(_path: &str) -> AppResult<i64> {
     Err(AppError::Pdf(NOT_BUILT.into()))
 }
 
+/// Stub: rendering needs the `pdf` feature.
+pub fn render_page_file(_path: &str, _page: i64, _scale: f32) -> AppResult<PageBitmap> {
+    Err(AppError::Internal("页面渲染需要 pdf 构建特性".into()))
+}
+
 pub fn render_page(_page: i64, _zoom: f32, _dpi_scale: f32) -> AppResult<PageBitmap> {
     Err(AppError::Pdf(NOT_BUILT.into()))
 }

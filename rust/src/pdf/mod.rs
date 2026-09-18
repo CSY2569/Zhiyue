@@ -24,7 +24,8 @@ mod image_book;
 #[cfg(feature = "pdf")]
 pub use pdfium::{
     close, extract_document_text, extract_text, open, outline, page_has_text, render_page,
-    render_thumbnail_file, shared_handle, thumbnail, with_document_file, with_pdfium_lock,
+    render_page_file, render_thumbnail_file, shared_handle, thumbnail, with_document_file,
+    with_pdfium_lock,
 };
 #[cfg(feature = "pdf")]
 pub use image_book::{
@@ -37,6 +38,6 @@ mod fallback;
 #[cfg(not(feature = "pdf"))]
 pub use fallback::{
     close, close_image, extract_document_text, extract_image_text, extract_text, open, open_image,
-    outline, page_has_text, page_image_has_text, render_image, render_page, render_thumbnail_file,
-    thumbnail, thumbnail_image,
+    outline, page_has_text, page_image_has_text, render_image, render_page, render_page_file,
+    render_thumbnail_file, thumbnail, thumbnail_image,
 };

@@ -496,6 +496,38 @@ Future<int> cancelEngineInstall() =>
 /// failure.
 Future<int> uninstallEngine() => RustLib.instance.api.crateApiUninstallEngine();
 
+/// Starts a whole-book translation with the BabelDOC engine, streaming
+/// progress. Completion is observed by the stream ending; failures arrive as
+/// a final event carrying `error`. Returns nothing -- read the result with
+/// [get_book_translation].
+Stream<BookTranslateEvent> translateBook({required PlatformInt64 bookId}) =>
+    RustLib.instance.api.crateApiTranslateBook(bookId: bookId);
+
+/// Cancels the running whole-book translation (kills the engine process).
+/// Returns 1.
+Future<int> cancelBookTranslation() =>
+    RustLib.instance.api.crateApiCancelBookTranslation();
+
+Future<BookTranslationResult> getBookTranslation({
+  required PlatformInt64 bookId,
+}) => RustLib.instance.api.crateApiGetBookTranslation(bookId: bookId);
+
+/// Deletes a book's translated artifacts. Returns 1 on success.
+Future<int> clearBookTranslation({required PlatformInt64 bookId}) =>
+    RustLib.instance.api.crateApiClearBookTranslation(bookId: bookId);
+
+/// Renders page [page] (1-indexed) of the book's translated PDF (the engine's
+/// mono output) at [dpi_scale]x. `has_translation` false -> no artifact yet.
+Future<TranslatedPageBitmap> renderTranslatedPage({
+  required PlatformInt64 bookId,
+  required PlatformInt64 page,
+  required double dpiScale,
+}) => RustLib.instance.api.crateApiRenderTranslatedPage(
+  bookId: bookId,
+  page: page,
+  dpiScale: dpiScale,
+);
+
 /// Reads the translation config (KV `translation_config`, plan §8).
 Future<TranslationConfig> getTranslationConfig() =>
     RustLib.instance.api.crateApiGetTranslationConfig();
@@ -570,6 +602,25 @@ class AnnotationCreateResult {
           runtimeType == other.runtimeType &&
           id == other.id &&
           error == other.error;
+}
+
+/// The completed translation of [book_id] (null fields when absent).
+class BookTranslationResult {
+  final BookTranslation? translation;
+  final bool running;
+
+  const BookTranslationResult({this.translation, required this.running});
+
+  @override
+  int get hashCode => translation.hashCode ^ running.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is BookTranslationResult &&
+          runtimeType == other.runtimeType &&
+          translation == other.translation &&
+          running == other.running;
 }
 
 /// Per-character boxes of one page for selection hit-testing (FEATURES 4.1.1).
@@ -884,5 +935,44 @@ class SearchResult {
       other is SearchResult &&
           runtimeType == other.runtimeType &&
           hits == other.hits &&
+          error == other.error;
+}
+
+/// Result of [render_translated_page]: a rendered RGBA page bitmap.
+class TranslatedPageBitmap {
+  final int width;
+  final int height;
+  final Uint8List rgba;
+
+  /// Whether a translated artifact exists (false -> [rgba] is empty and the
+  /// pane shows its "尚未翻译" state).
+  final bool hasTranslation;
+  final String? error;
+
+  const TranslatedPageBitmap({
+    required this.width,
+    required this.height,
+    required this.rgba,
+    required this.hasTranslation,
+    this.error,
+  });
+
+  @override
+  int get hashCode =>
+      width.hashCode ^
+      height.hashCode ^
+      rgba.hashCode ^
+      hasTranslation.hashCode ^
+      error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TranslatedPageBitmap &&
+          runtimeType == other.runtimeType &&
+          width == other.width &&
+          height == other.height &&
+          rgba == other.rgba &&
+          hasTranslation == other.hasTranslation &&
           error == other.error;
 }

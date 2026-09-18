@@ -32,7 +32,7 @@ class EngineSettingsCard extends ConsumerWidget {
                 const SizedBox(width: 8),
                 Text('翻译引擎', style: theme.textTheme.titleSmall),
                 const Spacer(),
-                if (status != null) _StatusChip(kind: kind),
+                if (status != null) _StatusChip(kind: kind, bundled: status.bundled),
               ],
             ),
             const SizedBox(height: 4),
@@ -63,17 +63,23 @@ class EngineSettingsCard extends ConsumerWidget {
                 children: [
                   Switch(
                     value: kind == EngineStatusKind.installed,
-                    onChanged: (on) => on
-                        ? _confirmInstall(context, ref)
-                        : _confirmUninstall(context, ref),
+                    // A bundled engine is part of the installation: no
+                    // download and no removal from here.
+                    onChanged: (status?.bundled ?? false)
+                        ? null
+                        : (on) => on
+                            ? _confirmInstall(context, ref)
+                            : _confirmUninstall(context, ref),
                   ),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
                       switch (kind) {
-                        EngineStatusKind.installed =>
-                          '已启用${status!.version.isNotEmpty ? '（v${status.version}）' : ''}'
-                              '${status.sizeBytes > 0 ? ' · 占用 ${_formatBytes(status.sizeBytes)}' : ''}',
+                        EngineStatusKind.installed => status!.bundled
+                            ? '已内置（随安装包分发，无需下载）'
+                                '${status.version.isNotEmpty ? ' · v${status.version}' : ''}'
+                            : '已启用${status.version.isNotEmpty ? '（v${status.version}）' : ''}'
+                                '${status.sizeBytes > 0 ? ' · 占用 ${_formatBytes(status.sizeBytes)}' : ''}',
                         EngineStatusKind.failed =>
                           '安装失败：${status?.error ?? '未知错误'}',
                         _ => '未启用',
@@ -153,14 +159,15 @@ class EngineSettingsCard extends ConsumerWidget {
 }
 
 class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.kind});
+  const _StatusChip({required this.kind, required this.bundled});
 
   final EngineStatusKind kind;
+  final bool bundled;
 
   @override
   Widget build(BuildContext context) {
     final (label, color) = switch (kind) {
-      EngineStatusKind.installed => ('已安装', Colors.green),
+      EngineStatusKind.installed => (bundled ? '已内置' : '已安装', Colors.green),
       EngineStatusKind.installing => ('安装中', Colors.blue),
       EngineStatusKind.failed => ('失败', Colors.red),
       EngineStatusKind.notInstalled => ('未安装', Colors.grey),

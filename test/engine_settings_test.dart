@@ -47,6 +47,7 @@ void main() {
         version: '',
         sizeBytes: 0,
         error: null,
+            bundled: false,
       );
     await tester.pumpWidget(_scope(repo));
     await tester.pumpAndSettle();
@@ -64,6 +65,7 @@ void main() {
       version: '2.9.0',
       sizeBytes: 1153433600, // ~1.07 GB
       error: null,
+            bundled: false,
     );
     await tester.tap(find.text('开始下载'));
     await tester.pumpAndSettle();
@@ -93,6 +95,7 @@ void main() {
         version: '',
         sizeBytes: 0,
         error: null,
+            bundled: false,
       ),
     );
     await tester.pumpAndSettle();
@@ -110,6 +113,7 @@ void main() {
         version: '',
         sizeBytes: 0,
         error: '网络不可达',
+            bundled: false,
       ),
     );
     await tester.pumpAndSettle();
@@ -127,6 +131,7 @@ void main() {
         version: '2.9.0',
         sizeBytes: 1024,
         error: null,
+            bundled: false,
       );
     await tester.pumpWidget(_scope(repo));
     await tester.pumpAndSettle();

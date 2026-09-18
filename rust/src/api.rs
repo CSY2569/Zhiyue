@@ -1754,6 +1754,7 @@ pub fn get_engine_status() -> crate::models::translate::EngineStatus {
             version: String::new(),
             size_bytes: 0,
             error: Some("翻译引擎需要 ai 构建特性".into()),
+            bundled: false,
         }
     }
 }
@@ -1804,6 +1805,147 @@ pub fn uninstall_engine() -> i32 {
     #[cfg(not(feature = "ai"))]
     {
         0
+    }
+}
+
+/// Result of [render_translated_page]: a rendered RGBA page bitmap.
+pub struct TranslatedPageBitmap {
+    pub width: u32,
+    pub height: u32,
+    pub rgba: Vec<u8>,
+    /// Whether a translated artifact exists (false -> [rgba] is empty and the
+    /// pane shows its "尚未翻译" state).
+    pub has_translation: bool,
+    pub error: Option<String>,
+}
+
+/// Starts a whole-book translation with the BabelDOC engine, streaming
+/// progress. Completion is observed by the stream ending; failures arrive as
+/// a final event carrying `error`. Returns nothing -- read the result with
+/// [get_book_translation].
+pub async fn translate_book(
+    book_id: i64,
+    sink: StreamSink<crate::models::translate::BookTranslateEvent>,
+) {
+    #[cfg(feature = "ai")]
+    {
+        let result = crate::translate::job::translate_book(book_id, move |ev| {
+            let _ = sink.add(ev);
+        })
+        .await;
+        if let Err(e) = result {
+            tracing::warn!(?e, book_id, "translate_book failed");
+        }
+    }
+    #[cfg(not(feature = "ai"))]
+    {
+        let _ = book_id;
+        let _ = sink.add_error("翻译需要 ai 构建特性".to_string());
+    }
+}
+
+/// Cancels the running whole-book translation (kills the engine process).
+/// Returns 1.
+pub fn cancel_book_translation() -> i32 {
+    #[cfg(feature = "ai")]
+    crate::translate::job::cancel();
+    1
+}
+
+/// The completed translation of [book_id] (null fields when absent).
+pub struct BookTranslationResult {
+    pub translation: Option<crate::models::translate::BookTranslation>,
+    pub running: bool,
+}
+
+pub fn get_book_translation(book_id: i64) -> BookTranslationResult {
+    #[cfg(feature = "ai")]
+    {
+        BookTranslationResult {
+            translation: crate::translate::job::load_artifact(book_id),
+            running: crate::translate::job::is_running(),
+        }
+    }
+    #[cfg(not(feature = "ai"))]
+    {
+        BookTranslationResult {
+            translation: None,
+            running: false,
+        }
+    }
+}
+
+/// Deletes a book's translated artifacts. Returns 1 on success.
+pub fn clear_book_translation(book_id: i64) -> i32 {
+    #[cfg(feature = "ai")]
+    {
+        crate::translate::job::clear_artifact(book_id)
+            .map(|_| 1)
+            .unwrap_or(0)
+    }
+    #[cfg(not(feature = "ai"))]
+    {
+        clear_translation_artifacts(book_id)
+    }
+}
+
+/// Renders page [page] (1-indexed) of the book's translated PDF (the engine's
+/// mono output) at [dpi_scale]x. `has_translation` false -> no artifact yet.
+pub async fn render_translated_page(
+    book_id: i64,
+    page: i64,
+    dpi_scale: f64,
+) -> TranslatedPageBitmap {
+    #[cfg(feature = "ai")]
+    {
+        let Some(t) = crate::translate::job::load_artifact(book_id) else {
+            return TranslatedPageBitmap {
+                width: 0,
+                height: 0,
+                rgba: Vec::new(),
+                has_translation: false,
+                error: None,
+            };
+        };
+        let path = t.mono_path.clone();
+        let result = tokio::task::spawn_blocking(move || {
+            crate::pdf::render_page_file(&path, page - 1, dpi_scale as f32)
+        })
+        .await;
+        match result {
+            Ok(Ok(bmp)) => TranslatedPageBitmap {
+                width: bmp.width,
+                height: bmp.height,
+                rgba: bmp.rgba,
+                has_translation: true,
+                error: None,
+            },
+            Ok(Err(e)) => TranslatedPageBitmap {
+                width: 0,
+                height: 0,
+                rgba: Vec::new(),
+                has_translation: true,
+                error: Some(e.to_string()),
+            },
+            Err(e) => TranslatedPageBitmap {
+                width: 0,
+                height: 0,
+                rgba: Vec::new(),
+                has_translation: true,
+                error: Some(format!("译文页渲染任务失败: {e}")),
+            },
+        }
+    }
+    #[cfg(not(feature = "ai"))]
+    {
+        let _ = (book_id, page, dpi_scale);
+        TranslatedPageBitmap {
+            width: 0,
+            height: 0,
+            rgba: Vec::new(),
+            has_translation: false,
+            error: None,
+        }
     }
 }
 

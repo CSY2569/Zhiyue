@@ -51,6 +51,37 @@ class TranslationRepository {
   Future<int> deleteGlossaryEntry(int id) =>
       rust.deleteTranslationGlossary(id: id);
 
+  // --- whole-book translation (BabelDOC engine) --------------------------
+
+  /// Starts a whole-book translation, streaming progress. Failures arrive as
+  /// a final event carrying [BookTranslateEvent.error].
+  Stream<BookTranslateEvent> translateBook(int bookId) =>
+      rust.translateBook(bookId: bookId);
+
+  /// Cancels the running job (kills the engine process); returns 1.
+  Future<int> cancelBookTranslation() => rust.cancelBookTranslation();
+
+  /// The completed translation of a book (null when absent) plus whether a
+  /// job is currently running.
+  Future<rust.BookTranslationResult> getBookTranslation(int bookId) =>
+      rust.getBookTranslation(bookId: bookId);
+
+  /// Deletes the book's translated artifacts; returns 1 on success.
+  Future<int> clearBookTranslation(int bookId) =>
+      rust.clearBookTranslation(bookId: bookId);
+
+  /// Renders page [page] (1-indexed) of the translated PDF at [dpiScale]x.
+  Future<rust.TranslatedPageBitmap> renderTranslatedPage({
+    required int bookId,
+    required int page,
+    double dpiScale = 1.0,
+  }) =>
+      rust.renderTranslatedPage(
+        bookId: bookId,
+        page: page,
+        dpiScale: dpiScale,
+      );
+
   // --- translation engine (BabelDOC, opt-in download) --------------------
 
   /// Current engine state (probes disk).

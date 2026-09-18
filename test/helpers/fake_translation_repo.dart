@@ -1,5 +1,8 @@
 import 'package:rbwa/data/repositories/translation_repository.dart';
-import 'package:rbwa/src/rust/api.dart' show GlossaryResult;
+import 'dart:typed_data';
+
+import 'package:rbwa/src/rust/api.dart'
+    show BookTranslationResult, GlossaryResult, TranslatedPageBitmap;
 import 'package:rbwa/src/rust/models/translate.dart';
 
 /// Fake translation repository for widget tests: no Rust, in-memory config +
@@ -41,6 +44,7 @@ class FakeTranslationRepo extends TranslationRepository {
     version: '',
     sizeBytes: 0,
     error: null,
+    bundled: false,
   );
 
   /// Event script streamed by [installEngine]; a final event with
@@ -71,6 +75,74 @@ class FakeTranslationRepo extends TranslationRepository {
     return 1;
   }
 
+  // --- whole-book translation --------------------------------------------
+
+  /// Artifact reported by [getBookTranslation] (null = not translated yet).
+  BookTranslation? bookTranslation;
+  bool bookTranslateRunning = false;
+
+  /// Event script streamed by [translateBook].
+  List<BookTranslateEvent> translateScript = const [
+    BookTranslateEvent(
+        phase: '翻译中', detail: 'start to translate', done: false, error: null),
+    BookTranslateEvent(phase: '完成', detail: '已翻译', done: true, error: null),
+  ];
+
+  int translateCalls = 0;
+  int cancelBookCalls = 0;
+  int clearBookCalls = 0;
+
+  @override
+  Stream<BookTranslateEvent> translateBook(int bookId) {
+    translateCalls++;
+    return Stream.fromIterable(translateScript);
+  }
+
+  @override
+  Future<int> cancelBookTranslation() async {
+    cancelBookCalls++;
+    return 1;
+  }
+
+  @override
+  Future<BookTranslationResult> getBookTranslation(int bookId) async =>
+      BookTranslationResult(
+        translation: bookTranslation,
+        running: bookTranslateRunning,
+      );
+
+  @override
+  Future<int> clearBookTranslation(int bookId) async {
+    clearBookCalls++;
+    bookTranslation = null;
+    return 1;
+  }
+
+  @override
+  Future<TranslatedPageBitmap> renderTranslatedPage({
+    required int bookId,
+    required int page,
+    double dpiScale = 1.0,
+  }) async {
+    if (bookTranslation == null) {
+      return TranslatedPageBitmap(
+        width: 0,
+        height: 0,
+        rgba: Uint8List(0),
+        hasTranslation: false,
+        error: null,
+      );
+    }
+    // 2x2 opaque white bitmap (decodes on the engine's task runner).
+    return TranslatedPageBitmap(
+      width: 2,
+      height: 2,
+      rgba: Uint8List.fromList(List.filled(2 * 2 * 4, 255)),
+      hasTranslation: true,
+      error: null,
+    );
+  }
+
   @override
   Future<int> uninstallEngine() async {
     uninstallCalls++;
@@ -81,6 +153,7 @@ class FakeTranslationRepo extends TranslationRepository {
       version: '',
       sizeBytes: 0,
       error: null,
+      bundled: false,
     );
     return 1;
   }

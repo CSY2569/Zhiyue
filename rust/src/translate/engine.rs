@@ -54,10 +54,25 @@ static ENGINE_DIR_OVERRIDE: OnceLock<PathBuf> = OnceLock::new();
 /// `~/.cache/babeldoc` (uninstall deletes it).
 static CACHE_DIR_OVERRIDE: OnceLock<PathBuf> = OnceLock::new();
 
+/// An engine shipped INSIDE the installation bundle (`<exe_dir>/babeldoc`,
+/// mirroring the OCR models' resolution): packaged test builds carry the
+/// interpreter + site-packages + offline asset package, so no download is
+/// needed. Layout: `python/` (standalone CPython), `site-packages/`,
+/// `engine.json`, optional `offline_assets_*.zip`.
+pub fn bundled_engine_dir() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?.join("babeldoc");
+    dir.join("engine.json").is_file().then_some(dir)
+}
+
+/// The managed engine directory: a bundled engine wins; otherwise
 /// `{app_data_dir}/babeldoc` (override: `RBWA_BABELDOC_DIR`).
 pub fn engine_dir() -> PathBuf {
     if let Some(dir) = ENGINE_DIR_OVERRIDE.get() {
         return dir.clone();
+    }
+    if let Some(bundled) = bundled_engine_dir() {
+        return bundled;
     }
     if let Ok(dir) = std::env::var("RBWA_BABELDOC_DIR") {
         return PathBuf::from(dir);
@@ -65,6 +80,12 @@ pub fn engine_dir() -> PathBuf {
     crate::db::app_data_dir()
         .unwrap_or_default()
         .join("babeldoc")
+}
+
+/// Whether the active engine comes from the installation bundle (not
+/// removable by the user).
+pub fn is_bundled() -> bool {
+    bundled_engine_dir().is_some()
 }
 
 fn manifest_path() -> PathBuf {
@@ -78,6 +99,43 @@ fn venv_dir() -> PathBuf {
 }
 fn venv_python() -> PathBuf {
     venv_dir().join("bin").join("python")
+}
+
+/// Interpreter used to run BabelDOC: a bundled engine uses its standalone
+/// CPython directly (no venv: absolute symlinks/shebangs would break under
+/// the AppImage's per-run mount path, and `PYTHONPATH` supplies the
+/// packages); a downloaded engine uses its venv python.
+pub fn python_executable() -> PathBuf {
+    if is_bundled() {
+        let bundled = engine_dir().join("python").join("bin").join("python3.12");
+        if bundled.exists() {
+            return bundled;
+        }
+    }
+    venv_python()
+}
+
+/// Extra environment for running BabelDOC out of [engine_dir].
+pub fn python_env() -> Vec<(String, String)> {
+    let mut env = Vec::new();
+    if is_bundled() {
+        env.push((
+            "PYTHONPATH".to_string(),
+            engine_dir()
+                .join("site-packages")
+                .to_string_lossy()
+                .to_string(),
+        ));
+    }
+    env
+}
+
+/// Command-line args that invoke the BabelDOC CLI via the module entry point
+/// (`babeldoc` has no `__main__`; console scripts carry absolute shebangs).
+/// The entry is `cli()` -- the top-level `main()` is a coroutine and calling
+/// it bare silently does nothing (caught by the packaging self-check).
+pub fn babeldoc_argv() -> [&'static str; 2] {
+    ["-c", "import sys; from babeldoc.main import cli; sys.exit(cli())"]
 }
 fn venv_babeldoc() -> PathBuf {
     venv_dir().join("bin").join("babeldoc")
@@ -111,6 +169,9 @@ pub struct EngineManifest {
     /// follows the configured index).
     #[serde(default)]
     pub uv_wheel: Option<String>,
+    /// Engine shipped inside the installation bundle (cannot be uninstalled).
+    #[serde(default)]
+    pub bundled: bool,
 }
 
 fn read_manifest() -> Option<EngineManifest> {
@@ -153,6 +214,7 @@ fn probe_status() -> EngineStatus {
             version: m.pdf2zh_next,
             size_bytes: engine_disk_usage(),
             error: None,
+            bundled: m.bundled || is_bundled(),
         },
         None => EngineStatus {
             kind: EngineStatusKind::NotInstalled,
@@ -161,6 +223,7 @@ fn probe_status() -> EngineStatus {
             version: String::new(),
             size_bytes: engine_disk_usage(),
             error: None,
+            bundled: false,
         },
     }
 }
@@ -190,6 +253,11 @@ pub fn cancel_install() {
 /// Removes the managed environment (and BabelDOC's asset cache when WE
 /// created it). Refused while a book is translating or an install is running.
 pub fn uninstall_engine() -> AppResult<()> {
+    if is_bundled() {
+        return Err(AppError::Internal(
+            "引擎内置于安装包，无法卸载（更换发行版即可移除）".into(),
+        ));
+    }
     if get_engine_status().kind == EngineStatusKind::Installing {
         return Err(AppError::Internal("引擎正在安装，无法卸载".into()));
     }
@@ -234,6 +302,7 @@ pub async fn install_engine(mut on_event: impl FnMut(EngineInstallEvent) + Send 
             version: String::new(),
             size_bytes: 0,
             error: None,
+            bundled: false,
         };
     });
 
@@ -316,6 +385,7 @@ fn run_install(on_event: &mut impl FnMut(EngineInstallEvent)) -> AppResult<()> {
         installed_at: chrono_now(),
         cache_preexisting: CACHE_PREEXISTING.load(Ordering::SeqCst),
         uv_wheel: UV_WHEEL.get().cloned(),
+        bundled: false, // the installer always produces a user-space engine
     };
     std::fs::write(manifest_path(), serde_json::to_string_pretty(&manifest)?)?;
     emit(on_event, "完成", 1.0, "翻译引擎安装完成");
@@ -849,6 +919,80 @@ fn set_executable(path: &Path) -> AppResult<()> {
 fn set_executable(_path: &Path) -> AppResult<()> {
     Ok(())
 }
+/// Restores BabelDOC's asset cache from a bundled offline-assets package when
+/// the cache is missing (bundled test builds ship one so no download is
+/// needed). Returns the number of restored packages' lines on success; a
+/// no-op when no package / cache already present.
+pub fn restore_bundled_assets(
+    on_line: &mut impl FnMut(String),
+) -> AppResult<bool> {
+    let Some(bundled) = bundled_engine_dir() else {
+        return Ok(false);
+    };
+    if babeldoc_cache_dir().join("models").is_dir() {
+        return Ok(false); // assets already in place
+    }
+    let zip = std::fs::read_dir(&bundled)
+        .ok()
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .find(|p| {
+            p.file_name()
+                .map(|n| {
+                    let n = n.to_string_lossy();
+                    n.starts_with("offline_assets_") && n.ends_with(".zip")
+                })
+                .unwrap_or(false)
+        });
+    let Some(zip) = zip else {
+        return Ok(false);
+    };
+
+    let mut cmd = Command::new(python_executable());
+    let argv = babeldoc_argv();
+    cmd.args(argv)
+        .args(["--restore-offline-assets", &zip.to_string_lossy()])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    for (k, v) in python_env() {
+        cmd.env(k, v);
+    }
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| AppError::Internal(format!("资产恢复失败（无法启动）: {e}")))?;
+    let (tx, rx) = std::sync::mpsc::channel::<String>();
+    if let Some(out) = child.stdout.take() {
+        spawn_line_reader(out, tx.clone());
+    }
+    if let Some(err) = child.stderr.take() {
+        spawn_line_reader(err, tx.clone());
+    }
+    drop(tx);
+    loop {
+        while let Ok(line) = rx.try_recv() {
+            let line = line.trim().to_string();
+            if !line.is_empty() {
+                on_line(line);
+            }
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                if !status.success() {
+                    return Err(AppError::Internal(format!(
+                        "资产恢复失败：退出码 {status}"
+                    )));
+                }
+                return Ok(true);
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(200)),
+            Err(e) => return Err(AppError::Internal(format!("等待资产恢复失败: {e}"))),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -881,6 +1025,7 @@ mod tests {
             installed_at: "0".into(),
             cache_preexisting: false,
             uv_wheel: None,
+            bundled: false,
         };
         std::fs::write(manifest_path(), serde_json::to_string(&m).unwrap()).unwrap();
         let s = get_engine_status();
@@ -905,6 +1050,7 @@ mod tests {
             installed_at: "0".into(),
             cache_preexisting: true,
             uv_wheel: None,
+            bundled: false,
         };
         std::fs::write(manifest_path(), serde_json::to_string(&m).unwrap()).unwrap();
         uninstall_engine().unwrap();

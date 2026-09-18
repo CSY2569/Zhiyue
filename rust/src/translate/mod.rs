@@ -54,6 +54,8 @@ pub fn is_translating_any() -> bool {
 
 #[cfg(feature = "ai")]
 pub mod engine;
+#[cfg(feature = "ai")]
+pub mod job;
 
 /// `{data_dir}/translated/{book_id}` -- translated PDFs (plan §6/§7).
 /// Sibling of `covers/` / `ai_images/`.
@@ -100,6 +102,23 @@ pub fn save_translation_config(config: &TranslationConfig) -> AppResult<()> {
         rusqlite::params![json],
     )?;
     Ok(())
+}
+
+/// The AI configuration the engine job reuses (BYOK OpenAI-compatible
+/// endpoint; the translation target language also lives there).
+#[cfg(feature = "ai")]
+pub fn load_ai_config_for_job() -> AppResult<crate::models::ai::AiConfig> {
+    let conn = db::db();
+    let raw: Option<String> = conn
+        .query_row(
+            "SELECT value FROM settings WHERE key = 'ai_config'",
+            [],
+            |row| row.get(0),
+        )
+        .ok();
+    Ok(raw
+        .and_then(|json| serde_json::from_str(&json).ok())
+        .unwrap_or_default())
 }
 
 /// Deletes a book's translated artifacts (the translated PDFs).

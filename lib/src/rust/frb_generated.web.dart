@@ -37,6 +37,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustStreamSink<String> dco_decode_StreamSink_String_Sse(dynamic raw);
 
   @protected
+  RustStreamSink<BookTranslateEvent>
+  dco_decode_StreamSink_book_translate_event_Sse(dynamic raw);
+
+  @protected
   RustStreamSink<EngineInstallEvent>
   dco_decode_StreamSink_engine_install_event_Sse(dynamic raw);
 
@@ -68,6 +72,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Book dco_decode_book(dynamic raw);
 
   @protected
+  BookTranslateEvent dco_decode_book_translate_event(dynamic raw);
+
+  @protected
+  BookTranslation dco_decode_book_translation(dynamic raw);
+
+  @protected
+  BookTranslationResult dco_decode_book_translation_result(dynamic raw);
+
+  @protected
   BookType dco_decode_book_type(dynamic raw);
 
   @protected
@@ -81,6 +94,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Book dco_decode_box_autoadd_book(dynamic raw);
+
+  @protected
+  BookTranslation dco_decode_box_autoadd_book_translation(dynamic raw);
 
   @protected
   Category dco_decode_box_autoadd_category(dynamic raw);
@@ -239,6 +255,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Book? dco_decode_opt_box_autoadd_book(dynamic raw);
 
   @protected
+  BookTranslation? dco_decode_opt_box_autoadd_book_translation(dynamic raw);
+
+  @protected
   Category? dco_decode_opt_box_autoadd_category(dynamic raw);
 
   @protected
@@ -287,6 +306,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TextAnnotationKind dco_decode_text_annotation_kind(dynamic raw);
 
   @protected
+  TranslatedPageBitmap dco_decode_translated_page_bitmap(dynamic raw);
+
+  @protected
   TranslationBackgroundBehavior dco_decode_translation_background_behavior(
     dynamic raw,
   );
@@ -326,6 +348,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustStreamSink<BookTranslateEvent>
+  sse_decode_StreamSink_book_translate_event_Sse(SseDeserializer deserializer);
+
+  @protected
   RustStreamSink<EngineInstallEvent>
   sse_decode_StreamSink_engine_install_event_Sse(SseDeserializer deserializer);
 
@@ -361,6 +387,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Book sse_decode_book(SseDeserializer deserializer);
 
   @protected
+  BookTranslateEvent sse_decode_book_translate_event(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  BookTranslation sse_decode_book_translation(SseDeserializer deserializer);
+
+  @protected
+  BookTranslationResult sse_decode_book_translation_result(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   BookType sse_decode_book_type(SseDeserializer deserializer);
 
   @protected
@@ -376,6 +415,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Book sse_decode_box_autoadd_book(SseDeserializer deserializer);
+
+  @protected
+  BookTranslation sse_decode_box_autoadd_book_translation(
+    SseDeserializer deserializer,
+  );
 
   @protected
   Category sse_decode_box_autoadd_category(SseDeserializer deserializer);
@@ -558,6 +602,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Book? sse_decode_opt_box_autoadd_book(SseDeserializer deserializer);
 
   @protected
+  BookTranslation? sse_decode_opt_box_autoadd_book_translation(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   Category? sse_decode_opt_box_autoadd_category(SseDeserializer deserializer);
 
   @protected
@@ -614,6 +663,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  TranslatedPageBitmap sse_decode_translated_page_bitmap(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   TranslationBackgroundBehavior sse_decode_translation_background_behavior(
     SseDeserializer deserializer,
   );
@@ -660,6 +714,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_StreamSink_book_translate_event_Sse(
+    RustStreamSink<BookTranslateEvent> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_StreamSink_engine_install_event_Sse(
     RustStreamSink<EngineInstallEvent> self,
     SseSerializer serializer,
@@ -699,6 +759,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_book(Book self, SseSerializer serializer);
 
   @protected
+  void sse_encode_book_translate_event(
+    BookTranslateEvent self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_book_translation(
+    BookTranslation self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_book_translation_result(
+    BookTranslationResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_book_type(BookType self, SseSerializer serializer);
 
   @protected
@@ -718,6 +796,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_book(Book self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_book_translation(
+    BookTranslation self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_category(Category self, SseSerializer serializer);
@@ -942,6 +1026,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_box_autoadd_book(Book? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_book_translation(
+    BookTranslation? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_category(
     Category? self,
     SseSerializer serializer,
@@ -1019,6 +1109,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_text_annotation_kind(
     TextAnnotationKind self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_translated_page_bitmap(
+    TranslatedPageBitmap self,
     SseSerializer serializer,
   );
 

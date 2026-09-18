@@ -27,6 +27,7 @@ class EngineController extends AsyncNotifier<EngineStatus> {
       version: '',
       sizeBytes: 0,
       error: null,
+      bundled: false,
     ));
     try {
       await for (final ev in repo.installEngine()) {
@@ -38,6 +39,7 @@ class EngineController extends AsyncNotifier<EngineStatus> {
             version: '',
             sizeBytes: 0,
             error: ev.error,
+            bundled: false,
           ));
           return;
         }
@@ -50,6 +52,7 @@ class EngineController extends AsyncNotifier<EngineStatus> {
           version: '',
           sizeBytes: 0,
           error: null,
+          bundled: false,
         ));
       }
     } catch (e) {
@@ -60,6 +63,7 @@ class EngineController extends AsyncNotifier<EngineStatus> {
         version: '',
         sizeBytes: 0,
         error: e.toString(),
+        bundled: false,
       ));
       return;
     }

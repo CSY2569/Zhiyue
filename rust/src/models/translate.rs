@@ -222,6 +222,40 @@ pub struct EngineStatus {
     /// On-disk size of the managed environment + assets, bytes (0 unknown).
     pub size_bytes: i64,
     pub error: Option<String>,
+    /// Engine shipped inside the installation bundle (cannot be uninstalled;
+    /// the settings card hides the removal affordance).
+    pub bundled: bool,
+}
+
+/// A completed whole-book translation (manifest under
+/// `translated/{book_id}/manifest.json`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BookTranslation {
+    pub book_id: i64,
+    pub title: String,
+    /// Display language the user configured (e.g. 中文).
+    pub target_lang: String,
+    /// BabelDOC language code used for the run (e.g. zh).
+    pub lang_out: String,
+    /// Absolute paths of the produced PDFs (mono = translated pages; dual =
+    /// original + translation side by side on each page).
+    pub mono_path: String,
+    pub dual_path: String,
+    pub pages: i64,
+    pub finished_at: String,
+    pub error: Option<String>,
+}
+
+/// One event of the whole-book translation stream.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BookTranslateEvent {
+    /// Coarse phase (解析版式 / 翻译中 / 排版输出 / 完成 / 失败).
+    pub phase: String,
+    /// Latest engine output line (progress detail).
+    pub detail: String,
+    /// Whether the run has ended (success or failure).
+    pub done: bool,
+    pub error: Option<String>,
 }
 
 /// One install-stream event.

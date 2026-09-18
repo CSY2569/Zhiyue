@@ -4,7 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:rbwa/core/theme/app_theme.dart';
 import 'package:rbwa/data/repositories/translation_repository.dart';
+import 'package:rbwa/features/bilingual/providers/book_translation_provider.dart';
 import 'package:rbwa/features/bilingual/providers/page_translation_provider.dart';
+import 'package:rbwa/src/rust/models/translate.dart';
 import 'package:rbwa/features/bilingual/widgets/translated_pane.dart';
 import 'package:rbwa/src/rust/models/progress.dart' show ViewMode;
 
@@ -79,6 +81,101 @@ void main() {
       expect(find.text('尚未安装翻译引擎'), findsOneWidget);
       expect(find.text('前往设置'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('engine installed without artifact offers the translate action',
+        (tester) async {
+      final repo = FakeTranslationRepo()
+        ..engineStatus = const EngineStatus(
+          kind: EngineStatusKind.installed,
+          phase: '',
+          progress: 1,
+          version: '2.9.0',
+          sizeBytes: 1024,
+          error: null,
+          bundled: true,
+        );
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          translationRepositoryProvider.overrideWithValue(repo),
+          defaultViewer(book: testBook(pageCount: 3), currentPage: 2),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: const Scaffold(body: TranslatedColumn()),
+        ),
+      ));
+      // Spinners animate forever: bounded pumps, not pumpAndSettle.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.text('翻译本书'), findsOneWidget);
+      expect(find.text('开始翻译'), findsOneWidget);
+
+      // Start the run (fake streams two events, then refresh reads the
+      // artifact the test pre-seeds).
+      final started = DateTime.now();
+      repo.bookTranslation = BookTranslation(
+        bookId: 1,
+        title: '测试书',
+        targetLang: '中文',
+        langOut: 'zh',
+        monoPath: '/x.mono.pdf',
+        dualPath: '/x.dual.pdf',
+        pages: 3,
+        finishedAt: started.millisecondsSinceEpoch.toString(),
+      );
+      await tester.tap(find.text('开始翻译'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(repo.translateCalls, 1);
+      // The artifact is present now: the synced page list renders p.N chips.
+      expect(find.text('p.2'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('running translation shows phase + cancel', (tester) async {
+      final repo = FakeTranslationRepo()
+        ..engineStatus = const EngineStatus(
+          kind: EngineStatusKind.installed,
+          phase: '',
+          progress: 1,
+          version: '2.9.0',
+          sizeBytes: 0,
+          error: null,
+          bundled: true,
+        )
+        ..bookTranslateRunning = true;
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          translationRepositoryProvider.overrideWithValue(repo),
+          defaultViewer(book: testBook(pageCount: 3)),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: const Scaffold(body: TranslatedColumn()),
+        ),
+      ));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      // No artifact yet -> ready state; drive the controller into running.
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(TranslatedColumn)),
+        listen: false,
+      );
+      container.read(bookTranslationProvider(1).notifier).state =
+          const AsyncData(BookTranslationState(
+        running: true,
+        phase: '翻译中',
+        detail: 'start to translate',
+        loaded: true,
+      ));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      expect(find.text('翻译中'), findsOneWidget);
+      expect(find.text('取消翻译'), findsOneWidget);
+      expect(find.textContaining('start to translate'), findsOneWidget);
     });
   });
 }
