@@ -477,6 +477,25 @@ Future<String> searchIndexStatus({required PlatformInt64 bookId}) =>
 Future<int> clearTranslationArtifacts({required PlatformInt64 bookId}) =>
     RustLib.instance.api.crateApiClearTranslationArtifacts(bookId: bookId);
 
+/// Current engine state for the settings card (probes disk each call).
+Future<EngineStatus> getEngineStatus() =>
+    RustLib.instance.api.crateApiGetEngineStatus();
+
+/// Installs the translation engine, streaming progress. Idempotent (a retry
+/// resumes at the first incomplete step). Completion is observed by the
+/// stream ending; errors go to `sink.add_error`.
+Stream<EngineInstallEvent> installEngine() =>
+    RustLib.instance.api.crateApiInstallEngine();
+
+/// Requests cancellation of a running install. Returns 1.
+Future<int> cancelEngineInstall() =>
+    RustLib.instance.api.crateApiCancelEngineInstall();
+
+/// Removes the managed engine environment + asset cache. Returns 1 on
+/// success, 0 when refused (install running / translation in flight) or on
+/// failure.
+Future<int> uninstallEngine() => RustLib.instance.api.crateApiUninstallEngine();
+
 /// Reads the translation config (KV `translation_config`, plan §8).
 Future<TranslationConfig> getTranslationConfig() =>
     RustLib.instance.api.crateApiGetTranslationConfig();

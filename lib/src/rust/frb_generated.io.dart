@@ -35,6 +35,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustStreamSink<String> dco_decode_StreamSink_String_Sse(dynamic raw);
 
   @protected
+  RustStreamSink<EngineInstallEvent>
+  dco_decode_StreamSink_engine_install_event_Sse(dynamic raw);
+
+  @protected
   String dco_decode_String(dynamic raw);
 
   @protected
@@ -105,6 +109,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CustomPrompt dco_decode_custom_prompt(dynamic raw);
+
+  @protected
+  EngineInstallEvent dco_decode_engine_install_event(dynamic raw);
+
+  @protected
+  EngineStatus dco_decode_engine_status(dynamic raw);
+
+  @protected
+  EngineStatusKind dco_decode_engine_status_kind(dynamic raw);
 
   @protected
   ExportResult dco_decode_export_result(dynamic raw);
@@ -311,6 +324,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RustStreamSink<EngineInstallEvent>
+  sse_decode_StreamSink_engine_install_event_Sse(SseDeserializer deserializer);
+
+  @protected
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
@@ -391,6 +408,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CustomPrompt sse_decode_custom_prompt(SseDeserializer deserializer);
+
+  @protected
+  EngineInstallEvent sse_decode_engine_install_event(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  EngineStatus sse_decode_engine_status(SseDeserializer deserializer);
+
+  @protected
+  EngineStatusKind sse_decode_engine_status_kind(SseDeserializer deserializer);
 
   @protected
   ExportResult sse_decode_export_result(SseDeserializer deserializer);
@@ -630,6 +658,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_StreamSink_engine_install_event_Sse(
+    RustStreamSink<EngineInstallEvent> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
@@ -724,6 +758,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_custom_prompt(CustomPrompt self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_engine_install_event(
+    EngineInstallEvent self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_engine_status(EngineStatus self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_engine_status_kind(
+    EngineStatusKind self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_export_result(ExportResult self, SseSerializer serializer);

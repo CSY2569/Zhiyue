@@ -41,13 +41,14 @@ pdfium-render = { version = "0.9", features = ["image_latest", "thread_safe"], o
 # AI client - OpenAI-compatible streaming + vision (M4).
 # Transport is a hand-written reqwest SSE client (TECH_ROADMAP fallback:
 # async-openai's request types serialize fields providers reject, e.g.
-# `image_url.detail: null`), so only reqwest is needed.
+# `image_url.detail: null`), so only reqwest is needed. `blocking` serves the
+# translation-engine installer's uv download; flate2/tar unpack it.
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls", "blocking"], optional = true }
+flate2 = { version = "1", optional = true }
+tar = { version = "0.4", optional = true }
 
 # Image processing - thumbnails (M2)
 image = { version = "0.25", optional = true }
-
-# HTTP - AI fallback / model download (M4/M5)
-reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"], optional = true }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -92,7 +93,7 @@ pdf = [
 ]
 # M4: AI streaming client (hand-written reqwest SSE). Vision screenshots are
 # sent as base64 data URLs, so no image-decoding dependency is needed here.
-ai = ["dep:reqwest"]
+ai = ["dep:reqwest", "dep:flate2", "dep:tar"]
 # M5: local full-page OCR engine (rapidocr-core + onnxruntime). Without it
 # the OCR api layer falls back to an explicit "models not installed" error.
 ocr = ["dep:rapidocr-core", "dep:image"]

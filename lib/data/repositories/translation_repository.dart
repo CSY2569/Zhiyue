@@ -50,6 +50,21 @@ class TranslationRepository {
   /// Removes a glossary entry; returns 1 on success.
   Future<int> deleteGlossaryEntry(int id) =>
       rust.deleteTranslationGlossary(id: id);
+
+  // --- translation engine (BabelDOC, opt-in download) --------------------
+
+  /// Current engine state (probes disk).
+  Future<EngineStatus> getEngineStatus() => rust.getEngineStatus();
+
+  /// Installs the engine, streaming progress events. Failures arrive as a
+  /// final event carrying [EngineInstallEvent.error].
+  Stream<EngineInstallEvent> installEngine() => rust.installEngine();
+
+  /// Requests cancellation of a running install; returns 1.
+  Future<int> cancelEngineInstall() => rust.cancelEngineInstall();
+
+  /// Removes the managed engine environment; returns 1 on success.
+  Future<int> uninstallEngine() => rust.uninstallEngine();
 }
 
 /// Riverpod provider for the singleton [TranslationRepository].

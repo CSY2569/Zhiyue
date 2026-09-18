@@ -1723,7 +1723,7 @@ pub fn search_index_status(book_id: i64) -> String {
 // per-page SQLite cache) was RETIRED in favor of the downloadable BabelDOC
 // engine; this section keeps the engine-independent surface: the translation
 // config KV, the in-flight registry (eviction guard) and the glossary.
-// Engine install/progress APIs live in the engine section below (staged).
+// Engine install/progress APIs live in the engine section below.
 // All error surfaces use the sentinel pattern (an `error: Option<String>`
 // field) -- never `Result`.
 
@@ -1733,6 +1733,78 @@ pub fn clear_translation_artifacts(book_id: i64) -> i32 {
     crate::translate::clear_translation_artifacts(book_id)
         .map(|_| 1)
         .unwrap_or(0)
+}
+
+// =============================================================================
+// M7 -- Translation engine (BabelDOC, opt-in download)
+// =============================================================================
+
+/// Current engine state for the settings card (probes disk each call).
+pub fn get_engine_status() -> crate::models::translate::EngineStatus {
+    #[cfg(feature = "ai")]
+    {
+        crate::translate::engine::get_engine_status()
+    }
+    #[cfg(not(feature = "ai"))]
+    {
+        crate::models::translate::EngineStatus {
+            kind: crate::models::translate::EngineStatusKind::NotInstalled,
+            phase: String::new(),
+            progress: 0.0,
+            version: String::new(),
+            size_bytes: 0,
+            error: Some("翻译引擎需要 ai 构建特性".into()),
+        }
+    }
+}
+
+/// Installs the translation engine, streaming progress. Idempotent (a retry
+/// resumes at the first incomplete step). Completion is observed by the
+/// stream ending; errors go to `sink.add_error`.
+pub async fn install_engine(
+    sink: StreamSink<crate::models::translate::EngineInstallEvent>,
+) {
+    #[cfg(feature = "ai")]
+    {
+        let result = crate::translate::engine::install_engine(move |ev| {
+            let _ = sink.add(ev);
+        })
+        .await;
+        // Failures already arrive on the stream as a final error event.
+        if let Err(e) = result {
+            tracing::warn!(?e, "engine install failed");
+        }
+    }
+    #[cfg(not(feature = "ai"))]
+    {
+        let _ = sink.add_error("翻译引擎需要 ai 构建特性".to_string());
+    }
+}
+
+/// Requests cancellation of a running install. Returns 1.
+pub fn cancel_engine_install() -> i32 {
+    #[cfg(feature = "ai")]
+    crate::translate::engine::cancel_install();
+    1
+}
+
+/// Removes the managed engine environment + asset cache. Returns 1 on
+/// success, 0 when refused (install running / translation in flight) or on
+/// failure.
+pub fn uninstall_engine() -> i32 {
+    #[cfg(feature = "ai")]
+    {
+        crate::translate::engine::uninstall_engine()
+            .map(|_| 1)
+            .unwrap_or_else(|e| {
+                tracing::warn!(?e, "uninstall_engine failed");
+                0
+            })
+    }
+    #[cfg(not(feature = "ai"))]
+    {
+        0
+    }
 }
 
 /// Reads the translation config (KV `translation_config`, plan §8).

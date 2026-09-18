@@ -198,6 +198,45 @@ pub struct GlossaryEntry {
     pub target_lang: Option<String>,
 }
 
+/// Lifecycle of the downloadable translation engine (BabelDOC + pdf2zh-next
+/// in a uv-managed Python environment under `app_data_dir/babeldoc`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EngineStatusKind {
+    NotInstalled,
+    Installing,
+    Installed,
+    Failed,
+}
+
+/// Current engine state for the settings card.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EngineStatus {
+    pub kind: EngineStatusKind,
+    /// Human-readable step label while installing ("下载 uv" / "安装依赖" /
+    /// "下载模型资产" ...), empty otherwise.
+    pub phase: String,
+    /// Progress within the WHOLE install (0..1); 0 when not installing.
+    pub progress: f64,
+    /// Installed engine version (pdf2zh-next pin), empty when absent.
+    pub version: String,
+    /// On-disk size of the managed environment + assets, bytes (0 unknown).
+    pub size_bytes: i64,
+    pub error: Option<String>,
+}
+
+/// One install-stream event.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EngineInstallEvent {
+    pub phase: String,
+    /// Progress within the whole install (0..1).
+    pub progress: f64,
+    /// Detail line (latest child-process output line / byte counts).
+    pub detail: String,
+    /// Whether the install has finished (success or failure).
+    pub finished: bool,
+    pub error: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

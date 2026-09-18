@@ -6,6 +6,101 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+/// One install-stream event.
+class EngineInstallEvent {
+  final String phase;
+
+  /// Progress within the whole install (0..1).
+  final double progress;
+
+  /// Detail line (latest child-process output line / byte counts).
+  final String detail;
+
+  /// Whether the install has finished (success or failure).
+  final bool finished;
+  final String? error;
+
+  const EngineInstallEvent({
+    required this.phase,
+    required this.progress,
+    required this.detail,
+    required this.finished,
+    this.error,
+  });
+
+  @override
+  int get hashCode =>
+      phase.hashCode ^
+      progress.hashCode ^
+      detail.hashCode ^
+      finished.hashCode ^
+      error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is EngineInstallEvent &&
+          runtimeType == other.runtimeType &&
+          phase == other.phase &&
+          progress == other.progress &&
+          detail == other.detail &&
+          finished == other.finished &&
+          error == other.error;
+}
+
+/// Current engine state for the settings card.
+class EngineStatus {
+  final EngineStatusKind kind;
+
+  /// Human-readable step label while installing ("下载 uv" / "安装依赖" /
+  /// "下载模型资产" ...), empty otherwise.
+  final String phase;
+
+  /// Progress within the WHOLE install (0..1); 0 when not installing.
+  final double progress;
+
+  /// Installed engine version (pdf2zh-next pin), empty when absent.
+  final String version;
+
+  /// On-disk size of the managed environment + assets, bytes (0 unknown).
+  final PlatformInt64 sizeBytes;
+  final String? error;
+
+  const EngineStatus({
+    required this.kind,
+    required this.phase,
+    required this.progress,
+    required this.version,
+    required this.sizeBytes,
+    this.error,
+  });
+
+  @override
+  int get hashCode =>
+      kind.hashCode ^
+      phase.hashCode ^
+      progress.hashCode ^
+      version.hashCode ^
+      sizeBytes.hashCode ^
+      error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is EngineStatus &&
+          runtimeType == other.runtimeType &&
+          kind == other.kind &&
+          phase == other.phase &&
+          progress == other.progress &&
+          version == other.version &&
+          sizeBytes == other.sizeBytes &&
+          error == other.error;
+}
+
+/// Lifecycle of the downloadable translation engine (BabelDOC + pdf2zh-next
+/// in a uv-managed Python environment under `app_data_dir/babeldoc`).
+enum EngineStatusKind { notInstalled, installing, installed, failed }
+
 /// One glossary entry (table: `translation_glossary`, plan §4.4): a fixed
 /// term pair applied to every translation for consistent naming.
 class GlossaryEntry {

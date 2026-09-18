@@ -31,6 +31,60 @@ class FakeTranslationRepo extends TranslationRepository {
   final glossary = <GlossaryEntry>[];
   int _nextGlossaryId = 1;
 
+  // --- engine (BabelDOC) --------------------------------------------------
+
+  /// Current engine status reported by [getEngineStatus].
+  EngineStatus engineStatus = const EngineStatus(
+    kind: EngineStatusKind.notInstalled,
+    phase: '',
+    progress: 0,
+    version: '',
+    sizeBytes: 0,
+    error: null,
+  );
+
+  /// Event script streamed by [installEngine]; a final event with
+  /// [EngineInstallEvent.finished] ends the stream.
+  List<EngineInstallEvent> installScript = const [
+    EngineInstallEvent(
+        phase: '下载 uv', progress: 0.1, detail: '', finished: false, error: null),
+    EngineInstallEvent(
+        phase: '完成', progress: 1.0, detail: '', finished: true, error: null),
+  ];
+
+  int installCalls = 0;
+  int cancelCalls = 0;
+  int uninstallCalls = 0;
+
+  @override
+  Future<EngineStatus> getEngineStatus() async => engineStatus;
+
+  @override
+  Stream<EngineInstallEvent> installEngine() {
+    installCalls++;
+    return Stream.fromIterable(installScript);
+  }
+
+  @override
+  Future<int> cancelEngineInstall() async {
+    cancelCalls++;
+    return 1;
+  }
+
+  @override
+  Future<int> uninstallEngine() async {
+    uninstallCalls++;
+    engineStatus = const EngineStatus(
+      kind: EngineStatusKind.notInstalled,
+      phase: '',
+      progress: 0,
+      version: '',
+      sizeBytes: 0,
+      error: null,
+    );
+    return 1;
+  }
+
   @override
   Future<TranslationConfig> getTranslationConfig() async => config;
 

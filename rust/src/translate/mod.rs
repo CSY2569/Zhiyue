@@ -47,6 +47,14 @@ pub fn translating_books() -> Vec<i64> {
     translating().lock().unwrap().iter().copied().collect()
 }
 
+/// Whether ANY book has translation work in flight (engine uninstall guard).
+pub fn is_translating_any() -> bool {
+    !translating().lock().unwrap().is_empty()
+}
+
+#[cfg(feature = "ai")]
+pub mod engine;
+
 /// `{data_dir}/translated/{book_id}` -- translated PDFs (plan §6/§7).
 /// Sibling of `covers/` / `ai_images/`.
 pub fn translated_dir(book_id: i64) -> PathBuf {

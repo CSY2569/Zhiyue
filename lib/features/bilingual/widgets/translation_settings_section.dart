@@ -8,6 +8,7 @@ import 'package:rbwa/data/repositories/settings_repository.dart';
 import 'package:rbwa/data/repositories/translation_repository.dart';
 import 'package:rbwa/features/ai/providers/ai_config_provider.dart';
 import 'package:rbwa/features/bilingual/providers/translation_config_provider.dart';
+import 'package:rbwa/features/bilingual/widgets/engine_settings_card.dart';
 import 'package:rbwa/features/settings/widgets/settings_widgets.dart';
 import 'package:rbwa/src/rust/models/book.dart';
 import 'package:rbwa/src/rust/models/translate.dart';
@@ -127,11 +128,13 @@ class _TranslationSettingsSectionState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // --- 翻译引擎（BabelDOC，按需下载） --------------------------------
+        const EngineSettingsCard(),
         // --- 翻译服务 ---------------------------------------------------
         SettingsSection(
           title: '翻译服务',
           icon: Icons.cloud_outlined,
-          description: '逐段翻译正文，公式以小图保留',
+          description: '提供译文服务；引擎就绪后用于对照阅读与译文导出',
           children: [
             SettingsControlRow(
               title: '服务提供方',
