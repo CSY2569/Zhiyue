@@ -1,14 +1,13 @@
-//! Bilingual reading models (M7, `docs/BILINGUAL_READING_PLAN.md`).
+//! Bilingual reading models (M7).
 //!
-//! Types crossing the Rust <-> Dart FFI boundary for the 对照阅读 feature:
-//! per-page paragraph extraction, paragraph-level translation results, the
-//! per-page translation cache payload, whole-book progress and stream
-//! progress events. Pages are **1-indexed** throughout the translation APIs
-//! (matching the UI's `currentPage`), unlike pdfium's 0-indexed pages.
+//! Types crossing the Rust <-> Dart FFI boundary for the 对照阅读 feature.
+//! The retired built-in pipeline's per-page models (paragraphs, page
+//! translations, progress events) were removed together with the pipeline --
+//! translation now runs on the downloadable BabelDOC engine; these are the
+//! settings + glossary types that remain engine-independent. The engine's
+//! install status / progress models live in `translate::engine`.
 
 use serde::{Deserialize, Serialize};
-
-use super::annotation::NormRect;
 
 /// Translation service selection (plan §8). `ReuseAi` reuses the AI settings'
 /// OpenAI-compatible config for LLM translation.
@@ -186,178 +185,6 @@ impl Default for TranslationConfig {
     }
 }
 
-/// What a paragraph is (plan §3): normal text, a whole-paragraph formula
-/// (kept as an image, never machine-translated), or removed noise
-/// (header / footer / page number).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ParagraphKind {
-    Text,
-    Formula,
-    Noise,
-}
-
-impl ParagraphKind {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Text => "text",
-            Self::Formula => "formula",
-            Self::Noise => "noise",
-        }
-    }
-
-    /// Inverse of [ParagraphKind::as_str].
-    pub fn from_db_str(s: &str) -> Option<Self> {
-        match s {
-            "text" => Some(Self::Text),
-            "formula" => Some(Self::Formula),
-            "noise" => Some(Self::Noise),
-            _ => None,
-        }
-    }
-}
-
-/// Per-paragraph translation status in the pane (plan §5).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ParagraphStatus {
-    Pending,
-    Translating,
-    Done,
-    /// OCR confidence < 0.8 (plan §3.5): shown with a "请核对" hint.
-    LowConfidence,
-    Failed,
-    /// Placeholder backfill validation failed: the formula may be wrong.
-    FormulaCheck,
-}
-
-impl ParagraphStatus {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Pending => "pending",
-            Self::Translating => "translating",
-            Self::Done => "done",
-            Self::LowConfidence => "low_confidence",
-            Self::Failed => "failed",
-            Self::FormulaCheck => "formula_check",
-        }
-    }
-
-    /// Inverse of [ParagraphStatus::as_str].
-    pub fn from_db_str(s: &str) -> Option<Self> {
-        match s {
-            "pending" => Some(Self::Pending),
-            "translating" => Some(Self::Translating),
-            "done" => Some(Self::Done),
-            "low_confidence" => Some(Self::LowConfidence),
-            "failed" => Some(Self::Failed),
-            "formula_check" => Some(Self::FormulaCheck),
-            _ => None,
-        }
-    }
-}
-
-/// A formula region detected from font metadata (plan §3.4): the rect on
-/// the original page plus the raw formula text. `image_path`/`placeholder`
-/// are VESTIGES of the retired region-image pipeline: extraction never
-/// sets them anymore (whole-paragraph formulas keep their original page
-/// pixels; inline tokens are built dynamically by the translation layer).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FormulaRegion {
-    /// Normalized rect (top-left origin, Flutter space), same convention as
-    /// annotation rects.
-    pub rect: NormRect,
-    /// Always `None` since the region-image pipeline was removed; kept for
-    /// cache-row compatibility.
-    pub image_path: Option<String>,
-    /// The raw formula text as it appeared on the page.
-    pub source_text: String,
-    /// Always empty since the region-image pipeline was removed; kept for
-    /// cache-row compatibility.
-    pub placeholder: String,
-}
-
-/// One reconstructed paragraph of a page (plan §3): text + line rects +
-/// formula regions found inside it.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Paragraph {
-    pub text: String,
-    /// Bounding rects of the paragraph's lines (normalized).
-    pub rects: Vec<NormRect>,
-    /// 1-indexed page number.
-    pub page: i64,
-    pub kind: ParagraphKind,
-    /// 1.0 for text-layer paragraphs; the minimum OCR line confidence
-    /// otherwise.
-    pub confidence: f64,
-    pub formula_regions: Vec<FormulaRegion>,
-}
-
-/// A paragraph with its translation (plan §4-5). `translated` still contains
-/// the formula placeholder tokens: consumers substitute them with
-/// [FormulaRegion::source_text].
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TranslatedParagraph {
-    pub source: String,
-    /// Machine translation with `⟨..MATH_n⟩` tokens still in place (may be
-    /// empty for whole-paragraph formulas, which keep their original pixels).
-    pub translated: String,
-    pub kind: ParagraphKind,
-    pub status: ParagraphStatus,
-    pub confidence: f64,
-    pub formula_regions: Vec<FormulaRegion>,
-    /// Bounding rects of the paragraph's LINES (normalized, top-left origin),
-    /// copied from the extracted [Paragraph]. The overlay writer draws the
-    /// translation at this footprint; empty for rows cached before v3 (such
-    /// rows are rejected as stale before reaching the writer).
-    #[serde(default)]
-    pub rects: Vec<NormRect>,
-}
-
-/// The cached translation of one page (table: `page_translation_cache`).
-/// The cache key is (book_id, page, target_lang, provider); `source_hash`
-/// guards freshness (a re-extracted page that changed invalidates the row).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PageTranslation {
-    /// 1-indexed page number (plan §2: absolute page number, never reorder).
-    pub page: i64,
-    pub target_lang: String,
-    /// Provider id string (`deepl` / `openai_compat` / `reuse_ai`).
-    pub provider: String,
-    /// SHA-256 of the page's paragraph texts at translation time.
-    pub source_hash: String,
-    pub paragraphs: Vec<TranslatedParagraph>,
-    /// Fraction of translatable paragraphs (text kind, noise/formula
-    /// excluded) with a non-empty translation (plan §4.7).
-    pub coverage: f64,
-}
-
-/// Whole-book translation progress for the resume decision (plan §9).
-#[derive(Debug, Clone)]
-pub struct TranslationOverview {
-    pub book_id: i64,
-    /// Total page count of the book.
-    pub total_pages: i64,
-    /// Pages with a cached translation for the current target lang + provider.
-    pub translated_pages: i64,
-    /// The target language this overview was computed for.
-    pub target_lang: String,
-}
-
-/// One progress event of a `translate_page` / `build_translated_pdf` stream.
-#[derive(Debug, Clone)]
-pub struct TranslationProgressEvent {
-    /// 1-indexed page the event belongs to.
-    pub page: i64,
-    /// Paragraphs finished on the page (translate events). Build events are
-    /// page-granular: this echoes the page number as the pages-done count.
-    pub done_paragraphs: i64,
-    pub total_paragraphs: i64,
-    /// Page coverage fraction (translate events).
-    pub coverage: f64,
-    /// Whether the stream has completed (page done / whole build done).
-    pub finished: bool,
-    pub error: Option<String>,
-}
-
 /// One glossary entry (table: `translation_glossary`, plan §4.4): a fixed
 /// term pair applied to every translation for consistent naming.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -443,51 +270,5 @@ mod tests {
                 s
             );
         }
-        for s in ["text", "formula", "noise"] {
-            assert_eq!(ParagraphKind::from_db_str(s).unwrap().as_str(), s);
-        }
-        for s in ["pending", "translating", "done", "low_confidence", "failed", "formula_check"] {
-            assert_eq!(ParagraphStatus::from_db_str(s).unwrap().as_str(), s);
-        }
-    }
-
-    #[test]
-    fn page_translation_json_roundtrip() {
-        let page = PageTranslation {
-            page: 12,
-            target_lang: "中文".into(),
-            provider: "deepl".into(),
-            source_hash: "abc".into(),
-            paragraphs: vec![TranslatedParagraph {
-                source: "Hello ⟨F1-MATH_0⟩ world".into(),
-                translated: "你好 ⟨F1-MATH_0⟩ 世界".into(),
-                kind: ParagraphKind::Text,
-                status: ParagraphStatus::Done,
-                confidence: 1.0,
-                formula_regions: vec![FormulaRegion {
-                    rect: NormRect { x: 0.1, y: 0.2, w: 0.3, h: 0.05 },
-                    image_path: None,
-                    source_text: "x^2".into(),
-                    placeholder: "⟨F1-MATH_0⟩".into(),
-                }],
-                rects: vec![NormRect { x: 0.1, y: 0.2, w: 0.3, h: 0.05 }],
-            }],
-            coverage: 1.0,
-        };
-        let back: PageTranslation =
-            serde_json::from_str(&serde_json::to_string(&page).unwrap()).unwrap();
-        assert_eq!(back.page, 12);
-        assert_eq!(back.paragraphs.len(), 1);
-        assert_eq!(back.paragraphs[0].translated, "你好 ⟨F1-MATH_0⟩ 世界");
-        assert_eq!(back.paragraphs[0].formula_regions.len(), 1);
-        assert_eq!(back.paragraphs[0].rects.len(), 1);
-
-        // Legacy JSON without rects (pre-v3 rows) reads with empty rects.
-        let legacy: TranslatedParagraph = serde_json::from_str(
-            r#"{"source":"a","translated":"b","kind":"Text","status":"Done","confidence":1.0,"formula_regions":[]}"#,
-        )
-        .unwrap();
-        assert!(legacy.rects.is_empty());
-        assert_eq!(back.paragraphs[0].formula_regions[0].image_path, None);
     }
 }

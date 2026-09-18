@@ -83,24 +83,12 @@ uuid = { version = "1", features = ["v4"] }
 rapidocr-core = { version = "0.2.2", default-features = false, optional = true }
 jieba-rs = "0.10.3"
 
-# Bilingual reading translated-PDF writer (M7, plan §6 fallback after the
-# font-subsetting verification): the font is subset at build time to just the
-# glyphs the book uses, and the PDF is assembled with lopdf emitting
-# Identity-H CID text. `subsetter` needs TrueType (glyf) outlines; `ttf-parser`
-# maps unicode -> glyph ids and supplies the original advances.
-lopdf = { version = "0.45", optional = true }
-subsetter = { version = "0.2.6", optional = true }
-ttf-parser = { version = "0.25", optional = true }
-
 [features]
 default = ["pdf", "ai", "ocr"]
 # Opt-in subsystem crates, enabled per milestone to keep the build lean.
 pdf = [
     "dep:pdfium-render",
     "dep:image",
-    "dep:lopdf",
-    "dep:subsetter",
-    "dep:ttf-parser",
 ]
 # M4: AI streaming client (hand-written reqwest SSE). Vision screenshots are
 # sent as base64 data URLs, so no image-decoding dependency is needed here.

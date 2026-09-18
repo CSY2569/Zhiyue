@@ -37,10 +37,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RustStreamSink<String> dco_decode_StreamSink_String_Sse(dynamic raw);
 
   @protected
-  RustStreamSink<TranslationProgressEvent>
-  dco_decode_StreamSink_translation_progress_event_Sse(dynamic raw);
-
-  @protected
   String dco_decode_String(dynamic raw);
 
   @protected
@@ -95,9 +91,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   OcrResult dco_decode_box_autoadd_ocr_result(dynamic raw);
 
   @protected
-  PageTranslation dco_decode_box_autoadd_page_translation(dynamic raw);
-
-  @protected
   ReadingProgress dco_decode_box_autoadd_reading_progress(dynamic raw);
 
   @protected
@@ -119,16 +112,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ExportResult dco_decode_export_result(dynamic raw);
 
   @protected
-  ExtractParagraphsResult dco_decode_extract_paragraphs_result(dynamic raw);
-
-  @protected
   double dco_decode_f_32(dynamic raw);
 
   @protected
   double dco_decode_f_64(dynamic raw);
-
-  @protected
-  FormulaRegion dco_decode_formula_region(dynamic raw);
 
   @protected
   GlossaryEntry dco_decode_glossary_entry(dynamic raw);
@@ -179,9 +166,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<CustomPrompt> dco_decode_list_custom_prompt(dynamic raw);
 
   @protected
-  List<FormulaRegion> dco_decode_list_formula_region(dynamic raw);
-
-  @protected
   List<GlossaryEntry> dco_decode_list_glossary_entry(dynamic raw);
 
   @protected
@@ -200,12 +184,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<OutlineEntry> dco_decode_list_outline_entry(dynamic raw);
 
   @protected
-  List<Paragraph> dco_decode_list_paragraph(dynamic raw);
-
-  @protected
-  Int64List dco_decode_list_prim_i_64_strict(dynamic raw);
-
-  @protected
   List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
 
   @protected
@@ -219,9 +197,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<TextAnnotation> dco_decode_list_text_annotation(dynamic raw);
-
-  @protected
-  List<TranslatedParagraph> dco_decode_list_translated_paragraph(dynamic raw);
 
   @protected
   NormRect dco_decode_norm_rect(dynamic raw);
@@ -263,9 +238,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   OcrResult? dco_decode_opt_box_autoadd_ocr_result(dynamic raw);
 
   @protected
-  PageTranslation? dco_decode_opt_box_autoadd_page_translation(dynamic raw);
-
-  @protected
   ReadingProgress? dco_decode_opt_box_autoadd_reading_progress(dynamic raw);
 
   @protected
@@ -279,21 +251,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PageRenderResult dco_decode_page_render_result(dynamic raw);
-
-  @protected
-  PageTranslation dco_decode_page_translation(dynamic raw);
-
-  @protected
-  PageTranslationResult dco_decode_page_translation_result(dynamic raw);
-
-  @protected
-  Paragraph dco_decode_paragraph(dynamic raw);
-
-  @protected
-  ParagraphKind dco_decode_paragraph_kind(dynamic raw);
-
-  @protected
-  ParagraphStatus dco_decode_paragraph_status(dynamic raw);
 
   @protected
   ReadingProgress dco_decode_reading_progress(dynamic raw);
@@ -317,12 +274,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TextAnnotationKind dco_decode_text_annotation_kind(dynamic raw);
 
   @protected
-  TranslatedPageBitmap dco_decode_translated_page_bitmap(dynamic raw);
-
-  @protected
-  TranslatedParagraph dco_decode_translated_paragraph(dynamic raw);
-
-  @protected
   TranslationBackgroundBehavior dco_decode_translation_background_behavior(
     dynamic raw,
   );
@@ -332,12 +283,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TranslationMode dco_decode_translation_mode(dynamic raw);
-
-  @protected
-  TranslationOverviewResult dco_decode_translation_overview_result(dynamic raw);
-
-  @protected
-  TranslationProgressEvent dco_decode_translation_progress_event(dynamic raw);
 
   @protected
   TranslationProviderKind dco_decode_translation_provider_kind(dynamic raw);
@@ -364,12 +309,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RustStreamSink<String> sse_decode_StreamSink_String_Sse(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  RustStreamSink<TranslationProgressEvent>
-  sse_decode_StreamSink_translation_progress_event_Sse(
     SseDeserializer deserializer,
   );
 
@@ -434,11 +373,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   OcrResult sse_decode_box_autoadd_ocr_result(SseDeserializer deserializer);
 
   @protected
-  PageTranslation sse_decode_box_autoadd_page_translation(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   ReadingProgress sse_decode_box_autoadd_reading_progress(
     SseDeserializer deserializer,
   );
@@ -464,18 +398,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ExportResult sse_decode_export_result(SseDeserializer deserializer);
 
   @protected
-  ExtractParagraphsResult sse_decode_extract_paragraphs_result(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   double sse_decode_f_32(SseDeserializer deserializer);
 
   @protected
   double sse_decode_f_64(SseDeserializer deserializer);
-
-  @protected
-  FormulaRegion sse_decode_formula_region(SseDeserializer deserializer);
 
   @protected
   GlossaryEntry sse_decode_glossary_entry(SseDeserializer deserializer);
@@ -532,11 +458,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  List<FormulaRegion> sse_decode_list_formula_region(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   List<GlossaryEntry> sse_decode_list_glossary_entry(
     SseDeserializer deserializer,
   );
@@ -561,12 +482,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  List<Paragraph> sse_decode_list_paragraph(SseDeserializer deserializer);
-
-  @protected
-  Int64List sse_decode_list_prim_i_64_strict(SseDeserializer deserializer);
-
-  @protected
   List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
 
   @protected
@@ -582,11 +497,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<TextAnnotation> sse_decode_list_text_annotation(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  List<TranslatedParagraph> sse_decode_list_translated_paragraph(
     SseDeserializer deserializer,
   );
 
@@ -634,11 +544,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  PageTranslation? sse_decode_opt_box_autoadd_page_translation(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   ReadingProgress? sse_decode_opt_box_autoadd_reading_progress(
     SseDeserializer deserializer,
   );
@@ -654,23 +559,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PageRenderResult sse_decode_page_render_result(SseDeserializer deserializer);
-
-  @protected
-  PageTranslation sse_decode_page_translation(SseDeserializer deserializer);
-
-  @protected
-  PageTranslationResult sse_decode_page_translation_result(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  Paragraph sse_decode_paragraph(SseDeserializer deserializer);
-
-  @protected
-  ParagraphKind sse_decode_paragraph_kind(SseDeserializer deserializer);
-
-  @protected
-  ParagraphStatus sse_decode_paragraph_status(SseDeserializer deserializer);
 
   @protected
   ReadingProgress sse_decode_reading_progress(SseDeserializer deserializer);
@@ -698,16 +586,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  TranslatedPageBitmap sse_decode_translated_page_bitmap(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TranslatedParagraph sse_decode_translated_paragraph(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   TranslationBackgroundBehavior sse_decode_translation_background_behavior(
     SseDeserializer deserializer,
   );
@@ -717,16 +595,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TranslationMode sse_decode_translation_mode(SseDeserializer deserializer);
-
-  @protected
-  TranslationOverviewResult sse_decode_translation_overview_result(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  TranslationProgressEvent sse_decode_translation_progress_event(
-    SseDeserializer deserializer,
-  );
 
   @protected
   TranslationProviderKind sse_decode_translation_provider_kind(
@@ -760,12 +628,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_StreamSink_String_Sse(
     RustStreamSink<String> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_StreamSink_translation_progress_event_Sse(
-    RustStreamSink<TranslationProgressEvent> self,
     SseSerializer serializer,
   );
 
@@ -842,12 +704,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_box_autoadd_page_translation(
-    PageTranslation self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_box_autoadd_reading_progress(
     ReadingProgress self,
     SseSerializer serializer,
@@ -875,19 +731,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_export_result(ExportResult self, SseSerializer serializer);
 
   @protected
-  void sse_encode_extract_paragraphs_result(
-    ExtractParagraphsResult self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
 
   @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_formula_region(FormulaRegion self, SseSerializer serializer);
 
   @protected
   void sse_encode_glossary_entry(GlossaryEntry self, SseSerializer serializer);
@@ -956,12 +803,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_formula_region(
-    List<FormulaRegion> self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_list_glossary_entry(
     List<GlossaryEntry> self,
     SseSerializer serializer,
@@ -992,18 +833,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_paragraph(
-    List<Paragraph> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_prim_i_64_strict(
-    Int64List self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);
 
   @protected
@@ -1027,12 +856,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_text_annotation(
     List<TextAnnotation> self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_list_translated_paragraph(
-    List<TranslatedParagraph> self,
     SseSerializer serializer,
   );
 
@@ -1091,12 +914,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_opt_box_autoadd_page_translation(
-    PageTranslation? self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_opt_box_autoadd_reading_progress(
     ReadingProgress? self,
     SseSerializer serializer,
@@ -1117,30 +934,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_page_render_result(
     PageRenderResult self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_page_translation(
-    PageTranslation self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_page_translation_result(
-    PageTranslationResult self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_paragraph(Paragraph self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_paragraph_kind(ParagraphKind self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_paragraph_status(
-    ParagraphStatus self,
     SseSerializer serializer,
   );
 
@@ -1181,18 +974,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_translated_page_bitmap(
-    TranslatedPageBitmap self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_translated_paragraph(
-    TranslatedParagraph self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_translation_background_behavior(
     TranslationBackgroundBehavior self,
     SseSerializer serializer,
@@ -1207,18 +988,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_translation_mode(
     TranslationMode self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_translation_overview_result(
-    TranslationOverviewResult self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_translation_progress_event(
-    TranslationProgressEvent self,
     SseSerializer serializer,
   );
 

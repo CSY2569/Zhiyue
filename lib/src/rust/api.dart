@@ -472,98 +472,7 @@ Future<void> ensureBookIndex({required PlatformInt64 bookId}) =>
 Future<String> searchIndexStatus({required PlatformInt64 bookId}) =>
     RustLib.instance.api.crateApiSearchIndexStatus(bookId: bookId);
 
-/// Paragraphs of one page (1-indexed) for inspection. Extracts on an
-/// INDEPENDENT pdfium handle so it never blocks reader rendering (plan §3.0).
-/// Scanned pages without a text layer return an empty list (the translate
-/// call decides whether to run OCR).
-Future<ExtractParagraphsResult> extractPageParagraphs({
-  required PlatformInt64 bookId,
-  required PlatformInt64 page,
-}) => RustLib.instance.api.crateApiExtractPageParagraphs(
-  bookId: bookId,
-  page: page,
-);
-
-/// Reads the cached translation of a page for the CURRENT target language +
-/// provider (the cache key is derived from settings, plan §2). A missing row
-/// is `translation: None` (not an error). Reading refreshes the LRU access
-/// time (plan §7).
-Future<PageTranslationResult> getPageTranslation({
-  required PlatformInt64 bookId,
-  required PlatformInt64 page,
-}) =>
-    RustLib.instance.api.crateApiGetPageTranslation(bookId: bookId, page: page);
-
-Future<TranslationOverviewResult> getTranslationOverview({
-  required PlatformInt64 bookId,
-}) => RustLib.instance.api.crateApiGetTranslationOverview(bookId: bookId);
-
-/// Pages of [book_id] with a CURRENT cached translation for the active target
-/// language + provider (plan §9). The Dart queue seeds its work list from this
-/// single call instead of probing every page (an N+1 of config re-reads).
-Future<Int64List> getTranslatedPages({required PlatformInt64 bookId}) =>
-    RustLib.instance.api.crateApiGetTranslatedPages(bookId: bookId);
-
-/// Translates one page (1-indexed), streaming progress events (plan §9:
-/// the atomic per-page API the Dart queue drives). `force` re-extracts and
-/// overwrites the cache even on a hit; the default path returns the cached
-/// row instantly.
-///
-/// Async: extraction + HTTP must not block the UI.
-Stream<TranslationProgressEvent> translatePage({
-  required PlatformInt64 bookId,
-  required PlatformInt64 page,
-  required bool force,
-}) => RustLib.instance.api.crateApiTranslatePage(
-  bookId: bookId,
-  page: page,
-  force: force,
-);
-
-/// Deletes all cached translations of a book (rows + artifacts, plan §7).
-/// Returns 1 on success, 0 on failure.
-Future<int> clearTranslations({required PlatformInt64 bookId}) =>
-    RustLib.instance.api.crateApiClearTranslations(bookId: bookId);
-
-/// Builds the translated PDF on demand (plan §6), streaming page-granular
-/// progress. Final completion is observed by the stream ending; the UI then
-/// opens the path from [get_translated_pdf_path]. Errors go to
-/// `sink.add_error`.
-Stream<TranslationProgressEvent> buildTranslatedPdf({
-  required PlatformInt64 bookId,
-  required String targetLang,
-}) => RustLib.instance.api.crateApiBuildTranslatedPdf(
-  bookId: bookId,
-  targetLang: targetLang,
-);
-
-/// Absolute path the translated PDF for [book_id] + [target_lang] would be
-/// (or is) written to; the UI opens it after a build completes.
-Future<String> getTranslatedPdfPath({
-  required PlatformInt64 bookId,
-  required String targetLang,
-}) => RustLib.instance.api.crateApiGetTranslatedPdfPath(
-  bookId: bookId,
-  targetLang: targetLang,
-);
-
-/// Renders ONE page's translation as a PDF page bitmap (the bilingual pane's
-/// page-level channel, plan §5): the pane displays the translation beside the
-/// original page instead of as a text list. Async: building + rasterizing the
-/// single-page PDF is CPU/IO work.
-Future<TranslatedPageBitmap> renderTranslatedPage({
-  required PlatformInt64 bookId,
-  required PlatformInt64 page,
-  required String targetLang,
-  required double dpiScale,
-}) => RustLib.instance.api.crateApiRenderTranslatedPage(
-  bookId: bookId,
-  page: page,
-  targetLang: targetLang,
-  dpiScale: dpiScale,
-);
-
-/// Deletes a book's translated artifacts (PDF + formula images); the cache
+/// Deletes a book's translated artifacts (the translated PDF); the cache
 /// rows are removed by the FK cascade on book delete. Returns 1 on success.
 Future<int> clearTranslationArtifacts({required PlatformInt64 bookId}) =>
     RustLib.instance.api.crateApiClearTranslationArtifacts(bookId: bookId);
@@ -680,25 +589,6 @@ class ExportResult {
       other is ExportResult &&
           runtimeType == other.runtimeType &&
           content == other.content &&
-          error == other.error;
-}
-
-/// Result of `extract_page_paragraphs`.
-class ExtractParagraphsResult {
-  final List<Paragraph> paragraphs;
-  final String? error;
-
-  const ExtractParagraphsResult({required this.paragraphs, this.error});
-
-  @override
-  int get hashCode => paragraphs.hashCode ^ error.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is ExtractParagraphsResult &&
-          runtimeType == other.runtimeType &&
-          paragraphs == other.paragraphs &&
           error == other.error;
 }
 
@@ -911,26 +801,6 @@ class PageRenderResult {
           error == other.error;
 }
 
-/// Result of `get_page_translation` / `get_translation_overview`.
-class PageTranslationResult {
-  /// The cached translation, or None when the page has not been translated.
-  final PageTranslation? translation;
-  final String? error;
-
-  const PageTranslationResult({this.translation, this.error});
-
-  @override
-  int get hashCode => translation.hashCode ^ error.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is PageTranslationResult &&
-          runtimeType == other.runtimeType &&
-          translation == other.translation &&
-          error == other.error;
-}
-
 /// Result of a full-page scan: the recognized lines (empty until the engine
 /// is available) + the mode used, or an explicit error.
 class ScanPageResult {
@@ -995,78 +865,5 @@ class SearchResult {
       other is SearchResult &&
           runtimeType == other.runtimeType &&
           hits == other.hits &&
-          error == other.error;
-}
-
-/// Result of [render_translated_page]: a rendered RGBA page bitmap.
-class TranslatedPageBitmap {
-  final int width;
-  final int height;
-  final Uint8List rgba;
-
-  /// Whether the page has a current translation (false -> [rgba] is empty
-  /// and the pane shows a "尚未翻译"placeholder).
-  final bool hasTranslation;
-  final String? error;
-
-  const TranslatedPageBitmap({
-    required this.width,
-    required this.height,
-    required this.rgba,
-    required this.hasTranslation,
-    this.error,
-  });
-
-  @override
-  int get hashCode =>
-      width.hashCode ^
-      height.hashCode ^
-      rgba.hashCode ^
-      hasTranslation.hashCode ^
-      error.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TranslatedPageBitmap &&
-          runtimeType == other.runtimeType &&
-          width == other.width &&
-          height == other.height &&
-          rgba == other.rgba &&
-          hasTranslation == other.hasTranslation &&
-          error == other.error;
-}
-
-/// Whole-book progress (plan §9): translated pages vs total for the current
-/// target language + provider; the Dart queue uses `translated < total` to
-/// decide whether to resume.
-class TranslationOverviewResult {
-  final PlatformInt64 totalPages;
-  final PlatformInt64 translatedPages;
-  final String targetLang;
-  final String? error;
-
-  const TranslationOverviewResult({
-    required this.totalPages,
-    required this.translatedPages,
-    required this.targetLang,
-    this.error,
-  });
-
-  @override
-  int get hashCode =>
-      totalPages.hashCode ^
-      translatedPages.hashCode ^
-      targetLang.hashCode ^
-      error.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TranslationOverviewResult &&
-          runtimeType == other.runtimeType &&
-          totalPages == other.totalPages &&
-          translatedPages == other.translatedPages &&
-          targetLang == other.targetLang &&
           error == other.error;
 }

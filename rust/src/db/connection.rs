@@ -205,6 +205,14 @@ fn migrate(conn: &Connection) -> AppResult<()> {
             tracing::info!("migrating schema 6 -> 7 (bilingual reading tables)");
             record_version(conn)?;
         }
+        Some(7) => {
+            // v8 DROPS the retired pipeline's per-page cache (translation
+            // moved to the downloadable BabelDOC engine; the rows have no
+            // consumer). `translation_glossary` stays.
+            tracing::info!("migrating schema 7 -> 8 (drop page_translation_cache)");
+            conn.execute_batch("DROP TABLE IF EXISTS page_translation_cache;")?;
+            record_version(conn)?;
+        }
         Some(v) => {
             tracing::warn!(recorded = v, expected = SCHEMA_VERSION, "schema version mismatch -- migration not yet implemented");
         }
@@ -465,8 +473,7 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(SCHEMA_SQL).unwrap();
         conn.execute_batch(
-            "DROP TABLE page_translation_cache;
-             DROP TABLE translation_glossary;
+            "DROP TABLE translation_glossary;
              DELETE FROM schema_version;
              INSERT INTO schema_version (version) VALUES (6);",
         )
@@ -474,8 +481,32 @@ mod tests {
         conn
     }
 
+    /// A v7-era database: the RETIRED pipeline's `page_translation_cache`
+    /// exists (v7 added it) alongside the glossary.
+    fn v7_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(SCHEMA_SQL).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE page_translation_cache (
+                 book_id         INTEGER NOT NULL,
+                 page            INTEGER NOT NULL,
+                 target_lang     TEXT NOT NULL,
+                 provider        TEXT NOT NULL,
+                 source_hash     TEXT NOT NULL,
+                 result_json     TEXT NOT NULL,
+                 created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+                 last_accessed_at TEXT NOT NULL DEFAULT (datetime('now')),
+                 PRIMARY KEY (book_id, page, target_lang, provider)
+             );
+             DELETE FROM schema_version;
+             INSERT INTO schema_version (version) VALUES (7);",
+        )
+        .unwrap();
+        conn
+    }
+
     #[test]
-    fn migrate_v6_to_v7_creates_bilingual_reading_tables() {
+    fn migrate_v6_records_current_version_with_glossary_only() {
         let conn = v6_db();
         // `init_database_at` order: SCHEMA_SQL (idempotent) then migrate.
         conn.execute_batch(SCHEMA_SQL).unwrap();
@@ -486,47 +517,46 @@ mod tests {
             .unwrap();
         assert_eq!(v, SCHEMA_VERSION);
 
-        // The cache table works, upserts on its key and cascades on book
-        // delete (plan §7: deleting a book removes its translations).
+        // Glossary table accepts entries; the retired pipeline's cache table
+        // never (re)appears for a pre-v7 database.
         conn.execute(
-            "INSERT INTO books (title, original_path, stored_path, file_type) \
-             VALUES ('测试书', '/x.pdf', '/x.pdf', 'pdf')",
+            "INSERT INTO translation_glossary (source_term, target_term) \
+             VALUES ('quantum', '量子')",
             [],
         )
         .unwrap();
-        conn.execute(
-            "INSERT INTO page_translation_cache \
-             (book_id, page, target_lang, provider, source_hash, result_json) \
-             VALUES (1, 1, '中文', 'deepl', 'h', '{}')",
-            [],
-        )
-        .unwrap();
-        conn.execute(
-            "INSERT INTO page_translation_cache \
-             (book_id, page, target_lang, provider, source_hash, result_json) \
-             VALUES (1, 1, '中文', 'deepl', 'h2', '{}') \
-             ON CONFLICT (book_id, page, target_lang, provider) DO UPDATE SET \
-                 result_json = excluded.result_json, \
-                 source_hash = excluded.source_hash",
-            [],
-        )
-        .unwrap();
-        let n: i64 = conn
-            .query_row("SELECT COUNT(*) FROM page_translation_cache", [], |r| r.get(0))
-            .unwrap();
-        assert_eq!(n, 1, "upsert must replace, not accumulate");
-        let hash: String = conn
-            .query_row("SELECT source_hash FROM page_translation_cache", [], |r| r.get(0))
-            .unwrap();
-        assert_eq!(hash, "h2");
+        assert!(
+            conn.query_row("SELECT COUNT(*) FROM page_translation_cache", [], |r| r
+                .get::<_, i64>(0))
+                .is_err(),
+            "v8 must not carry the retired page cache"
+        );
 
-        conn.execute("DELETE FROM books WHERE id = 1", []).unwrap();
-        let n: i64 = conn
-            .query_row("SELECT COUNT(*) FROM page_translation_cache", [], |r| r.get(0))
-            .unwrap();
-        assert_eq!(n, 0, "cache rows must follow the book cascade");
+        // migrate is idempotent once up to date.
+        migrate(&conn).unwrap();
+    }
 
-        // Glossary table accepts entries.
+    #[test]
+    fn migrate_v7_to_v8_drops_retired_page_cache_and_keeps_glossary() {
+        let conn = v7_db();
+        conn.execute_batch(SCHEMA_SQL).unwrap();
+        migrate(&conn).unwrap();
+
+        let v: u32 = conn
+            .query_row("SELECT MAX(version) FROM schema_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(v, SCHEMA_VERSION);
+
+        // The retired pipeline's cache is dropped (translation moved to the
+        // downloadable BabelDOC engine; the rows had no consumer).
+        assert!(
+            conn.query_row("SELECT COUNT(*) FROM page_translation_cache", [], |r| r
+                .get::<_, i64>(0))
+                .is_err(),
+            "page_translation_cache must be dropped by the v8 migration"
+        );
+
+        // The glossary survives the upgrade.
         conn.execute(
             "INSERT INTO translation_glossary (source_term, target_term) \
              VALUES ('quantum', '量子')",
@@ -534,7 +564,7 @@ mod tests {
         )
         .unwrap();
 
-        // migrate is idempotent once up to date.
+        // Idempotent once up to date.
         migrate(&conn).unwrap();
     }
 }
