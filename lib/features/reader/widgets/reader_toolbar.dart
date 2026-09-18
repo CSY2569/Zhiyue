@@ -3,11 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:rbwa/core/widgets/toolbar_icon_button.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
-import 'package:rbwa/features/ai/providers/ai_config_provider.dart';
 import 'package:rbwa/features/annotation/providers/image_mark_provider.dart'
     show MarkTool, markToolProvider;
-import 'package:rbwa/features/bilingual/bilingual_actions.dart'
-    show exportTranslatedPdf, startWholeBookTranslation;
 import 'package:rbwa/features/bilingual/providers/page_translation_provider.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
 import 'package:rbwa/features/screenshot/screenshot_provider.dart';
@@ -31,7 +28,6 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
     final state = ref.watch(viewerProvider);
     final notifier = ref.read(viewerProvider.notifier);
     final theme = Theme.of(context);
-    final targetLang = ref.watch(translateTargetLangProvider);
 
     return Container(
       height: 48,
@@ -63,9 +59,10 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
             active: state.openSidebar == SidebarType.annotations,
             onTap: () => notifier.toggleSidebar(SidebarType.annotations),
           ),
-          // 对照阅读 (bilingual reading, M7): double-page-style spread —
+          // 对照阅读 (bilingual reading, M7): double-page-style spread --
           // the reading area splits into original (left) + translation
-          // (right) at the same display size.
+          // (right) at the same display size. The spread actions (export /
+          // whole-book) return together with the BabelDOC engine integration.
           ToolbarIconButton(
             icon: Icons.translate,
             tooltip: '对照阅读',
@@ -73,26 +70,6 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
             onTap: () =>
                 ref.read(translationPaneProvider.notifier).toggle(),
           ),
-          // Spread actions (visible only while 对照 is open): export the
-          // translated PDF and start/track a whole-book run.
-          if (ref.watch(translationPaneProvider.select((s) => s.open))) ...[
-            IconButton(
-              icon: const Icon(Icons.picture_as_pdf_outlined, size: 20),
-              tooltip: '导出译文 PDF',
-              onPressed: state.book == null
-                  ? null
-                  : () => exportTranslatedPdf(
-                      context, ref, state.book!.id, targetLang),
-            ),
-            IconButton(
-              icon: const Icon(Icons.download_done_outlined, size: 20),
-              tooltip: '整本翻译',
-              onPressed: state.book == null
-                  ? null
-                  : () => startWholeBookTranslation(
-                      context, ref, state.book!.id),
-            ),
-          ],
           const VDivider(),
           // View mode selector (3.1): one popup for the three modes.
           const _ModeSelector(),

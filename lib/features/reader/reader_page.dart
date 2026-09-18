@@ -16,7 +16,6 @@ import 'package:rbwa/features/annotation/widgets/mark_toolbar.dart';
 import 'package:rbwa/features/annotation/widgets/note_composer.dart';
 import 'package:rbwa/features/annotation/widgets/note_popup.dart';
 import 'package:rbwa/features/bilingual/providers/page_translation_provider.dart';
-import 'package:rbwa/features/bilingual/providers/translation_queue_provider.dart';
 import 'package:rbwa/features/bilingual/widgets/translated_pane.dart'
     show TranslatedColumn;
 import 'package:rbwa/features/reader/providers/panel_layout.dart';
@@ -27,7 +26,6 @@ import 'package:rbwa/features/reader/widgets/sidebars/notes_rail.dart';
 import 'package:rbwa/features/reader/widgets/sidebars/outline_tree.dart';
 import 'package:rbwa/features/reader/widgets/sidebars/thumbnail_rail.dart';
 import 'package:rbwa/features/search/providers/search_providers.dart';
-import 'package:rbwa/src/rust/models/progress.dart';
 
 /// Reader page (FEATURES §3 + §4 + §6).
 ///
@@ -53,10 +51,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   late final ProviderSubscription _selectionSub;
   late final ProviderSubscription _viewerSub;
   late final ProviderSubscription _aiSub;
-  late final ProviderSubscription _queueSub;
 
   bool _sidebarCollapseNotified = false;
-  int? _lastQueuedBookId;
 
   @override
   void initState() {
@@ -109,28 +105,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       },
     );
 
-    // Bilingual reading queue (plan §10): 随进度 mode enqueues the visible
-    // page + the next two on every page turn; a re-opened book resumes an
-    // unfinished whole-book run per the background setting (plan §9).
-    _queueSub = ref.listenManual(
-      viewerProvider.select((s) => (s.book?.id, s.mode, s.currentPage)),
-      (prev, next) {
-        final bookId = next.$1;
-        if (bookId == null) return;
-        final queue = ref.read(translationQueueProvider.notifier);
-        final newBook = _lastQueuedBookId != bookId;
-        _lastQueuedBookId = bookId;
-        if (newBook) {
-          queue.resumeIfNeeded(bookId, ref.read(viewerProvider).pageCount);
-        }
-        if (prev != next) {
-          final List<int> visible = next.$2 == ViewMode.single
-              ? [next.$3]
-              : [next.$3, next.$3 + 1];
-          queue.onVisiblePages(bookId, visible);
-        }
-      },
-    );
+    // The bilingual-reading queue subscription was removed together with the
+    // built-in translation pipeline; the BabelDOC engine integration will add
+    // its own task wiring.
   }
 
   void _setVisible(OverlayPortalController c, bool show) {
@@ -196,7 +173,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     _selectionSub.close();
     _viewerSub.close();
     _aiSub.close();
-    _queueSub.close();
     // NOTE: cannot call ref.read() here -- Riverpod forbids using `ref` after
     // the widget is disposed. The ViewerNotifier's own dispose() cancels the
     // debounce timer; closing the pdfium document happens lazily when the

@@ -3,41 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rbwa/src/rust/api.dart' as rust;
 import 'package:rbwa/src/rust/models/translate.dart';
 
-/// Wrapper around the FRB bilingual-reading bindings (M7, plan §9).
+/// Wrapper around the FRB bilingual-reading bindings (M7).
 ///
-/// The only place the translation UI touches `lib/src/rust/*` directly
-/// (ARCHITECTURE §1). Streaming page translation returns a
-/// `Stream<TranslationProgressEvent>`; cancelling the subscription stops the
-/// work on the Rust side.
+/// The built-in per-page pipeline was retired in favor of the downloadable
+/// BabelDOC engine; this repository now carries the engine-independent
+/// surface (config KV, glossary, in-flight registry, artifact cleanup).
+/// Engine install/status methods arrive with the engine integration.
 class TranslationRepository {
-  /// Translates one page, streaming progress. [force] re-extracts and
-  /// overwrites the cache even on a hit.
-  Stream<TranslationProgressEvent> translatePage({
-    required int bookId,
-    required int page,
-    bool force = false,
-  }) =>
-      rust.translatePage(bookId: bookId, page: page, force: force);
-
-  /// The cached translation of a page (null when untranslated). Refreshes
-  /// the LRU access time on the Rust side.
-  Future<rust.PageTranslationResult> getPageTranslation(
-    int bookId,
-    int page,
-  ) =>
-      rust.getPageTranslation(bookId: bookId, page: page);
-
-  /// Whole-book progress (translated vs total pages) for the resume check.
-  Future<rust.TranslationOverviewResult> getTranslationOverview(int bookId) =>
-      rust.getTranslationOverview(bookId: bookId);
-
-  /// Pages of [bookId] with a CURRENT cached translation (stale rows filtered
-  /// by the core). One batched read the queue seeds its work list from.
-  Future<Set<int>> getTranslatedPages(int bookId) async =>
-      (await rust.getTranslatedPages(bookId: bookId))
-          .map((p) => p.toInt())
-          .toSet();
-
   /// Reads the 对照阅读 config (KV `translation_config`).
   Future<TranslationConfig> getTranslationConfig() =>
       rust.getTranslationConfig();
@@ -53,6 +25,10 @@ class TranslationRepository {
   /// Clears the translating registration (finished / cancelled).
   Future<int> cancelTranslation(int bookId) =>
       rust.cancelTranslation(bookId: bookId);
+
+  /// Deletes a book's translated artifacts (the produced PDFs).
+  Future<int> clearTranslationArtifacts(int bookId) =>
+      rust.clearTranslationArtifacts(bookId: bookId);
 
   /// Glossary entries.
   Future<rust.GlossaryResult> listGlossary() => rust.listTranslationGlossary();
@@ -74,38 +50,6 @@ class TranslationRepository {
   /// Removes a glossary entry; returns 1 on success.
   Future<int> deleteGlossaryEntry(int id) =>
       rust.deleteTranslationGlossary(id: id);
-
-  /// Builds the translated PDF on demand, streaming page-granular progress
-  /// (plan §6). Completion is observed by the stream ending; read the output
-  /// path with [translatedPdfPath].
-  Stream<TranslationProgressEvent> buildTranslatedPdf({
-    required int bookId,
-    required String targetLang,
-  }) =>
-      rust.buildTranslatedPdf(bookId: bookId, targetLang: targetLang);
-
-  /// Absolute path the translated PDF is (or would be) written to.
-  Future<String> translatedPdfPath({
-    required int bookId,
-    required String targetLang,
-  }) =>
-      rust.getTranslatedPdfPath(bookId: bookId, targetLang: targetLang);
-
-  /// Renders ONE page's translation to an RGBA bitmap (the pane's page-level
-  /// channel): the translation is displayed as a PDF page beside the original.
-  /// [hasTranslation] false -> the page is untranslated (show a placeholder).
-  Future<rust.TranslatedPageBitmap> renderTranslatedPage({
-    required int bookId,
-    required int page,
-    required String targetLang,
-    double dpiScale = 1.0,
-  }) =>
-      rust.renderTranslatedPage(
-        bookId: bookId,
-        page: page,
-        targetLang: targetLang,
-        dpiScale: dpiScale,
-      );
 }
 
 /// Riverpod provider for the singleton [TranslationRepository].

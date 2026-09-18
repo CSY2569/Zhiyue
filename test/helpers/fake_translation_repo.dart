@@ -1,12 +1,10 @@
-import 'dart:typed_data';
-
 import 'package:rbwa/data/repositories/translation_repository.dart';
-import 'package:rbwa/src/rust/api.dart'
-    show GlossaryResult, PageTranslationResult, TranslatedPageBitmap, TranslationOverviewResult;
+import 'package:rbwa/src/rust/api.dart' show GlossaryResult;
 import 'package:rbwa/src/rust/models/translate.dart';
 
-/// Fake translation repository for widget tests: no Rust, in-memory cache
-/// keyed by page, streaming events driven by a fixed script.
+/// Fake translation repository for widget tests: no Rust, in-memory config +
+/// glossary + registry bookkeeping. The retired per-page pipeline methods are
+/// gone; engine install/status methods arrive with the engine integration.
 class FakeTranslationRepo extends TranslationRepository {
   FakeTranslationRepo({
     this.config = const TranslationConfig(
@@ -26,18 +24,12 @@ class FakeTranslationRepo extends TranslationRepository {
   TranslationConfig config;
   TranslationConfig? saved;
 
-  /// page -> cached translation.
-  final cache = <int, PageTranslation>{};
-  final translateCalls = <(int, int, bool)>[];
   final started = <int>[];
   final cancelled = <int>[];
+  final clearedArtifacts = <int>[];
 
-  /// When true, [translatePage] streams an error instead of a result.
-  bool failTranslate = false;
-
-  /// Whether [renderTranslatedPage] reports a translation for the page.
-  /// A 2x2 opaque bitmap is returned so the provider decodes a real image.
-  bool hasTranslation = true;
+  final glossary = <GlossaryEntry>[];
+  int _nextGlossaryId = 1;
 
   @override
   Future<TranslationConfig> getTranslationConfig() async => config;
@@ -48,100 +40,6 @@ class FakeTranslationRepo extends TranslationRepository {
     saved = config;
     return 1;
   }
-
-  @override
-  Future<TranslatedPageBitmap> renderTranslatedPage({
-    required int bookId,
-    required int page,
-    required String targetLang,
-    double dpiScale = 1.0,
-  }) async {
-    if (!hasTranslation) {
-      return TranslatedPageBitmap(
-        width: 0,
-        height: 0,
-        rgba: Uint8List(0),
-        hasTranslation: false,
-        error: null,
-      );
-    }
-    // 2x2 RGBA, all opaque white.
-    final rgba = Uint8List.fromList(List.filled(2 * 2 * 4, 255));
-    return TranslatedPageBitmap(
-      width: 2,
-      height: 2,
-      rgba: rgba,
-      hasTranslation: true,
-      error: null,
-    );
-  }
-
-  @override
-  Future<PageTranslationResult> getPageTranslation(int bookId, int page) async {
-    return PageTranslationResult(translation: cache[page], error: null);
-  }
-
-  @override
-  Stream<TranslationProgressEvent> translatePage({
-    required int bookId,
-    required int page,
-    bool force = false,
-  }) {
-    translateCalls.add((bookId, page, force));
-    if (failTranslate) {
-      return Stream.error(Exception('未配置翻译服务'));
-    }
-    if (cache[page] == null || force) {
-      cache[page] = PageTranslation(
-        page: page,
-        targetLang: '中文',
-        provider: 'reuse_ai',
-        sourceHash: 'h',
-        paragraphs: [
-          TranslatedParagraph(
-            source: 'Hello world',
-            translated: '你好世界',
-            kind: ParagraphKind.text,
-            status: ParagraphStatus.done,
-            confidence: 1.0,
-            formulaRegions: const [],
-            rects: const [],
-          ),
-        ],
-        coverage: 1.0,
-      );
-    }
-    return Stream.fromIterable([
-      TranslationProgressEvent(
-        page: page,
-        doneParagraphs: 0,
-        totalParagraphs: 1,
-        coverage: 0.0,
-        finished: false,
-        error: null,
-      ),
-      TranslationProgressEvent(
-        page: page,
-        doneParagraphs: 1,
-        totalParagraphs: 1,
-        coverage: 1.0,
-        finished: true,
-        error: null,
-      ),
-    ]);
-  }
-
-  @override
-  Future<TranslationOverviewResult> getTranslationOverview(int bookId) async =>
-      TranslationOverviewResult(
-        totalPages: 10,
-        translatedPages: cache.length,
-        targetLang: '中文',
-        error: null,
-      );
-
-  @override
-  Future<Set<int>> getTranslatedPages(int bookId) async => cache.keys.toSet();
 
   @override
   Future<int> startBookTranslation(int bookId) async {
@@ -156,11 +54,14 @@ class FakeTranslationRepo extends TranslationRepository {
   }
 
   @override
-  Future<GlossaryResult> listGlossary() async =>
-      const GlossaryResult(entries: [], error: null);
+  Future<int> clearTranslationArtifacts(int bookId) async {
+    clearedArtifacts.add(bookId);
+    return 1;
+  }
 
-  final glossary = <GlossaryEntry>[];
-  int _nextGlossaryId = 1;
+  @override
+  Future<GlossaryResult> listGlossary() async =>
+      GlossaryResult(entries: List.of(glossary), error: null);
 
   @override
   Future<int> addGlossaryEntry({
