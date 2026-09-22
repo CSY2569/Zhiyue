@@ -1408,16 +1408,31 @@ async fn builtin_search_stream(
     // query is selected page text the reader may not understand); a typed
     // follow-up passes verbatim, exactly as the main stream_chat path does.
     let wrapped_query = wrap_input(AiActionType::Search, query, is_follow_up);
-    match ai::web_search_builtin(
-        &config.base_url,
-        &config.api_key,
-        &config.text_model,
-        &messages,
-        &wrapped_query,
-        &extras,
-    )
-    .await
-    {
+    // Two wire protocols for hosted search (6.2.3): the OpenAI Responses
+    // web_search tool, or the Anthropic Messages protocol -- DeepSeek
+    // executes hosted search only on the latter (its Responses endpoint
+    // silently ignores web_search tools).
+    let search = if config.search_builtin_protocol == "anthropic" {
+        ai::web_search_builtin_anthropic(
+            &config.base_url,
+            &config.api_key,
+            &config.text_model,
+            &messages,
+            &wrapped_query,
+        )
+        .await
+    } else {
+        ai::web_search_builtin(
+            &config.base_url,
+            &config.api_key,
+            &config.text_model,
+            &messages,
+            &wrapped_query,
+            &extras,
+        )
+        .await
+    };
+    match search {
         Ok(stream) => drain_stream(stream, sink).await,
         Err(e) => {
             // Fallback: answer from knowledge, noting the search failure

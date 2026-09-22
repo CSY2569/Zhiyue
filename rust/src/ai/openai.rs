@@ -415,6 +415,126 @@ pub(crate) async fn web_search_builtin(
     responses_stream_request(http, url, api_key, body).await
 }
 
+/// Server-tool name for Anthropic-protocol hosted web search (the 2026-03
+/// tool spec version, as in Anthropic's Messages API).
+const ANTHROPIC_WEB_SEARCH_TOOL: &str = "web_search_20250305";
+
+/// Anthropic Messages requires `max_tokens`; a generous ceiling for a search
+/// answer (billing follows actual usage, and thinking blocks count toward
+/// the cap, so headroom beats a truncated reply).
+const ANTHROPIC_MAX_TOKENS: i64 = 8192;
+
+/// Anthropic-protocol endpoint for built-in search (6.2.3, DeepSeek): the
+/// Messages API lives at `{base}/anthropic/v1/messages`. DeepSeek executes
+/// hosted search only on this protocol -- its Responses endpoint accepts
+/// `{"type": "web_search"}` but silently ignores it (tools compatibility
+/// table). The `/v1` suffix is stripped like [responses_endpoint] so
+/// chat-style base URLs join cleanly.
+fn anthropic_endpoint(base_url: &str) -> String {
+    let base = trimmed_or(base_url, "https://api.deepseek.com");
+    let base = base.strip_suffix("/v1").unwrap_or(base);
+    format!("{base}/anthropic/v1/messages")
+}
+
+/// Anthropic Messages body for built-in search: system prompts merge into
+/// the `system` slot; user / assistant turns map to messages with strict
+/// alternation (consecutive same-role turns merge) and the query as the
+/// final user message. Minimal body: no temperature / thinking controls.
+fn anthropic_search_body(model: &str, history: &[AiMessage], user_input: &str) -> Value {
+    let mut system = String::new();
+    let mut messages: Vec<Value> = Vec::new();
+    for m in history {
+        match m.role {
+            AiRole::System => {
+                if !system.is_empty() {
+                    system.push('\n');
+                }
+                system.push_str(&m.content);
+            }
+            AiRole::User => push_anthropic_turn(&mut messages, "user", &m.content),
+            AiRole::Assistant => push_anthropic_turn(&mut messages, "assistant", &m.content),
+        }
+    }
+    push_anthropic_turn(&mut messages, "user", user_input);
+    json!({
+        "model": model,
+        "max_tokens": ANTHROPIC_MAX_TOKENS,
+        "system": system,
+        "messages": messages,
+        "stream": true,
+        "tools": [{"type": ANTHROPIC_WEB_SEARCH_TOOL, "name": "web_search"}],
+    })
+}
+
+/// Append one turn, merging into the previous message when the role repeats
+/// (the Messages API requires user / assistant alternation).
+fn push_anthropic_turn(messages: &mut Vec<Value>, role: &str, content: &str) {
+    if let Some(last) = messages.last_mut() {
+        if last["role"].as_str() == Some(role) {
+            let prior = last["content"].as_str().unwrap_or_default();
+            last["content"] = json!(format!("{prior}\n\n{content}"));
+            return;
+        }
+    }
+    messages.push(json!({"role": role, "content": content}));
+}
+
+/// Parse one Anthropic Messages SSE event: `content_block_delta` with a
+/// `text_delta` yields text (thinking / tool-use deltas are ignored -- the
+/// search UI shows only the answer); `error` surfaces its message.
+fn parse_anthropic_event(event: &[u8]) -> Option<AppResult<String>> {
+    let data = sse_data(event)?;
+    let value: Value = serde_json::from_str(&data).ok()?;
+    match value["type"].as_str()? {
+        "content_block_delta" => {
+            let delta = &value["delta"];
+            if delta["type"].as_str() != Some("text_delta") {
+                return None;
+            }
+            delta["text"]
+                .as_str()
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+                .map(Ok)
+        }
+        "error" => Some(Err(AppError::Ai(
+            value["error"]["message"]
+                .as_str()
+                .unwrap_or("anthropic call failed")
+                .to_string(),
+        ))),
+        _ => None,
+    }
+}
+
+/// Built-in web search through the Anthropic Messages protocol (DeepSeek's
+/// hosted search): streams `{base}/anthropic/v1/messages` with the
+/// `web_search_20250305` server tool. Auth is `x-api-key` per the Anthropic
+/// convention (`anthropic-version` is sent for real-Anthropic compatibility;
+/// DeepSeek ignores it).
+pub(crate) async fn web_search_builtin_anthropic(
+    base_url: &str,
+    api_key: &str,
+    model: &str,
+    history: &[AiMessage],
+    query: &str,
+) -> AppResult<ChunkStream> {
+    let http = OpenAiClient::http_client()?;
+    let url = anthropic_endpoint(base_url);
+    let body = anthropic_search_body(model, history, query);
+    let resp = http
+        .post(&url)
+        .header("x-api-key", api_key)
+        .header("anthropic-version", "2023-06-01")
+        .json(&body)
+        .send()
+        .await?;
+    if !resp.status().is_success() {
+        return Err(http_error(resp).await);
+    }
+    Ok(Box::pin(sse_stream(resp.bytes_stream(), parse_anthropic_event)))
+}
+
 /// Plain-text chat through the Responses API (设置 → API 协议 = Responses):
 /// the same endpoint / SSE parsing as the built-in search, but no tools are
 /// sent -- this is a general-purpose conversational call. Used for every text
@@ -858,6 +978,187 @@ data: {"type":"response.completed"}
         };
         assert!(err2.to_string().contains("404"), "{err2}");
         assert!(err2.to_string().contains("model not found"), "{err2}");
+    }
+
+    #[test]
+    fn anthropic_endpoint_strips_v1_and_appends_messages_path() {
+        assert_eq!(
+            anthropic_endpoint(""),
+            "https://api.deepseek.com/anthropic/v1/messages"
+        );
+        assert_eq!(
+            anthropic_endpoint("https://api.deepseek.com"),
+            "https://api.deepseek.com/anthropic/v1/messages"
+        );
+        assert_eq!(
+            anthropic_endpoint("https://api.deepseek.com/v1"),
+            "https://api.deepseek.com/anthropic/v1/messages"
+        );
+        assert_eq!(
+            anthropic_endpoint("https://gw.example.com/v1/"),
+            "https://gw.example.com/anthropic/v1/messages"
+        );
+    }
+
+    #[test]
+    fn anthropic_search_body_merges_turns_and_sets_tools() {
+        let history = vec![
+            AiMessage {
+                id: -1,
+                thread_id: -1,
+                role: AiRole::System,
+                content: "你正在执行联网搜索。".into(),
+                image_path: None,
+                action_type: None,
+                created_at: String::new(),
+            },
+            AiMessage {
+                id: -1,
+                thread_id: -1,
+                role: AiRole::User,
+                content: "之前的问题".into(),
+                image_path: None,
+                action_type: None,
+                created_at: String::new(),
+            },
+            AiMessage {
+                id: -1,
+                thread_id: -1,
+                role: AiRole::User,
+                content: "补充说明".into(),
+                image_path: None,
+                action_type: None,
+                created_at: String::new(),
+            },
+            AiMessage {
+                id: -1,
+                thread_id: -1,
+                role: AiRole::Assistant,
+                content: "之前的回答".into(),
+                image_path: None,
+                action_type: None,
+                created_at: String::new(),
+            },
+        ];
+        let body = anthropic_search_body("deepseek-flash", &history, "量子计算");
+        assert_eq!(body["model"], "deepseek-flash");
+        assert_eq!(body["system"], "你正在执行联网搜索。");
+        assert_eq!(body["stream"], true);
+        assert!(body["max_tokens"].as_i64().unwrap() > 0);
+        assert_eq!(body["tools"][0]["type"], "web_search_20250305");
+        assert_eq!(body["tools"][0]["name"], "web_search");
+        // Minimal body: no temperature / reasoning controls.
+        assert!(body.get("temperature").is_none());
+        assert!(body.get("reasoning").is_none());
+        // Strict alternation: consecutive user turns merge; the query is the
+        // final user message (the previous turn is assistant, so no merge).
+        let msgs = body["messages"].as_array().unwrap();
+        assert_eq!(msgs.len(), 3);
+        assert_eq!(msgs[0]["role"], "user");
+        assert_eq!(msgs[0]["content"], "之前的问题\n\n补充说明");
+        assert_eq!(msgs[1]["role"], "assistant");
+        assert_eq!(msgs[2]["role"], "user");
+        assert_eq!(msgs[2]["content"], "量子计算");
+    }
+
+    #[test]
+    fn anthropic_search_body_merges_query_into_trailing_user_turn() {
+        // History ending on a user turn: the query must merge into it, or
+        // the request would carry two adjacent user messages.
+        let history = vec![AiMessage {
+            id: -1,
+            thread_id: -1,
+            role: AiRole::User,
+            content: "之前的问题".into(),
+            image_path: None,
+            action_type: None,
+            created_at: String::new(),
+        }];
+        let body = anthropic_search_body("m", &history, "量子计算");
+        let msgs = body["messages"].as_array().unwrap();
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(msgs[0]["content"], "之前的问题\n\n量子计算");
+    }
+
+    #[test]
+    fn parse_anthropic_event_yields_text_deltas_and_errors() {
+        let text =
+            r#"data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"量子"}}"#;
+        assert_eq!(parse_anthropic_event(text.as_bytes()).unwrap().unwrap(), "量子");
+        // Thinking / tool-use deltas and lifecycle events are ignored.
+        let think = r#"data: {"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"推理"}}"#;
+        assert!(parse_anthropic_event(think.as_bytes()).is_none());
+        let stop = br#"data: {"type":"message_stop"}"#;
+        assert!(parse_anthropic_event(stop).is_none());
+        // Mid-stream error event -> its message.
+        let err = r#"data: {"type":"error","error":{"message":"搜索配额不足"}}"#;
+        assert!(parse_anthropic_event(err.as_bytes()).unwrap().is_err());
+    }
+
+    #[tokio::test]
+    async fn web_search_builtin_anthropic_streams_text_deltas() {
+        let events = r#"data: {"type":"message_start"}
+
+data: {"type":"content_block_start","content_block":{"type":"thinking"}}
+
+data: {"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"推理"}}
+
+data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"量子"}}
+
+data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"要点"}}
+
+data: {"type":"message_stop"}
+
+"#;
+        let (base, mut req_rx) = mock_responses_server(events, "200 OK").await;
+        let mut stream = web_search_builtin_anthropic(
+            &base,
+            "test-key",
+            "deepseek-flash",
+            &[],
+            "量子计算",
+        )
+        .await
+        .unwrap();
+        let mut out = String::new();
+        while let Some(chunk) = stream.next().await {
+            out.push_str(&chunk.unwrap());
+        }
+        assert_eq!(out, "量子要点");
+
+        // Request shape: /anthropic/v1/messages path (v1 stripped),
+        // x-api-key auth (no bearer), and the server tool declared.
+        let req = req_rx.recv().await.unwrap();
+        assert!(req.starts_with("POST /anthropic/v1/messages HTTP/1.1"), "{req}");
+        assert!(req_lower(&req).contains("x-api-key: test-key"), "{req}");
+        assert!(!req_lower(&req).contains("authorization:"), "{req}");
+        // serde_json orders object keys alphabetically, so assert the tool
+        // fields separately instead of matching the serialized object.
+        assert!(req.contains(r#""web_search_20250305""#), "{req}");
+        assert!(req.contains(r#""name":"web_search""#), "{req}");
+    }
+
+    #[tokio::test]
+    async fn web_search_builtin_anthropic_surfaces_errors() {
+        // Semantic `error` event -> error with its message.
+        let events = r#"data: {"type":"error","error":{"message":"搜索配额不足"}}
+
+"#;
+        let (base, _rx) = mock_responses_server(events, "200 OK").await;
+        let mut stream =
+            web_search_builtin_anthropic(&base, "k", "m", &[], "q").await.unwrap();
+        let err = stream.next().await.unwrap().unwrap_err();
+        assert!(err.to_string().contains("搜索配额不足"), "{err}");
+
+        // Non-2xx -> full error body.
+        let (base2, _rx) =
+            mock_responses_server(r#"{"error":"invalid api key"}"#, "401 Unauthorized").await;
+        let err2 = match web_search_builtin_anthropic(&base2, "k", "m", &[], "q").await {
+            Err(e) => e,
+            Ok(_) => panic!("expected HTTP error"),
+        };
+        assert!(err2.to_string().contains("401"), "{err2}");
+        assert!(err2.to_string().contains("invalid api key"), "{err2}");
     }
 
     #[test]

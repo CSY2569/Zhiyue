@@ -126,6 +126,15 @@ pub struct AiConfig {
     pub search_use_builtin: bool,
     pub search_base_url: Option<String>,
     pub search_api_key: Option<String>,
+    /// Wire protocol for built-in search (6.2.3): "responses" sends the
+    /// OpenAI-style `{"type": "web_search"}` server tool to
+    /// `{base}/responses`; "anthropic" sends the Anthropic-style
+    /// `web_search_20250305` server tool to `{base}/anthropic/v1/messages`.
+    /// DeepSeek executes hosted search only on the latter -- its Responses
+    /// endpoint silently ignores web_search tools (2026-09 docs, tools
+    /// compatibility table).
+    #[serde(default = "default_search_builtin_protocol")]
+    pub search_builtin_protocol: String,
     /// Translation target language, default "中文" (6.1.3).
     pub translate_target_lang: String,
     /// Extra target languages the user added (设置 → AI 设置 → 翻译): shown as
@@ -227,6 +236,10 @@ fn default_api_protocol() -> String {
     "chat_completions".to_string()
 }
 
+fn default_search_builtin_protocol() -> String {
+    "responses".to_string()
+}
+
 fn default_prompt_template() -> String {
     "general".to_string()
 }
@@ -246,6 +259,7 @@ impl Default for AiConfig {
             search_use_builtin: false,
             search_base_url: None,
             search_api_key: None,
+            search_builtin_protocol: default_search_builtin_protocol(),
             translate_target_lang: "中文".to_string(),
             translate_custom_langs: Vec::new(),
             model_supports_vision: false,
@@ -299,6 +313,7 @@ mod tests {
         assert!(!cfg.search_use_builtin);
         assert!(cfg.search_base_url.is_none());
         assert!(cfg.search_api_key.is_none());
+        assert_eq!(cfg.search_builtin_protocol, "responses");
 
         // Round-trip through the current serializer keeps working.
         let back: AiConfig =
@@ -320,6 +335,7 @@ mod tests {
             search_use_builtin: true,
             search_base_url: Some("https://s.example/search".into()),
             search_api_key: Some("sk-s".into()),
+            search_builtin_protocol: "anthropic".into(),
             translate_target_lang: "中文".into(),
             translate_custom_langs: vec!["日文".into(), "法文".into()],
             model_supports_vision: true,
@@ -359,6 +375,7 @@ mod tests {
         assert!(back.search_use_builtin);
         assert_eq!(back.search_base_url, cfg.search_base_url);
         assert_eq!(back.search_api_key, cfg.search_api_key);
+        assert_eq!(back.search_builtin_protocol, "anthropic");
         assert_eq!(back.translate_target_lang, "中文");
         assert!(back.web_search_enabled);
         assert_eq!(back.ocr_mode, "fast");

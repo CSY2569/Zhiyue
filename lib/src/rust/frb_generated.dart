@@ -2654,8 +2654,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   AiConfig dco_decode_ai_config(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 30)
-      throw Exception('unexpected arr length: expect 30 but see ${arr.length}');
+    if (arr.length != 31)
+      throw Exception('unexpected arr length: expect 31 but see ${arr.length}');
     return AiConfig(
       baseUrl: dco_decode_String(arr[0]),
       apiKey: dco_decode_String(arr[1]),
@@ -2666,27 +2666,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       searchUseBuiltin: dco_decode_bool(arr[6]),
       searchBaseUrl: dco_decode_opt_String(arr[7]),
       searchApiKey: dco_decode_opt_String(arr[8]),
-      translateTargetLang: dco_decode_String(arr[9]),
-      translateCustomLangs: dco_decode_list_String(arr[10]),
-      modelSupportsVision: dco_decode_bool(arr[11]),
-      webSearchEnabled: dco_decode_bool(arr[12]),
-      ocrMode: dco_decode_String(arr[13]),
-      includeBookHistory: dco_decode_bool(arr[14]),
-      enableReasoning: dco_decode_bool(arr[15]),
-      reasoningEffort: dco_decode_String(arr[16]),
-      temperature: dco_decode_f_64(arr[17]),
-      apiProtocol: dco_decode_String(arr[18]),
-      promptTemplate: dco_decode_String(arr[19]),
-      customPrompt: dco_decode_String(arr[20]),
-      customPrompts: dco_decode_list_custom_prompt(arr[21]),
-      templateOverrides: dco_decode_Map_String_String_None(arr[22]),
-      embeddingEnabled: dco_decode_bool(arr[23]),
-      embeddingBaseUrl: dco_decode_opt_String(arr[24]),
-      embeddingApiKey: dco_decode_opt_String(arr[25]),
-      embeddingModel: dco_decode_String(arr[26]),
-      vectorDbUrl: dco_decode_opt_String(arr[27]),
-      vectorDbApiKey: dco_decode_opt_String(arr[28]),
-      vectorDbCollection: dco_decode_String(arr[29]),
+      searchBuiltinProtocol: dco_decode_String(arr[9]),
+      translateTargetLang: dco_decode_String(arr[10]),
+      translateCustomLangs: dco_decode_list_String(arr[11]),
+      modelSupportsVision: dco_decode_bool(arr[12]),
+      webSearchEnabled: dco_decode_bool(arr[13]),
+      ocrMode: dco_decode_String(arr[14]),
+      includeBookHistory: dco_decode_bool(arr[15]),
+      enableReasoning: dco_decode_bool(arr[16]),
+      reasoningEffort: dco_decode_String(arr[17]),
+      temperature: dco_decode_f_64(arr[18]),
+      apiProtocol: dco_decode_String(arr[19]),
+      promptTemplate: dco_decode_String(arr[20]),
+      customPrompt: dco_decode_String(arr[21]),
+      customPrompts: dco_decode_list_custom_prompt(arr[22]),
+      templateOverrides: dco_decode_Map_String_String_None(arr[23]),
+      embeddingEnabled: dco_decode_bool(arr[24]),
+      embeddingBaseUrl: dco_decode_opt_String(arr[25]),
+      embeddingApiKey: dco_decode_opt_String(arr[26]),
+      embeddingModel: dco_decode_String(arr[27]),
+      vectorDbUrl: dco_decode_opt_String(arr[28]),
+      vectorDbApiKey: dco_decode_opt_String(arr[29]),
+      vectorDbCollection: dco_decode_String(arr[30]),
     );
   }
 
@@ -3624,6 +3625,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_searchUseBuiltin = sse_decode_bool(deserializer);
     var var_searchBaseUrl = sse_decode_opt_String(deserializer);
     var var_searchApiKey = sse_decode_opt_String(deserializer);
+    var var_searchBuiltinProtocol = sse_decode_String(deserializer);
     var var_translateTargetLang = sse_decode_String(deserializer);
     var var_translateCustomLangs = sse_decode_list_String(deserializer);
     var var_modelSupportsVision = sse_decode_bool(deserializer);
@@ -3655,6 +3657,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       searchUseBuiltin: var_searchUseBuiltin,
       searchBaseUrl: var_searchBaseUrl,
       searchApiKey: var_searchApiKey,
+      searchBuiltinProtocol: var_searchBuiltinProtocol,
       translateTargetLang: var_translateTargetLang,
       translateCustomLangs: var_translateCustomLangs,
       modelSupportsVision: var_modelSupportsVision,
@@ -4862,6 +4865,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.searchUseBuiltin, serializer);
     sse_encode_opt_String(self.searchBaseUrl, serializer);
     sse_encode_opt_String(self.searchApiKey, serializer);
+    sse_encode_String(self.searchBuiltinProtocol, serializer);
     sse_encode_String(self.translateTargetLang, serializer);
     sse_encode_list_String(self.translateCustomLangs, serializer);
     sse_encode_bool(self.modelSupportsVision, serializer);

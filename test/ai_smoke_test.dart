@@ -128,6 +128,7 @@ AiConfig _cfg({
       modelSupportsVision: false,
       webSearchEnabled: webSearchEnabled,
       searchUseBuiltin: searchUseBuiltin,
+      searchBuiltinProtocol: 'responses',
       ocrMode: 'high_precision',
       includeBookHistory: includeBookHistory,
       enableReasoning: false,

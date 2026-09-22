@@ -37,6 +37,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _searchApiKey = TextEditingController();
   bool _webSearch = false;
   bool _searchBuiltin = false;
+  /// Built-in search wire protocol: 'responses' (OpenAI web_search tool) or
+  /// 'anthropic' (DeepSeek's hosted search lives only on that protocol).
+  String _searchBuiltinProtocol = 'responses';
   /// Whether the general model accepts images (多模态); false -> a separate
   /// vision config is shown.
   bool _supportsVision = false;
@@ -114,6 +117,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _vectorDbApiKey.text = config.vectorDbApiKey ?? '';
     _vectorDbCollection.text = config.vectorDbCollection;
     _searchBuiltin = config.searchUseBuiltin;
+    _searchBuiltinProtocol = config.searchBuiltinProtocol == 'anthropic'
+        ? 'anthropic'
+        : 'responses';
     _apiProtocol = config.apiProtocol == 'responses'
         ? 'responses'
         : 'chat_completions';
@@ -185,6 +191,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ? null
           : _searchApiKey.text.trim(),
       searchUseBuiltin: _searchBuiltin,
+      searchBuiltinProtocol: _searchBuiltinProtocol,
       webSearchEnabled: _webSearch,
       apiProtocol: _apiProtocol,
       ocrMode: _ocrMode,
@@ -430,8 +437,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   SettingsControlRow(
                     title: '搜索方式',
                     description: _searchBuiltin
-                        ? '内置搜索：由服务端联网，走通用配置的 Responses 协议（需模型支持）'
-                        : '第三方搜索：使用下方 Base URL + Key',
+                        ? '内置搜索：由服务端联网（需模型支持）。协议见下方「内置搜索协议」，使用上方通用的 Base URL / Key / 模型，搜索专用配置不参与'
+                        : '第三方搜索：调用下方端点的博查兼容搜索服务，把结果注入提示词（不使用通用配置）',
                     child: SegmentedButton<bool>(
                       segments: const [
                         ButtonSegment(
@@ -451,11 +458,38 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           setState(() => _searchBuiltin = s.first),
                     ),
                   ),
+                  // Built-in search has two wire protocols: the OpenAI
+                  // Responses web_search tool, or the Anthropic Messages
+                  // protocol -- DeepSeek executes hosted search only on the
+                  // latter (its Responses endpoint silently ignores the tool).
+                  if (_searchBuiltin)
+                    SettingsControlRow(
+                      title: '内置搜索协议',
+                      description: _searchBuiltinProtocol == 'anthropic'
+                          ? 'Anthropic 协议：请求 {Base URL}/anthropic/v1/messages + web_search 服务端工具。DeepSeek 的真实联网搜索仅在此协议执行'
+                          : 'Responses 协议：请求 {Base URL}/responses + web_search 服务端工具。OpenAI 支持；DeepSeek 会静默忽略该工具（不会真正联网）',
+                      child: SegmentedButton<String>(
+                        segments: const [
+                          ButtonSegment(
+                            value: 'responses',
+                            label: Text('Responses'),
+                          ),
+                          ButtonSegment(
+                            value: 'anthropic',
+                            label: Text('Anthropic'),
+                          ),
+                        ],
+                        selected: {_searchBuiltinProtocol},
+                        showSelectedIcon: false,
+                        onSelectionChanged: (s) => setState(
+                            () => _searchBuiltinProtocol = s.first),
+                      ),
+                    ),
                   if (!_searchBuiltin) ...[
                     SettingsTextField(
                       controller: _searchBaseUrl,
-                      label: '搜索 API Base URL',
-                      hint: '留空 = 博查默认（https://api.bochaai.com/v1/web-search）',
+                      label: '搜索端点 URL',
+                      hint: '博查兼容的完整端点地址（不是 API 基地址）；留空 = https://api.bochaai.com/v1/web-search',
                     ),
                     SettingsTextField(
                       controller: _searchApiKey,

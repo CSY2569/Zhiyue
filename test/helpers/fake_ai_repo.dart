@@ -48,6 +48,7 @@ class FakeAiRepo extends AiRepository {
         modelSupportsVision: false,
         webSearchEnabled: true,
         searchUseBuiltin: false,
+        searchBuiltinProtocol: 'responses',
         ocrMode: ocrMode,
         includeBookHistory: true,
         enableReasoning: false,

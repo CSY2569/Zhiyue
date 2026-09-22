@@ -345,15 +345,40 @@ void main() {
     await tester.pump();
     expect(find.text('搜索 API Key'), findsOneWidget);
 
-    // Built-in search reuses the general Responses config: fields hide.
+    // Built-in search reuses the general Responses config: fields hide, and
+    // the wire-protocol picker appears.
     await tester.tap(find.text('内置搜索'));
     await tester.pumpAndSettle();
     expect(find.text('搜索 API Key'), findsNothing);
+    expect(find.text('内置搜索协议'), findsOneWidget);
 
-    // Back to third-party -> fields return.
+    // Switching the protocol updates the description...
+    await tester.tap(find.text('Anthropic'));
+    await tester.pump();
+    // ...and third-party search hides the picker again.
     await tester.tap(find.text('第三方搜索'));
     await tester.pumpAndSettle();
+    expect(find.text('内置搜索协议'), findsNothing);
     expect(find.text('搜索 API Key'), findsOneWidget);
+
+    // The selected protocol persists with the config (Anthropic = DeepSeek's
+    // hosted search, which its Responses endpoint ignores).
+    await tester.tap(find.text('内置搜索'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Anthropic'));
+    await tester.pump();
+    // The save button sits at the very bottom of the page, below the search
+    // section -- scroll it into the lazy ListView's build range first.
+    await tester.scrollUntilVisible(
+      find.text('保存 AI 配置'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tapSaveAiConfig(tester);
+    await tester.pumpAndSettle();
+    expect(repo.saved, isNotNull);
+    expect(repo.saved!.searchUseBuiltin, isTrue);
+    expect(repo.saved!.searchBuiltinProtocol, 'anthropic');
     expect(tester.takeException(), isNull);
   });
 
@@ -464,6 +489,7 @@ void main() {
       modelSupportsVision: false,
       webSearchEnabled: false,
       searchUseBuiltin: false,
+      searchBuiltinProtocol: 'responses',
       ocrMode: 'high_precision',
       includeBookHistory: true,
       enableReasoning: false,

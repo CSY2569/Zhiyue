@@ -35,6 +35,15 @@ class AiConfig {
   final String? searchBaseUrl;
   final String? searchApiKey;
 
+  /// Wire protocol for built-in search (6.2.3): "responses" sends the
+  /// OpenAI-style `{"type": "web_search"}` server tool to
+  /// `{base}/responses`; "anthropic" sends the Anthropic-style
+  /// `web_search_20250305` server tool to `{base}/anthropic/v1/messages`.
+  /// DeepSeek executes hosted search only on the latter -- its Responses
+  /// endpoint silently ignores web_search tools (2026-09 docs, tools
+  /// compatibility table).
+  final String searchBuiltinProtocol;
+
   /// Translation target language, default "中文" (6.1.3).
   final String translateTargetLang;
 
@@ -113,6 +122,7 @@ class AiConfig {
     required this.searchUseBuiltin,
     this.searchBaseUrl,
     this.searchApiKey,
+    required this.searchBuiltinProtocol,
     required this.translateTargetLang,
     required this.translateCustomLangs,
     required this.modelSupportsVision,
@@ -147,6 +157,7 @@ class AiConfig {
       searchUseBuiltin.hashCode ^
       searchBaseUrl.hashCode ^
       searchApiKey.hashCode ^
+      searchBuiltinProtocol.hashCode ^
       translateTargetLang.hashCode ^
       translateCustomLangs.hashCode ^
       modelSupportsVision.hashCode ^
@@ -183,6 +194,7 @@ class AiConfig {
           searchUseBuiltin == other.searchUseBuiltin &&
           searchBaseUrl == other.searchBaseUrl &&
           searchApiKey == other.searchApiKey &&
+          searchBuiltinProtocol == other.searchBuiltinProtocol &&
           translateTargetLang == other.translateTargetLang &&
           translateCustomLangs == other.translateCustomLangs &&
           modelSupportsVision == other.modelSupportsVision &&
