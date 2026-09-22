@@ -10,6 +10,10 @@ import 'package:rbwa/src/rust/models/ai.dart';
 /// persisted API (6.5.4). Shared by the AI UI and screenshot tests.
 class FakeAiRepo extends AiRepository {
   final sent = <(AiActionType, String)>[];
+
+  /// History lists received by [streamChat] (one per call) -- lets tests
+  /// assert what a turn would replay to the provider (6.5.2).
+  final histories = <List<AiMessage>>[];
   AiConfig? saved;
   bool failStream = false;
 
@@ -159,6 +163,7 @@ class FakeAiRepo extends AiRepository {
     required bool isFollowUp,
   }) {
     sent.add((action, text));
+    histories.add(history);
     if (failStream) {
       return Stream.error(Exception('HTTP 400: Model Not Exist'));
     }

@@ -349,18 +349,7 @@ class AiNotifier extends Notifier<AiState> {
   }) {
     final history = action == AiActionType.translate
         ? <AiMessage>[] // translate: independent, no mixed context
-        : thread.messages
-            .take(thread.messages.length - 1) // exclude the message being sent
-            .map((m) => AiMessage(
-                  id: -1,
-                  threadId: thread.id,
-                  role: m.role,
-                  content: m.content,
-                  imagePath: m.imagePath,
-                  actionType: m.actionType,
-                  createdAt: m.createdAt ?? '',
-                ))
-            .toList();
+        : _replayHistory(thread);
     _startStream(
       thread,
       _repo.streamChat(
@@ -422,6 +411,33 @@ class AiNotifier extends Notifier<AiState> {
       if (m.role == AiRole.user) return m.actionType;
     }
     return null;
+  }
+
+  /// Build the replayed history for a non-translate turn: the thread's
+  /// messages minus the one being sent, with the stream-error note
+  /// (`\n\n> ⚠️ …`, appended by [AiStreamSession] on failure) stripped. The
+  /// note stays visible in the thread / card for the user, but replaying it
+  /// would hand the provider a fake assistant answer quoting an HTTP error
+  /// and pollute every later turn (6.5.2); a turn that failed before any text
+  /// arrived drops out of the replay entirely.
+  List<AiMessage> _replayHistory(AiThreadState thread) {
+    final result = <AiMessage>[];
+    for (final m in thread.messages.take(thread.messages.length - 1)) {
+      final cut = m.content.indexOf('\n\n> ⚠️');
+      final content =
+          (cut < 0 ? m.content : m.content.substring(0, cut)).trim();
+      if (content.isEmpty) continue;
+      result.add(AiMessage(
+        id: -1,
+        threadId: thread.id,
+        role: m.role,
+        content: content,
+        imagePath: m.imagePath,
+        actionType: m.actionType,
+        createdAt: m.createdAt ?? '',
+      ));
+    }
+    return result;
   }
 
   /// Keep the in-flight partial answer in the thread (and its shadow row).
