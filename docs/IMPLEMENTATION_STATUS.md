@@ -321,6 +321,47 @@
 
 **已知边界**：整本粒度（无分块/随进度）；进度为粗阶段（引擎的 rich 进度条非 TTY 下不可解析）；`--pages` 分块与 dual 导出 UI 待接入；引擎内置版首次翻译若缺资产会自动联网补齐。
 
+
+### 3.18 引擎整体替换：内置 RetainPDF 管线（2026-10-07，分支 feat/retain-engine）
+
+**决策**：BabelDOC（AGPL-3.0，按需下载 ~1.5GB）整体替换为 **RetainPDF 管线**
+（`retainpdf-pipeline` 4.2.6，MIT，随包内置 ~286MB）。上游管线以
+`document.v1.json` 为翻译输入、Typst 重排输出，支持扫描版与公式直通；
+其 `generic_flat_ocr` 适配器使智阅无需任何云 OCR 即可喂入自有文字层/本地 OCR。
+
+**集成形态**（引擎细节见 `rust/src/translate/`）：
+- **vendoring**：`third_party/retainpdf/`（pipeline 源码 + 宋体 + PIN，钉提交 d365ed8）
+- **引擎目录**：`scripts/build_retain_engine.sh` 组装独立 CPython 3.11 + site-packages
+  （Pin 依赖：Pillow/PyMuPDF/pikepdf/requests/urllib3）+ Typst 0.15.1 + `@preview`
+  cmarker/mitex + 字体 + `engine.json`；随包内置（`<exe_dir>/retainpdf`），开发用
+  `RBWA_RETAIN_ENGINE_DIR` 指向组装目录
+- **输入桥**（新 `flat_ocr.rs`，旧管线 `extract.rs` 聚类代码移植）：文字层
+  （pdfium 字体元数据）与本地 OCR 两条路径 → 扁平块（heading/body/abstract/
+  caption/footnote/header/footer + 整段公式）→ `generic_flat_ocr` JSON
+- **运行器**（重写 `job.rs`）：两步 CLI（`normalize-ocr` → `book`），stdout JSONL
+  进度映射（解析版式/翻译中/排版输出），取消杀进程，产物安装为
+  `translated/{book_id}/translated.pdf` + manifest（`BookTranslation` 模型不变、
+  FFI 签名不变、无需 codegen）
+- **术语表**：接入引擎 `glossary_entries`（level=preferred）
+- **移除**：BabelDOC 下载器/安装器（engine.rs 从 1126 行缩至 ~250 行）、
+  设置页下载/卸载 UI
+
+**验证**（全零真实 API）：
+- Rust 106 测试 + clippy 干净；`flat_ocr` 含真实 PDF 集成测试（pdfium 造两页版面，
+  断言标题/图注/公式分类、页眉页脚与页码剔除、段落合并、bbox 在页内）
+- **端到端**（`#[ignore] translate_book_end_to_end`）：临时 DB + 夹具书 + mock LLM
+  （`scripts/dev/mock_llm.py`，理解管线四种协议）+ **真实 Python 管线**，断言
+  2 页 1:1、译文进入 PDF、事件流有翻译中与终态成功
+- 零 LLM 冒烟：Rust 桥产物 → `normalize-ocr` 校验 → `render-only` overlay 产出
+- Flutter 192 测试全绿、`flutter analyze` 0
+
+**已知边界（v1）**：目标语言固定简体中文（上游硬编码）；整本粒度（随进度/手动
+待后续）；无 dual 并排导出（窗格渲染单 PDF）；引擎不可应用内卸载（随包内置）。
+
+**docs 同步**：FEATURES §7.4、THIRD_PARTY §2（含 PyMuPDF AGPL 独立进程登记）、
+ARCHITECTURE `translate` 行、README 概览。
+
+---
 ## 4. 后续开发方向
 
 ### 4.1 近期（补齐规格 P2 缺口）

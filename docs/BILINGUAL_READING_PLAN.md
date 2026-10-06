@@ -1,5 +1,10 @@
 # 对照阅读（双语阅读）方案 v4.2
 
+> **历史文档（v4.2，自研管线时代）**：本方案描述的自研翻译管线已于 2026-09-18 移除，
+> 引擎先后由 BabelDOC 与 RetainPDF 管线承担。当前实现见
+> `docs/IMPLEMENTATION_STATUS.md` §3.16–§3.18 与 `docs/FEATURES.md` §7.4；
+> 下文仅作设计史参考，术语与组件名均已变化。
+
 > 状态：**已实施完毕**（2026-09-14；后续演进与决策记录见 [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) §3.7–3.14，工作流程整理见 [bilingual_workflow.html](bilingual_workflow.html)）。
 > 本文档为定稿时的原始方案；其中「右栏像素宽度可拖拽」「公式小图」等设计已被后续
 > 改版取代（左右 50/50 分栏、公式保留原像素），保留作为决策历史。

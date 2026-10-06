@@ -92,7 +92,7 @@ LibraryPage (UI)
 | `ocr` | `OcrEngine` trait：run_page/load/cancel | M5（区域 OCR 在 M4） |
 | `ai` | `AiClient` trait：stream_chat/vision/cancel（手写 reqwest SSE 客户端） | M4 |
 | `search` | FTS5 索引 + jieba 分词：index_page/search（函数式，无 trait） | M6 |
-| `translate` | 对照阅读：段落抽取 / 翻译管线与 provider / 版式保留译文 PDF 写入 / LRU | M7 |
+| `translate` | 对照阅读：flat_ocr 输入桥（文字层/OCR 聚类）/ RetainPDF 引擎子进程运行器（spec/进度/取消/产物）/ LRU | M7 |
 | `export` | 标注 Markdown / JSON 导出 | M3 |
 | `error` | `AppError` 统一错误枚举 | 全程 |
 
