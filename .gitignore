@@ -92,3 +92,4 @@ app.*.map.json
 
 # ZCode agent session state (not project code)
 .zcode/
+engine-dev/
