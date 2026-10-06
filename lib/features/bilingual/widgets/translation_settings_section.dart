@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rbwa/data/repositories/library_repository.dart';
 import 'package:rbwa/data/repositories/settings_repository.dart';
 import 'package:rbwa/data/repositories/translation_repository.dart';
-import 'package:rbwa/features/ai/providers/ai_config_provider.dart';
 import 'package:rbwa/features/bilingual/providers/translation_config_provider.dart';
 import 'package:rbwa/features/bilingual/widgets/engine_settings_card.dart';
 import 'package:rbwa/features/settings/widgets/settings_widgets.dart';
@@ -123,57 +122,18 @@ class _TranslationSettingsSectionState
     final theme = Theme.of(context);
     final config = ref.watch(translationConfigProvider).valueOrNull;
     _hydrate(config);
-    final targetLang = ref.watch(translateTargetLangProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // --- 翻译引擎（BabelDOC，按需下载） --------------------------------
+        // --- 翻译引擎（RetainPDF，随包内置） --------------------------------
         const EngineSettingsCard(),
-        // --- 翻译服务 ---------------------------------------------------
+        // --- 翻译服务（RetainPDF 引擎：复用 AI 设置，无 provider 选择） -----
         SettingsSection(
           title: '翻译服务',
           icon: Icons.cloud_outlined,
-          description: '提供译文服务；引擎就绪后用于对照阅读与译文导出',
+          description: '引擎复用「AI 设置」中的 OpenAI 兼容服务（地址 / Key / 模型）',
           children: [
-            SettingsControlRow(
-              title: '服务提供方',
-              topPadding: 2,
-              child: SegmentedButton<TranslationProviderKind>(
-                segments: const [
-                  ButtonSegment(
-                      value: TranslationProviderKind.reuseAi,
-                      label: Text('复用 AI')),
-                  ButtonSegment(
-                      value: TranslationProviderKind.deepL, label: Text('DeepL')),
-                  ButtonSegment(
-                      value: TranslationProviderKind.openAiCompat,
-                      label: Text('自定义')),
-                ],
-                selected: {_provider},
-                showSelectedIcon: false,
-                onSelectionChanged: (s) => setState(() => _provider = s.first),
-              ),
-            ),
-            if (_provider != TranslationProviderKind.reuseAi) ...[
-              SettingsTextField(
-                controller: _baseUrl,
-                label: '服务地址',
-                hint: 'https://api-free.deepl.com 或 OpenAI 兼容地址',
-              ),
-              SettingsTextField(
-                controller: _apiKey,
-                label: 'API Key',
-                hint: '仅保存在本机',
-                obscure: true,
-              ),
-            ],
-            if (_provider == TranslationProviderKind.openAiCompat)
-              SettingsTextField(
-                controller: _model,
-                label: '模型',
-                hint: '如 gpt-4o-mini',
-              ),
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Row(
@@ -183,29 +143,14 @@ class _TranslationSettingsSectionState
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '目标语言沿用「AI 设置 → 翻译」：$targetLang',
+                      '目标语言：简体中文（RetainPDF 引擎固定，暂不可配置；'
+                      '「AI 设置 → 翻译」中的目标语言对对照阅读暂不生效）',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
                 ],
-              ),
-            ),
-            SettingsControlRow(
-              title: '源语言',
-              child: DropdownButton<String>(
-                value: _sourceLang,
-                items: const [
-                  DropdownMenuItem(value: 'auto', child: Text('自动判定')),
-                  DropdownMenuItem(value: '中文', child: Text('中文')),
-                  DropdownMenuItem(value: '英文', child: Text('英文')),
-                  DropdownMenuItem(value: '日文', child: Text('日文')),
-                  DropdownMenuItem(value: '法文', child: Text('法文')),
-                  DropdownMenuItem(value: '德文', child: Text('德文')),
-                ],
-                onChanged: (v) =>
-                    v == null ? null : setState(() => _sourceLang = v),
               ),
             ),
           ],
@@ -240,7 +185,7 @@ class _TranslationSettingsSectionState
               ),
             ),
             SettingsControlRow(
-              title: '整本翻译后台行为',
+              title: '整本翻译后台行为（暂未生效）',
               description: switch (_background) {
                 TranslationBackgroundBehavior.ask => '首次触发整本翻译时询问',
                 TranslationBackgroundBehavior.continue_ =>
@@ -270,7 +215,7 @@ class _TranslationSettingsSectionState
             ),
             SettingsSwitchRow(
               title: '扫描版自动 OCR',
-              description: '扫描页无文字层时先本地识别再翻译（低置信会标注）',
+              description: '扫描页无文字层时先本地识别再翻译（当前版本始终启用）',
               value: _autoOcr,
               onChanged: (v) => setState(() => _autoOcr = v),
             ),
@@ -283,8 +228,8 @@ class _TranslationSettingsSectionState
           icon: Icons.speed_outlined,
           children: [
             SettingsControlRow(
-              title: '整本翻译并发数',
-              description: '并发 $_concurrency 页（过高可能触发限流）',
+              title: '整本翻译并发数（暂未生效）',
+              description: '当前版本固定为 8 个并行翻译请求',
               topPadding: 2,
               child: Slider(
                 value: _concurrency.toDouble(),
@@ -292,7 +237,7 @@ class _TranslationSettingsSectionState
                 max: 8,
                 divisions: 7,
                 label: '$_concurrency',
-                onChanged: (v) => setState(() => _concurrency = v.round()),
+                onChanged: null,
               ),
             ),
             SettingsControlRow(

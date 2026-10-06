@@ -11,7 +11,7 @@ import 'package:rbwa/src/rust/models/translate.dart';
 /// so the pane's per-page image providers re-render.
 final translationRevisionProvider = StateProvider<int>((ref) => 0);
 
-/// State of the whole-book BabelDOC run for one book.
+/// State of the whole-book RetainPDF run for one book.
 class BookTranslationState {
   const BookTranslationState({
     this.translation,

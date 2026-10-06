@@ -62,7 +62,7 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
           // 对照阅读 (bilingual reading, M7): double-page-style spread --
           // the reading area splits into original (left) + translation
           // (right) at the same display size. The spread actions (export /
-          // whole-book) return together with the BabelDOC engine integration.
+          // whole-book) return together with further engine integrations.
           ToolbarIconButton(
             icon: Icons.translate,
             tooltip: '对照阅读',

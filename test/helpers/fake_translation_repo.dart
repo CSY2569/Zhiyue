@@ -34,7 +34,7 @@ class FakeTranslationRepo extends TranslationRepository {
   final glossary = <GlossaryEntry>[];
   int _nextGlossaryId = 1;
 
-  // --- engine (BabelDOC) --------------------------------------------------
+  // --- engine (RetainPDF) -------------------------------------------------
 
   /// Current engine status reported by [getEngineStatus].
   EngineStatus engineStatus = const EngineStatus(

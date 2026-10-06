@@ -85,14 +85,14 @@ class _EngineNotice extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.cloud_download_outlined,
+              Icon(Icons.translate_outlined,
                   size: 44, color: theme.colorScheme.outline),
               const SizedBox(height: 12),
-              Text('尚未安装翻译引擎', style: theme.textTheme.titleMedium),
+              Text('未找到翻译引擎', style: theme.textTheme.titleMedium),
               const SizedBox(height: 8),
               Text(
-                '对照阅读由 BabelDOC 引擎驱动（独立开源组件，AGPL-3.0，'
-                '约 1.5GB）。可在设置中下载并启用；安装完成后译文将在此显示。',
+                '对照阅读由内置的 RetainPDF 引擎驱动；'
+                '正式安装包已内置该引擎，开发构建需先组装引擎目录后才能翻译。',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.outline),

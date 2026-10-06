@@ -106,7 +106,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
 
     // The bilingual-reading queue subscription was removed together with the
-    // built-in translation pipeline; the BabelDOC engine integration will add
+    // built-in translation pipeline; the engine integration will add
     // its own task wiring.
   }
 

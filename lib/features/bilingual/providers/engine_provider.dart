@@ -3,9 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rbwa/data/repositories/translation_repository.dart';
 import 'package:rbwa/src/rust/models/translate.dart';
 
-/// Translation-engine (BabelDOC) state for the settings card: the on-disk
-/// status plus the live install stream. The engine is an opt-in download
-/// (~1GB: uv-managed Python + pdf2zh-next + model assets).
+/// Translation-engine (RetainPDF pipeline) state for the settings card: the
+/// on-disk status. The engine ships inside the installation bundle; the
+/// install/uninstall methods are kept for the FFI surface but are refused by
+/// the Rust side (v1 has no in-app installer).
 class EngineController extends AsyncNotifier<EngineStatus> {
   @override
   Future<EngineStatus> build() =>

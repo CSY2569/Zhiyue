@@ -57,7 +57,7 @@ void main() {
       expect(find.text('打开一本书后即可对照阅读'), findsOneWidget);
     });
 
-    testWidgets('shows the engine-download guide with a book open',
+    testWidgets('shows the missing-engine guide with a book open',
         (tester) async {
       tester.view.physicalSize = const Size(520, 1000);
       tester.view.devicePixelRatio = 1.0;
@@ -76,9 +76,9 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      // The built-in pipeline is retired: the column guides the user to the
-      // engine download in settings, and renders without overflow.
-      expect(find.text('尚未安装翻译引擎'), findsOneWidget);
+      // A build without an assembled engine shows the build-time guide and
+      // renders without overflow.
+      expect(find.text('未找到翻译引擎'), findsOneWidget);
       expect(find.text('前往设置'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
