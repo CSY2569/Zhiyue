@@ -207,7 +207,7 @@ fn migrate(conn: &Connection) -> AppResult<()> {
         }
         Some(7) => {
             // v8 DROPS the retired pipeline's per-page cache (translation
-            // moved to the downloadable BabelDOC engine; the rows have no
+            // moved to an external translation engine; the rows have no
             // consumer). `translation_glossary` stays.
             tracing::info!("migrating schema 7 -> 8 (drop page_translation_cache)");
             conn.execute_batch("DROP TABLE IF EXISTS page_translation_cache;")?;
@@ -548,7 +548,7 @@ mod tests {
         assert_eq!(v, SCHEMA_VERSION);
 
         // The retired pipeline's cache is dropped (translation moved to the
-        // downloadable BabelDOC engine; the rows had no consumer).
+        // external translation engine; the rows had no consumer).
         assert!(
             conn.query_row("SELECT COUNT(*) FROM page_translation_cache", [], |r| r
                 .get::<_, i64>(0))

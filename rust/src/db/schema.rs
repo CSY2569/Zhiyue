@@ -26,7 +26,7 @@
 /// for consistent naming); the per-page `page_translation_cache` added by
 /// the same version was dropped again in v8.
 /// 8: retire the built-in translation pipeline (replaced by the downloadable
-/// BabelDOC engine) -- `page_translation_cache` DROPPED, its rows have no
+/// external engine) -- `page_translation_cache` DROPPED, its rows have no
 /// consumer; `translation_glossary` stays.
 pub const SCHEMA_VERSION: u32 = 8;
 
@@ -235,7 +235,7 @@ CREATE INDEX IF NOT EXISTS ai_messages_thread ON ai_messages(thread_id, created_
 --     `source_lang`/`target_lang` are optional DeepL-style language-pair
 --     restrictions; null = the entry applies to every translation.
 --     (The per-page `page_translation_cache` of the retired built-in
---     pipeline is gone -- v8 drops it; translation moved to the BabelDOC
+--     pipeline is gone -- v8 drops it; translation moved to an external
 --     engine, whose artifacts live under `translated/{book_id}/` on disk.)
 -- ===========================================================================
 CREATE TABLE IF NOT EXISTS translation_glossary (

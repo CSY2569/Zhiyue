@@ -1735,7 +1735,7 @@ pub fn search_index_status(book_id: i64) -> String {
 // =============================================================================
 //
 // The built-in pipeline (extraction -> providers -> overlay writer, with a
-// per-page SQLite cache) was RETIRED in favor of the downloadable BabelDOC
+// per-page SQLite cache) was RETIRED in favor of the bundled RetainPDF
 // engine; this section keeps the engine-independent surface: the translation
 // config KV, the in-flight registry (eviction guard) and the glossary.
 // Engine install/progress APIs live in the engine section below.
@@ -1751,7 +1751,7 @@ pub fn clear_translation_artifacts(book_id: i64) -> i32 {
 }
 
 // =============================================================================
-// M7 -- Translation engine (BabelDOC, opt-in download)
+// M7 -- Translation engine (RetainPDF pipeline, bundled)
 // =============================================================================
 
 /// Current engine state for the settings card (probes disk each call).
@@ -1834,7 +1834,7 @@ pub struct TranslatedPageBitmap {
     pub error: Option<String>,
 }
 
-/// Starts a whole-book translation with the BabelDOC engine, streaming
+/// Starts a whole-book translation with the RetainPDF engine, streaming
 /// progress. Completion is observed by the stream ending; failures arrive as
 /// a final event carrying `error`. Returns nothing -- read the result with
 /// [get_book_translation].

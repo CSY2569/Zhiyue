@@ -1,7 +1,7 @@
 //! `translation_glossary` repository (M7).
 //!
 //! The retired built-in pipeline's `page_translation_cache` was dropped in
-//! schema v8 (translation moved to the downloadable BabelDOC engine; its
+//! schema v8 (translation moved to an external engine sidecar; its
 //! artifacts live under `translated/{book_id}/` on disk). Repositories take
 //! a borrowed `&Connection` and do no file IO -- the on-disk helpers below
 //! are the exception, kept here next to the artifact LRU they serve.
