@@ -2,7 +2,7 @@
 //!
 //! The original built-in pipeline (pdfium paragraph extraction → LLM/DeepL
 //! providers → overlay PDF writer, with a per-page SQLite cache) was RETIRED
-//! in favor of the downloadable BabelDOC engine (see `engine.rs`, staged);
+//! in favor of an external engine sidecar (see `engine.rs`, `job.rs`, staged);
 //! git tag `pre-babeldoc-replacement` preserves the old code.
 //!
 //! What remains here is the engine-independent bookkeeping: a registry of
@@ -54,6 +54,8 @@ pub fn is_translating_any() -> bool {
 
 #[cfg(feature = "ai")]
 pub mod engine;
+#[cfg(feature = "ai")]
+pub mod flat_ocr;
 #[cfg(feature = "ai")]
 pub mod job;
 
