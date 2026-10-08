@@ -1,2 +1,0 @@
-[console_scripts]
-retainpdf-pipeline = retainpdf_pipeline.entrypoints.console:main

@@ -1,1 +1,0 @@
-"""Translation application services."""
