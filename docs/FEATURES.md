@@ -147,7 +147,7 @@
 | 6.1.1 | P0 | 设置项：API Base URL、API Key、文本模型、视觉模型 |
 | 6.1.2 | P0 | **视觉独立配置**（可选）：单独 Base URL + Key，不填回退通用配置 |
 | 6.1.3 | P0 | 翻译目标语言（默认中文） |
-| 6.1.4 | P0 | 联网搜索开关 + 搜索方式（二选一）：① **模型内置搜索**（服务端联网，需模型支持；协议可选：**Responses** `{base}/responses` + `web_search` 工具（OpenAI 支持；DeepSeek 会静默忽略该工具）或 **Anthropic** `{base}/anthropic/v1/messages` + `web_search_20250305` 服务端工具（DeepSeek 的真实联网搜索仅在此协议执行），复用通用 Base URL / Key / 模型）② 第三方搜索（Base URL + Key，留空 Base URL 默认博查 Bocha，可填其他 Bocha 兼容服务，填完整端点地址而非 API 基地址）；Key 留空则降级为知识回答 |
+| 6.1.4 | P0 | 联网搜索开关 + 搜索方式（二选一）：① **模型内置搜索**（服务端联网，需模型支持；协议可选：**Responses** `{base}/responses` + `web_search` 工具 或 **Anthropic** `{base}/anthropic/v1/messages` + `web_search_20250305` 服务端工具，复用通用 Base URL / Key / 模型）② 第三方搜索（Base URL + Key，留空 Base URL 默认博查 Bocha，可填其他 Bocha 兼容服务，填完整端点地址而非 API 基地址）；Key 留空则降级为知识回答 |
 | 6.1.5 | P0 | 密钥仅保存在本地，设置说明兼容 OpenAI / DeepSeek / Kimi / 通义等 |
 
 ### 6.2 文本 AI 动作（选中文字触发）
