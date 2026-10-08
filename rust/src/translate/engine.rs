@@ -85,6 +85,11 @@ pub struct EngineManifest {
     /// Engine shipped inside the installation bundle.
     #[serde(default)]
     pub bundled: bool,
+    /// On-disk footprint recorded at build time (bytes). Absent on manifests
+    /// produced before the field existed; the status probe then walks the
+    /// tree ONCE per process (a 300MB walk on every probe blocked the UI).
+    #[serde(default)]
+    pub size_bytes: Option<i64>,
 }
 
 pub fn read_manifest() -> Option<EngineManifest> {
@@ -96,9 +101,19 @@ fn dir_size(dir: &Path) -> u64 {
     crate::db::repository::translate::dir_size(dir)
 }
 
-/// Total engine footprint (the assembled directory).
+/// Total engine footprint (the assembled directory). The manifest records it
+/// at build time; without that we walk the tree at most once per process.
+static WALKED_SIZE: OnceLock<i64> = OnceLock::new();
+
 pub fn engine_disk_usage() -> i64 {
-    dir_size(&engine_dir()) as i64
+    if let Some(m) = read_manifest() {
+        if let Some(size) = m.size_bytes {
+            if size > 0 {
+                return size;
+            }
+        }
+    }
+    *WALKED_SIZE.get_or_init(|| dir_size(&engine_dir()) as i64)
 }
 
 /// Interpreter running the pipeline (standalone CPython; no venv).
@@ -117,7 +132,7 @@ pub fn pipeline_argv() -> [&'static str; 2] {
 /// Environment for pipeline child processes. [job_tmp] redirects every
 /// cache/temp the pipeline may write into the job directory (never the
 /// user's home).
-pub fn runtime_env(job_tmp: &Path) -> Vec<(String, String)> {
+pub fn runtime_env(job_tmp: &Path, book_id: i64) -> Vec<(String, String)> {
     let engine = engine_dir();
     let s = |p: PathBuf| p.to_string_lossy().to_string();
     vec![
@@ -143,8 +158,13 @@ pub fn runtime_env(job_tmp: &Path) -> Vec<(String, String)> {
         ("RETAIN_PDF_TYPST_FONT_FAMILY".into(), "Source Han Serif SC".into()),
         ("PYTHONUNBUFFERED".into(), "1".into()),
         // Engine scratch (translation-unit / domain / typography caches):
-        // without this the pipeline anchors `data/` at its cwd.
-        ("OUTPUT_ROOT".into(), s(job_tmp.join("output"))),
+        // persistent PER BOOK so retries / re-translations reuse already-paid
+        // LLM work; bounded by `enforce_output_cache_cap`. Without this the
+        // pipeline anchors `data/` at its cwd.
+        (
+            "OUTPUT_ROOT".into(),
+            s(crate::translate::output_cache_dir(book_id)),
+        ),
         ("TMPDIR".into(), s(job_tmp.join("tmp"))),
         ("XDG_CACHE_HOME".into(), s(job_tmp.join("xdg-cache"))),
         ("HOME".into(), s(job_tmp.join("home"))),
@@ -244,7 +264,7 @@ mod tests {
         std::fs::create_dir_all(dir.join("python/bin")).unwrap();
         std::fs::write(
             dir.join("engine.json"),
-            r#"{"retainpdf_pipeline":"4.2.6","upstream_commit":"d365ed8","built_at":"2026-10-06T00:00:00Z","bundled":true}"#,
+            r#"{"retainpdf_pipeline":"4.2.6","upstream_commit":"d365ed8","built_at":"2026-10-06T00:00:00Z","bundled":true,"size_bytes":123456}"#,
         )
         .unwrap();
         std::fs::write(dir.join("python/bin/python3.11"), b"#!/bin/sh\n").unwrap();
@@ -260,15 +280,22 @@ mod tests {
         assert!(s.bundled);
         assert!(is_ready());
         assert!(python_executable().ends_with("python3.11"));
+        // The recorded footprint wins over a directory walk (a 300MB walk on
+        // every status probe blocked the settings UI).
+        assert_eq!(engine_disk_usage(), 123456);
+        assert_eq!(get_engine_status().size_bytes, 123456);
 
-        let env = runtime_env(Path::new("/tmp/job"));
+        let env = runtime_env(Path::new("/tmp/job"), 7);
         let get = |k: &str| env.iter().find(|(n, _)| n == k).map(|(_, v)| v.clone());
         assert!(get("PYTHONPATH").unwrap().ends_with("site-packages"));
         assert_eq!(get("TYPST_BIN").unwrap(), dir.join("bin/typst").to_string_lossy());
         assert_eq!(get("RETAIN_PDF_TYPST_FONT_FAMILY").unwrap(), "Source Han Serif SC");
         assert_eq!(get("PYTHONUNBUFFERED").unwrap(), "1");
         assert!(get("TMPDIR").unwrap().starts_with("/tmp/job"));
-        assert_eq!(get("OUTPUT_ROOT").unwrap(), "/tmp/job/output");
+        assert!(
+            get("OUTPUT_ROOT").unwrap().ends_with("retain_output/7"),
+            "OUTPUT_ROOT must be the persistent per-book cache"
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }

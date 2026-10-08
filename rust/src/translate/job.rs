@@ -206,6 +206,9 @@ fn run_job_inner(
         return Err(AppError::Internal("找不到原书文件".into()));
     }
 
+    // Bound the persistent engine caches before adding to them.
+    crate::translate::enforce_output_cache_cap().ok();
+
     // --- fresh job directory -------------------------------------------------
     if root.exists() {
         std::fs::remove_dir_all(root)?;
@@ -263,7 +266,7 @@ fn run_job_inner(
         }),
     )?;
     emit("解析版式", "规范化文档结构…".into());
-    run_pipeline_step(root, "normalize-ocr", &normalize_spec, None, on_event)?;
+    run_pipeline_step(root, book_id, "normalize-ocr", &normalize_spec, None, on_event)?;
     if !doc_v1.is_file() {
         return Err(AppError::Internal("管线未产出 document.v1.json".into()));
     }
@@ -312,7 +315,7 @@ fn run_job_inner(
         }),
     )?;
     let output_pdf =
-        run_pipeline_step(root, "book", &book_spec, Some(&ai.api_key), on_event)?
+        run_pipeline_step(root, book_id, "book", &book_spec, Some(&ai.api_key), on_event)?
             .unwrap_or_default();
     let produced = if !output_pdf.is_empty() && Path::new(&output_pdf).is_file() {
         PathBuf::from(&output_pdf)
@@ -494,6 +497,7 @@ fn parse_pipeline_line(line: &str) -> LineOutcome {
 /// Returns the published output PDF path when the step announced one.
 fn run_pipeline_step(
     root: &Path,
+    book_id: i64,
     command: &str,
     spec_path: &Path,
     api_key: Option<&str>,
@@ -508,7 +512,7 @@ fn run_pipeline_step(
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    for (k, v) in crate::translate::engine::runtime_env(root) {
+    for (k, v) in crate::translate::engine::runtime_env(root, book_id) {
         cmd.env(k, v);
     }
     if let Some(key) = api_key {
@@ -618,32 +622,53 @@ fn kill_child(child: &mut Child) {
     let _ = child.wait();
 }
 
-/// The pipeline prints a machine-readable failure line; prefer its summary.
+/// The pipeline prints a machine-readable failure line. Its `summary` is
+/// often the useless "任务失败，但暂未识别出明确根因" while the real cause
+/// lives in `detail` (e.g. the review-gate item list), so prefer `detail`.
 fn structured_failure_summary(lines: &[String]) -> Option<String> {
     for line in lines.iter().rev() {
         if let Some(rest) = line.split("structured failure json:").nth(1) {
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(rest.trim()) {
-                let summary = v
-                    .get("summary")
-                    .and_then(|s| s.as_str())
-                    .unwrap_or_default()
-                    .to_string();
-                let code = v
-                    .get("failure_code")
-                    .and_then(|s| s.as_str())
-                    .unwrap_or_default();
-                let stage = v
-                    .get("failed_stage")
-                    .and_then(|s| s.as_str())
-                    .unwrap_or_default();
-                let detail = format!("{stage}/{code}: {summary}");
-                if !detail.trim_matches(['/', ':', ' ']).is_empty() {
-                    return Some(detail.trim_matches(['/', ':', ' ']).to_string());
+                let field = |key: &str| {
+                    v.get(key)
+                        .and_then(|s| s.as_str())
+                        .unwrap_or_default()
+                        .trim()
+                        .to_string()
+                };
+                let summary = field("summary");
+                let detail = field("detail");
+                let code = field("failure_code");
+                let stage = field("failed_stage");
+                let message = if !detail.is_empty() && detail != summary {
+                    detail
+                } else {
+                    summary
+                };
+                let prefix = format!("{stage}/{code}");
+                let joined = if message.is_empty() {
+                    prefix
+                } else {
+                    format!("{prefix}: {message}")
+                };
+                let joined = joined.trim_matches(['/', ':', ' ']).to_string();
+                if !joined.is_empty() {
+                    return Some(truncate_chars(&joined, 400));
                 }
             }
         }
     }
     None
+}
+
+/// Char-boundary-safe truncation for error messages (Chinese text).
+fn truncate_chars(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        return s.to_string();
+    }
+    let mut out: String = s.chars().take(max).collect();
+    out.push('…');
+    out
 }
 
 fn spawn_line_reader(pipe: impl Read + Send + 'static, tx: std::sync::mpsc::Sender<String>) {
@@ -706,6 +731,18 @@ mod tests {
         let s = structured_failure_summary(&lines).unwrap();
         assert!(s.contains("render") && s.contains("typst_failed") && s.contains("compile error"));
         assert!(structured_failure_summary(&["nothing".into()]).is_none());
+    }
+
+    /// The generic upstream summary must not hide the real cause: `detail`
+    /// wins whenever it says something else.
+    #[test]
+    fn failure_summary_prefers_detail_over_generic_summary() {
+        let lines = vec![
+            r#"structured failure json: {"failed_stage":"translation","failure_code":"python_unhandled_exception","summary":"任务失败，但暂未识别出明确根因","detail":"translation review gate blocked: review_error_count=6 preview=p3:p003-b000:truncated_translation"}"#.to_string(),
+        ];
+        let s = structured_failure_summary(&lines).unwrap();
+        assert!(s.contains("review gate blocked"), "{s}");
+        assert!(!s.contains("未识别出明确根因"), "{s}");
     }
 
     // =========================================================================
@@ -819,25 +856,39 @@ mod tests {
         std::fs::create_dir_all(&tmp).expect("tmp dir");
         crate::db::init_database_at(&tmp.join("rbwa.db")).expect("init db");
 
+        // RBWA_E2E_BOOK_PDF: use an external PDF (scale diagnosis) instead of
+        // the tiny built-in fixture.
         let book_pdf = tmp.join("book.pdf");
-        build_fixture_pdf(&book_pdf);
+        let mut fixture_pages = 2i64;
+        match std::env::var("RBWA_E2E_BOOK_PDF") {
+            Ok(src) => {
+                std::fs::copy(&src, &book_pdf).expect("copy external pdf");
+                fixture_pages = crate::pdf::with_document_file(book_pdf.to_str().unwrap(), |doc| {
+                    Ok(doc.pages().len() as i64)
+                })
+                .expect("count pages");
+            }
+            Err(_) => build_fixture_pdf(&book_pdf),
+        }
 
         // Book row.
         let conn = crate::db::db();
         conn.execute(
             "INSERT INTO books (title, original_path, stored_path, file_type, page_count) \
-             VALUES (?1, ?2, ?3, 'pdf', 2)",
+             VALUES (?1, ?2, ?3, 'pdf', ?4)",
             rusqlite::params![
                 "端到端测试书",
                 book_pdf.to_string_lossy(),
-                book_pdf.to_string_lossy()
+                book_pdf.to_string_lossy(),
+                fixture_pages
             ],
         )
         .expect("insert book");
         let book_id: i64 = conn.last_insert_rowid();
         drop(conn);
 
-        // Mock LLM.
+        // Mock LLM only: this harness must never call a real endpoint (real
+        // API runs are the user's decision, not a test's).
         let port = free_port();
         let mut mock = Command::new("python3")
             .arg(&mock_script)
@@ -847,7 +898,6 @@ mod tests {
             .stderr(Stdio::null())
             .spawn()
             .expect("spawn mock llm");
-        // Wait for the mock to accept connections.
         for _ in 0..50 {
             if std::net::TcpStream::connect(("127.0.0.1", port)).is_ok() {
                 break;
@@ -896,7 +946,7 @@ mod tests {
             Ok(doc.pages().len() as i64)
         })
         .expect("open produced pdf");
-        assert_eq!(pages, 2, "page count must match the source");
+        assert_eq!(pages, fixture_pages, "page count must match the source");
         let texts = crate::pdf::extract_document_text(&translation.mono_path).expect("extract text");
         assert!(
             texts.first().map(|t| t.contains("模拟译文")).unwrap_or(false),

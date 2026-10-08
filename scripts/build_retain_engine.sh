@@ -104,12 +104,17 @@ done
 cp -f "$VENDOR/fonts/SourceHanSerifSC-Regular.otf" "$VENDOR/fonts/SourceHanSerifSC-Bold.otf" "$OUT/fonts/"
 
 # 6. 清单
+# size_bytes lets the app report the footprint WITHOUT walking the tree on
+# every status probe (a 300MB walk blocked the settings UI).
+SIZE_BYTES="$(du -sb "$OUT" 2>/dev/null | cut -f1)"
+SIZE_BYTES="${SIZE_BYTES:-0}"
 cat > "$OUT/engine.json" <<JSON
 {
   "retainpdf_pipeline": "$PIPELINE_VERSION",
   "upstream_commit": "$UPSTREAM_COMMIT",
   "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "bundled": false
+  "bundled": false,
+  "size_bytes": $SIZE_BYTES
 }
 JSON
 

@@ -5,6 +5,10 @@ import 'package:go_router/go_router.dart';
 import 'package:rbwa/features/bilingual/providers/book_translation_provider.dart';
 import 'package:rbwa/features/bilingual/providers/engine_provider.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
+import 'package:rbwa/features/annotation/providers/annotation_provider.dart';
+import 'package:rbwa/features/annotation/widgets/highlight_layer.dart';
+import 'package:rbwa/features/annotation/widgets/selection_layer.dart';
+import 'package:rbwa/src/rust/models/annotation.dart' show TextAnnotation;
 import 'package:rbwa/features/reader/widgets/pdf_page_scroll.dart'
     show kPageGap, pageHeightProvider;
 import 'package:rbwa/src/rust/models/translate.dart';
@@ -283,6 +287,19 @@ class _SyncedPageListState extends State<_SyncedPageList> {
   }
 }
 
+/// Text-layer marks made ON the translated pane (v9 `source`), for one page.
+/// The original pane holds its own set with the same page number.
+final translatedPageAnnotationsProvider =
+    Provider.family<List<TextAnnotation>, ({int bookId, int page})>((ref, key) {
+  final list = ref.watch(annotationProvider).valueOrNull;
+  if (list == null) return const <TextAnnotation>[];
+  return list
+      .where((a) =>
+          a.page == key.page &&
+          AnnotationPane.fromSource(a.source) == AnnotationPane.translated)
+      .toList(growable: false);
+});
+
 class _TranslatedPageCard extends ConsumerWidget {
   const _TranslatedPageCard({
     required this.bookId,
@@ -303,11 +320,20 @@ class _TranslatedPageCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final async = ref.watch(
-        translatedPageImageProvider((bookId: bookId, page: page)));
-    final data = async.valueOrNull;
+    // Render the page at (roughly) the pixels actually displayed, bucketed so
+    // small resizes reuse one bitmap -- the old fixed 3.0 dpi rasterized
+    // ~1785px wide regardless of the pane's real width.
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final pageAnns = ref.watch(
+        translatedPageAnnotationsProvider((bookId: bookId, page: page - 1)));
 
-    return Padding(
+    return LayoutBuilder(builder: (context, constraints) {
+      final targetWidthPx =
+          (constraints.maxWidth * dpr).ceil().clamp(256, 4096);
+      final async = ref.watch(translatedPageImageProvider(
+          (bookId: bookId, page: page, targetWidthPx: targetWidthPx)));
+      final data = async.valueOrNull;
+      return Padding(
       padding: EdgeInsets.only(bottom: kPageGap - 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -349,23 +375,71 @@ class _TranslatedPageCard extends ConsumerWidget {
                       offset: const Offset(0, 2)),
                 ],
               ),
-              child: _pageContent(theme, data),
+              child: _pageContent(theme, data, pageAnns),
             ),
           ),
         ],
       ),
-    );
+      );
+    });
   }
 
-  Widget _pageContent(ThemeData theme, TranslatedPageImage? data) {
+  Widget _pageContent(
+    ThemeData theme,
+    TranslatedPageImage? data,
+    List<TextAnnotation> pageAnns,
+  ) {
     if (data == null) {
       return const Center(child: CircularProgressIndicator(strokeWidth: 2));
     }
     if (data.image != null) {
-      return RawImage(
-        image: data.image,
-        fit: BoxFit.contain,
-        alignment: Alignment.topCenter,
+      // The image is letterboxed (contain, top-center) inside the card; the
+      // selection layer must cover the SAME rect or its normalized char-box
+      // coordinates would be off. LayoutBuilder recomputes the fitted rect.
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final fitted = applyBoxFit(
+            BoxFit.contain,
+            Size(data.image!.width.toDouble(), data.image!.height.toDouble()),
+            constraints.biggest,
+          );
+          // The image is letterboxed inside the card; the selection layer must
+          // cover EXACTLY the fitted rect -- filling the whole card would put
+          // its normalized coordinates on a different scale than the glyphs
+          // (selection boxes drifted and line starts/ends over- or
+          // under-selected).
+          return Align(
+            alignment: Alignment.topCenter,
+            child: SizedBox(
+              width: fitted.destination.width,
+              height: fitted.destination.height,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: RawImage(
+                      image: data.image,
+                      fit: BoxFit.fill,
+                    ),
+                  ),
+                  // Marks made on this pane (highlight / underline /
+                  // strikethrough / note outlines), below the selection
+                  // preview so a live selection stays visible.
+                  Positioned.fill(
+                    child: HighlightLayer(annotations: pageAnns),
+                  ),
+                  Positioned.fill(
+                    child: SelectionLayer(
+                      bookId: bookId,
+                      page: page - 1, // 0-indexed, same page as the original
+                      annotations: pageAnns,
+                      translated: true,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       );
     }
     return Center(

@@ -59,6 +59,82 @@ pub mod flat_ocr;
 #[cfg(feature = "ai")]
 pub mod job;
 
+/// `{data_dir}/retain_output/{book_id}` -- the engine's persistent scratch
+/// (translation-unit cache, domain cache, typography memory). Kept ACROSS
+/// runs so a retry / re-translate reuses already-paid LLM work; bounded by
+/// [enforce_output_cache_cap] and dropped with the book.
+pub fn output_cache_dir(book_id: i64) -> PathBuf {
+    db::app_data_dir()
+        .unwrap_or_default()
+        .join("retain_output")
+        .join(book_id.to_string())
+}
+
+/// Removes one book's engine output cache (delete-book cascade).
+pub fn clear_output_cache(book_id: i64) -> AppResult<()> {
+    let dir = output_cache_dir(book_id);
+    if dir.exists() {
+        std::fs::remove_dir_all(dir)?;
+    }
+    Ok(())
+}
+
+/// Total bytes under `{data_dir}/retain_output`.
+fn output_cache_total() -> u64 {
+    let Some(root) = db::app_data_dir().ok().map(|d| d.join("retain_output")) else {
+        return 0;
+    };
+    let mut total = 0u64;
+    if let Ok(entries) = std::fs::read_dir(&root) {
+        for entry in entries.flatten() {
+            total += crate::db::repository::translate::dir_size(&entry.path());
+        }
+    }
+    total
+}
+
+/// Cap the engine output caches (default 2GB): evict whole books oldest-first,
+/// skipping pinned / in-flight ones (same policy as the artifact LRU).
+pub fn enforce_output_cache_cap() -> AppResult<()> {
+    const CAP_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+    let mut used = output_cache_total();
+    if used <= CAP_BYTES {
+        return Ok(());
+    }
+    let pinned: std::collections::HashSet<i64> = pinned_books().into_iter().collect();
+    let translating: std::collections::HashSet<i64> = translating_books().into_iter().collect();
+    let root = db::app_data_dir()?.join("retain_output");
+    let mut candidates: Vec<(i64, std::time::SystemTime)> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&root) {
+        for entry in entries.flatten() {
+            let Ok(id) = entry.file_name().to_string_lossy().parse::<i64>() else {
+                continue;
+            };
+            if let Ok(md) = entry.metadata() {
+                if let Ok(mtime) = md.modified() {
+                    candidates.push((id, mtime));
+                }
+            }
+        }
+    }
+    candidates.sort_by_key(|(_, mtime)| *mtime);
+    for (book_id, _) in candidates {
+        if used <= CAP_BYTES {
+            break;
+        }
+        if pinned.contains(&book_id) || translating.contains(&book_id) {
+            continue;
+        }
+        let dir = output_cache_dir(book_id);
+        let before = crate::db::repository::translate::dir_size(&dir);
+        if dir.exists() {
+            std::fs::remove_dir_all(&dir)?;
+        }
+        used = used.saturating_sub(before);
+    }
+    Ok(())
+}
+
 /// `{data_dir}/translated/{book_id}` -- translated PDFs (plan §6/§7).
 /// Sibling of `covers/` / `ai_images/`.
 pub fn translated_dir(book_id: i64) -> PathBuf {
@@ -200,6 +276,11 @@ pub fn enforce_cache_limit() -> AppResult<u64> {
         if dir.exists() {
             std::fs::remove_dir_all(&dir)?;
         }
+        // The engine's per-book caches are part of the same budget.
+        let cache = output_cache_dir(book_id);
+        if cache.exists() {
+            let _ = std::fs::remove_dir_all(&cache);
+        }
         used = used.saturating_sub(before);
     }
     Ok(used)
@@ -208,6 +289,16 @@ pub fn enforce_cache_limit() -> AppResult<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The engine's scratch lives per book under retain_output/ (persistent
+    /// across runs so retries reuse paid LLM work).
+    #[test]
+    fn output_cache_dir_is_per_book_and_persistent() {
+        let a = output_cache_dir(7);
+        let b = output_cache_dir(8);
+        assert!(a.to_string_lossy().contains("retain_output/7"), "{a:?}");
+        assert_ne!(a, b);
+    }
 
     #[test]
     fn translating_registry_roundtrip() {

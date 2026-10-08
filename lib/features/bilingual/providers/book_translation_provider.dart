@@ -4,7 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:rbwa/data/repositories/translation_repository.dart';
-import 'package:rbwa/features/reader/providers/image_decoder.dart';
+import 'package:rbwa/features/bilingual/providers/translated_bitmap_cache.dart';
 import 'package:rbwa/src/rust/models/translate.dart';
 
 /// Bumped when a book's translated artifact appears / changes / is deleted,
@@ -162,27 +162,14 @@ class TranslatedPageImage {
   final String? error;
 }
 
-final translatedPageImageProvider = FutureProvider.family<TranslatedPageImage,
-    ({int bookId, int page})>((ref, key) async {
-  // Re-render when the artifact appears / changes.
+final translatedPageImageProvider = FutureProvider.autoDispose
+    .family<TranslatedPageImage, ({int bookId, int page, int targetWidthPx})>(
+        (ref, key) {
+  // A new artifact (re-translate / delete) invalidates every page.
   ref.watch(translationRevisionProvider);
-  final repo = ref.read(translationRepositoryProvider);
-  final bmp = await repo.renderTranslatedPage(
-    bookId: key.bookId,
-    page: key.page,
-    dpiScale: 3.0,
-  );
-  if (bmp.error != null) {
-    return TranslatedPageImage(
-        hasTranslation: bmp.hasTranslation, error: bmp.error);
-  }
-  if (!bmp.hasTranslation || bmp.rgba.isEmpty) {
-    return const TranslatedPageImage(hasTranslation: false);
-  }
-  final image = await decodeRgbaImage(bmp.width, bmp.height, bmp.rgba);
-  return TranslatedPageImage(
-    image: image,
-    hasTranslation: true,
-    error: image == null ? '译文页解码失败' : null,
-  );
+  return ref.read(translatedBitmapCacheProvider).getOrFetch(
+        bookId: key.bookId,
+        page: key.page,
+        targetWidthPx: key.targetWidthPx,
+      );
 });

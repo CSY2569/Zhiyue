@@ -7,6 +7,11 @@ import 'package:rbwa/data/repositories/translation_repository.dart';
 import 'package:rbwa/features/bilingual/providers/book_translation_provider.dart';
 import 'package:rbwa/features/bilingual/providers/page_translation_provider.dart';
 import 'package:rbwa/src/rust/models/translate.dart';
+import 'package:rbwa/features/annotation/providers/annotation_provider.dart';
+import 'package:rbwa/features/annotation/widgets/highlight_layer.dart';
+import 'package:rbwa/features/annotation/widgets/selection_layer.dart';
+import 'package:rbwa/src/rust/models/annotation.dart'
+    show NormRect, TextAnnotation, TextAnnotationKind;
 import 'package:rbwa/features/bilingual/widgets/translated_pane.dart';
 import 'package:rbwa/src/rust/models/progress.dart' show ViewMode;
 
@@ -134,6 +139,94 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('译文选中层与图像显示矩形完全重合（几何回归）', (tester) async {
+      tester.view.physicalSize = const Size(520, 1000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final repo = FakeTranslationRepo()
+        ..engineStatus = const EngineStatus(
+          kind: EngineStatusKind.installed,
+          phase: '',
+          progress: 1,
+          version: 'retainpdf-pipeline 4.2.6',
+          sizeBytes: 1024,
+          error: null,
+          bundled: true,
+        )
+        ..bookTranslation = BookTranslation(
+          bookId: 1,
+          title: '测试书',
+          targetLang: '中文',
+          langOut: 'zh',
+          monoPath: '/x.mono.pdf',
+          dualPath: '',
+          pages: 3,
+          finishedAt: '0',
+        );
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          translationRepositoryProvider.overrideWithValue(repo),
+          annotationProvider.overrideWith(() => _SeededAnnotations([
+                TextAnnotation(
+                  id: 1,
+                  bookId: 1,
+                  page: 0,
+                  kind: TextAnnotationKind.highlight,
+                  source: 'translated',
+                  text: '译文句子',
+                  content: null,
+                  rects: const [NormRect(x: 0.1, y: 0.1, w: 0.4, h: 0.02)],
+                  color: '#ffff00',
+                  createdAt: '',
+                  updatedAt: '',
+                ),
+              ])),
+          defaultViewer(book: testBook(pageCount: 3), currentPage: 1),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: const Scaffold(body: TranslatedColumn()),
+        ),
+      ));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      // The page bitmap decodes on the engine (ui.decodeImageFromPixels):
+      // give the real event loop a slice, then pump the result in.
+      await tester.runAsync(() => Future<void>.delayed(
+            const Duration(milliseconds: 100),
+          ));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      final images = find.byType(RawImage);
+      expect(images, findsWidgets, reason: '译文页应已渲染图像');
+      final layer = find.byType(SelectionLayer);
+      expect(layer, findsWidgets, reason: '译文页应带选中层');
+
+      // The image is letterboxed (2:3 inside a wider card): the layer must
+      // cover the IMAGE rect, not the whole card.
+      final imageRect = tester.getRect(images.first);
+      final layerRect = tester.getRect(layer.first);
+      expect(layerRect.left, closeTo(imageRect.left, 0.5), reason: '左边对齐');
+      expect(layerRect.top, closeTo(imageRect.top, 0.5), reason: '顶边对齐');
+      expect(layerRect.width, closeTo(imageRect.width, 0.5), reason: '宽度一致');
+      expect(layerRect.height, closeTo(imageRect.height, 0.5), reason: '高度一致');
+      expect(tester.takeException(), isNull);
+
+      // Marks made on the translated pane are painted there (v9 pane tag).
+      final painted = tester
+          .widget<HighlightLayer>(find.byType(HighlightLayer).first)
+          .annotations;
+      expect(painted, isNotEmpty, reason: '译文标注应在译文页渲染');
+      expect(
+        painted.every((a) => a.source == 'translated'),
+        isTrue,
+        reason: '译文页只画译文标注',
+      );
+    });
+
     testWidgets('running translation shows phase + cancel', (tester) async {
       final repo = FakeTranslationRepo()
         ..engineStatus = const EngineStatus(
@@ -178,4 +271,14 @@ void main() {
       expect(find.textContaining('start to translate'), findsOneWidget);
     });
   });
+}
+
+/// Annotation list seeded for tests (no DB).
+class _SeededAnnotations extends AnnotationNotifier {
+  _SeededAnnotations(this.seed);
+
+  final List<TextAnnotation> seed;
+
+  @override
+  Future<List<TextAnnotation>> build() async => seed;
 }

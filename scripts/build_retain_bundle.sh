@@ -60,6 +60,13 @@ import json, pathlib
 p = pathlib.Path("$ENGINE_DST/engine.json")
 m = json.loads(p.read_text())
 m["bundled"] = True
+# size_bytes is recorded pre-copy; refresh it for the staged tree so the app
+# never walks the bundle to report the footprint.
+import subprocess as _sp
+m["size_bytes"] = int(
+    _sp.run(["du", "-sb", str(p.parent)], capture_output=True, text=True)
+    .stdout.split()[0]
+)
 p.write_text(json.dumps(m, indent=1, ensure_ascii=False) + "\n")
 print("    manifest:", m)
 PY
@@ -109,6 +116,14 @@ RUN
 chmod +x "$APPDIR/AppRun"
 
 OUT="$DIST/ZhiYue-${VERSION}-retainpdf-x86_64.AppImage"
-"$APPIMAGE_TOOL" --runtime-file "$RUNTIME_FILE" "$APPDIR" "$OUT" >/dev/null 2>&1
+# A running instance keeps the old file open (ETXTBSY): appimagetool then
+# fails silently -- unlink first (the running process keeps its inode).
+rm -f "$OUT"
+"$APPIMAGE_TOOL" --runtime-file "$RUNTIME_FILE" "$APPDIR" "$OUT" >/dev/null 2>&1 || true
+if [ ! -f "$OUT" ]; then
+  echo "appimagetool failed; rerunning with output for diagnosis" >&2
+  "$APPIMAGE_TOOL" --runtime-file "$RUNTIME_FILE" "$APPDIR" "$OUT"
+  exit 1
+fi
 echo
 echo "==> Done: $OUT ($(du -h "$OUT" | cut -f1))"
