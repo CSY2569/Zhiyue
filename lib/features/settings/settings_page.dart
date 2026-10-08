@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:rbwa/core/theme/reading_theme.dart';
+import 'package:rbwa/core/theme/reading_theme_controller.dart';
 import 'package:rbwa/core/theme/theme_controller.dart';
 import 'package:rbwa/data/repositories/ai_repository.dart';
 import 'package:rbwa/features/ai/providers/ai_config_provider.dart';
@@ -231,6 +233,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final themeMode = ref.watch(themeControllerProvider);
+    final readingTheme = ref.watch(readingThemeControllerProvider);
     final config = ref.watch(aiConfigProvider).valueOrNull;
     _hydrate(config);
     final canSave = !_saving && _apiKey.text.trim().isNotEmpty;
@@ -280,6 +283,39 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       showSelectedIcon: false,
                       onSelectionChanged: (s) => ref
                           .read(themeControllerProvider.notifier)
+                          .set(s.first),
+                    ),
+                  ),
+                  SettingsControlRow(
+                    title: '阅读主题',
+                    description: '阅读器界面与页面配色；「跟随亮度」在亮色下为纸白、暗色下为暗夜',
+                    child: SegmentedButton<ReadingTheme>(
+                      segments: const [
+                        ButtonSegment(
+                          value: ReadingTheme.auto,
+                          label: Text('跟随亮度'),
+                          icon: Icon(Icons.brightness_auto_outlined, size: 16),
+                        ),
+                        ButtonSegment(
+                          value: ReadingTheme.paper,
+                          label: Text('纸白'),
+                          icon: Icon(Icons.description_outlined, size: 16),
+                        ),
+                        ButtonSegment(
+                          value: ReadingTheme.parchment,
+                          label: Text('羊皮纸'),
+                          icon: Icon(Icons.auto_stories_outlined, size: 16),
+                        ),
+                        ButtonSegment(
+                          value: ReadingTheme.night,
+                          label: Text('暗夜'),
+                          icon: Icon(Icons.nightlight_outlined, size: 16),
+                        ),
+                      ],
+                      selected: {readingTheme},
+                      showSelectedIcon: false,
+                      onSelectionChanged: (s) => ref
+                          .read(readingThemeControllerProvider.notifier)
                           .set(s.first),
                     ),
                   ),
