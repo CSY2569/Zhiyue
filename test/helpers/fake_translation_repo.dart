@@ -122,7 +122,7 @@ class FakeTranslationRepo extends TranslationRepository {
   Future<TranslatedPageBitmap> renderTranslatedPage({
     required int bookId,
     required int page,
-    double dpiScale = 1.0,
+    int targetWidthPx = 1024,
   }) async {
     if (bookTranslation == null) {
       return TranslatedPageBitmap(
@@ -133,11 +133,13 @@ class FakeTranslationRepo extends TranslationRepository {
         error: null,
       );
     }
-    // 2x2 opaque white bitmap (decodes on the engine's task runner).
+    // Tiny opaque white bitmap with an A4-like portrait ratio (decodes on the
+    // engine's task runner). The ratio matters: the translated pane letterboxes
+    // the image and must place the selection layer on the SAME rect.
     return TranslatedPageBitmap(
       width: 2,
-      height: 2,
-      rgba: Uint8List.fromList(List.filled(2 * 2 * 4, 255)),
+      height: 3,
+      rgba: Uint8List.fromList(List.filled(2 * 3 * 4, 255)),
       hasTranslation: true,
       error: null,
     );

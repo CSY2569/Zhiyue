@@ -103,7 +103,20 @@ pub fn annotations_markdown(
     let mut pages: BTreeMap<i64, Vec<String>> = BTreeMap::new();
     for ann in annotations {
         let text = ann.text.as_deref().unwrap_or("");
-        let mut line = format!("- {} {}：{}\n", kind_icon(ann.kind), kind_label(ann.kind), text);
+        // Marks made on the 对照 view's translated pane are labelled so the
+        // export never reads as if the quoted text were the original.
+        let pane = if ann.source == crate::models::annotation::ANNOTATION_SOURCE_TRANSLATED {
+            "（译文）"
+        } else {
+            ""
+        };
+        let mut line = format!(
+            "- {} {}{}：{}\n",
+            kind_icon(ann.kind),
+            kind_label(ann.kind),
+            pane,
+            text
+        );
         if let Some(content) = ann.content.as_deref() {
             if !content.is_empty() {
                 line.push_str(&format!("  > {}\n", content.replace('\n', "\n  > ")));
@@ -164,6 +177,7 @@ mod tests {
             book_id: 1,
             page,
             kind,
+            source: crate::models::annotation::ANNOTATION_SOURCE_ORIGINAL.to_string(),
             text: text.map(String::from),
             content: content.map(String::from),
             rects: vec![NormRect {

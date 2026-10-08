@@ -70,16 +70,22 @@ class TranslationRepository {
   Future<int> clearBookTranslation(int bookId) =>
       rust.clearBookTranslation(bookId: bookId);
 
-  /// Renders page [page] (1-indexed) of the translated PDF at [dpiScale]x.
+  /// Per-character boxes of one TRANSLATED page (0-indexed), for selection
+  /// and AI actions on the translated pane.
+  Future<rust.CharBoxResult> extractTranslatedText(int bookId, int page) =>
+      rust.extractTranslatedText(bookId: bookId, page: page);
+
+  /// Renders page [page] (1-indexed) of the translated PDF at about
+  /// [targetWidthPx] pixels wide (the pane's display width).
   Future<rust.TranslatedPageBitmap> renderTranslatedPage({
     required int bookId,
     required int page,
-    double dpiScale = 1.0,
+    int targetWidthPx = 1024,
   }) =>
       rust.renderTranslatedPage(
         bookId: bookId,
         page: page,
-        dpiScale: dpiScale,
+        targetWidthPx: targetWidthPx,
       );
 
   // --- translation engine (RetainPDF, bundled) ---------------------------

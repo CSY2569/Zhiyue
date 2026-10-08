@@ -224,6 +224,26 @@ class _AnnotationTile extends ConsumerWidget {
             children: [
               Icon(textAnnotationIcon(ann.kind),
                   size: 16, color: theme.colorScheme.primary),
+              // Marks made on the 对照 view's translated pane look identical
+              // to original ones otherwise: give them a pane badge.
+              if (AnnotationPane.fromSource(ann.source) ==
+                  AnnotationPane.translated) ...[
+                const SizedBox(width: 4),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '译',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSecondaryContainer,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(width: 8),
               Expanded(
                 child: Column(

@@ -28,7 +28,7 @@
 /// 8: retire the built-in translation pipeline (replaced by the downloadable
 /// external engine) -- `page_translation_cache` DROPPED, its rows have no
 /// consumer; `translation_glossary` stays.
-pub const SCHEMA_VERSION: u32 = 8;
+pub const SCHEMA_VERSION: u32 = 9;
 
 /// Indexes for per-book AI conversation windows (v3, FEATURES 6.5.4).
 ///
@@ -108,6 +108,7 @@ CREATE TABLE IF NOT EXISTS annotations (
     book_id     INTEGER NOT NULL,
     page        INTEGER NOT NULL,
     kind        TEXT NOT NULL,                 -- 'highlight'|'underline'|'strikethrough'|'note'
+    source      TEXT NOT NULL DEFAULT 'original', -- 'original' | 'translated' pane (v9)
     text        TEXT,                          -- selected text the mark was created from
     content     TEXT,                          -- note text (nullable for mark-only)
     rects       TEXT NOT NULL,                 -- JSON array of normalized rects [{x,y,w,h}, ...]

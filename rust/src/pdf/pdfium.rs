@@ -241,6 +241,66 @@ pub fn extract_text(page: i64) -> AppResult<Vec<CharBox>> {
     })
 }
 
+/// Renders page [page] (0-indexed) of [path] so the page is about
+/// [target_width_px] pixels wide: the scale is derived from the page's own
+/// point width, so callers never rasterize more pixels than they display.
+/// Clamped to [0.5, 4.0]x to keep degenerate inputs sane.
+pub fn render_page_file_to_width(
+    path: &str,
+    page: i64,
+    target_width_px: i64,
+) -> AppResult<PageBitmap> {
+    let _guard = PDFIUM_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let pdfium = pdfium()?;
+    let doc = pdfium.load_pdf_from_file(path, None)?;
+    let pg = doc.pages().get(page as PdfPageIndex)?;
+    let page_w = pg.width().value.max(1.0);
+    let scale = (target_width_px.max(64) as f32 / page_w).clamp(0.5, 4.0);
+    let config = PdfRenderConfig::new()
+        .set_target_width((page_w * scale).max(1.0) as i32)
+        .set_target_height((pg.height().value * scale).max(1.0) as i32);
+    let bitmap = pg.render_with_config(&config)?;
+    Ok(PageBitmap {
+        width: bitmap.width() as u32,
+        height: bitmap.height() as u32,
+        rgba: bitmap.as_rgba_bytes(),
+    })
+}
+
+/// Per-char boxes of one page of an ARBITRARY PDF file (the translated
+/// book's mono PDF): same normalization as [extract_text] (top-left origin,
+/// [0,1]). Selection on the translated pane reuses the original-pane
+/// machinery against these boxes.
+pub fn extract_text_file(path: &str, page: i64) -> AppResult<Vec<CharBox>> {
+    with_document_file(path, |doc| {
+        let pg = doc.pages().get(page as PdfPageIndex)?;
+        let page_w = pg.width().value.max(1.0);
+        let page_h = pg.height().value.max(1.0);
+        let text = pg.text()?;
+        let mut out = Vec::new();
+        for char in text.chars().iter() {
+            let ch = char.unicode_string().unwrap_or_default();
+            if ch.is_empty() {
+                continue;
+            }
+            if let Ok(rect) = char.tight_bounds() {
+                let quad = rect.to_quad_points();
+                let w = (quad.width().value / page_w).max(0.0);
+                let h = (quad.height().value / page_h).max(0.0);
+                out.push(CharBox {
+                    char: ch,
+                    x: (quad.left().value / page_w).max(0.0),
+                    y: (1.0 - (quad.bottom().value + quad.height().value) / page_h)
+                        .clamp(0.0, 1.0),
+                    w,
+                    h,
+                });
+            }
+        }
+        Ok(out)
+    })
+}
+
 /// Whether a page has extractable text (FEATURES 7.1.2: empty -> scanned).
 pub fn page_has_text(page: i64) -> AppResult<bool> {
     with_doc(|doc| {
@@ -405,6 +465,114 @@ mod tests {
     /// translator cache empty pages and never call the API.
     ///
     /// Skips when libpdfium is unreachable (run from the repo root).
+    /// Benchmark (ignored): raster cost of the translated pane's old fixed
+    /// 3.0-dpi render vs the new display-width render, on a real translated
+    /// PDF given via `RBWA_BENCH_PDF`.
+    ///
+    /// ```text
+    /// RBWA_BENCH_PDF=/path/translated.pdf cargo test --all-features -- \
+    ///   --ignored render_width_benchmark --nocapture
+    /// ```
+    #[test]
+    #[ignore = "manual benchmark"]
+    fn render_width_benchmark() {
+        use std::time::Instant;
+        let Ok(pdf) = std::env::var("RBWA_BENCH_PDF") else {
+            eprintln!("set RBWA_BENCH_PDF");
+            return;
+        };
+        type RenderCase<'a> = Box<dyn Fn() -> AppResult<PageBitmap> + 'a>;
+        let cases: Vec<(&str, RenderCase<'_>)> = vec![
+            ("fixed dpi 3.0 (old)", Box::new(|| render_page_file(&pdf, 2, 3.0))),
+            (
+                "target 768px (new, narrow pane)",
+                Box::new(|| render_page_file_to_width(&pdf, 2, 768)),
+            ),
+            (
+                "target 1280px (new, hi-dpi pane)",
+                Box::new(|| render_page_file_to_width(&pdf, 2, 1280)),
+            ),
+        ];
+        for (label, run) in cases {
+            // warm
+            let _ = run();
+            let t = Instant::now();
+            let bmp = run().expect("render");
+            let ms = t.elapsed().as_millis();
+            println!(
+                "{label}: {}x{} = {:.2}MP in {ms}ms",
+                bmp.width,
+                bmp.height,
+                (bmp.width as f64 * bmp.height as f64) / 1e6
+            );
+        }
+    }
+
+    /// Manual diagnostic: dump `extract_text_file` boxes for a PDF page so
+    /// they can be compared against the rendered glyphs (alignment debugging).
+    ///
+    /// ```text
+    /// RBWA_BOX_DUMP_PDF=/path/in.pdf RBWA_BOX_DUMP_PAGE=2 cargo test \
+    ///   --all-features -- --ignored dump_text_boxes --nocapture
+    /// ```
+    #[test]
+    #[ignore = "manual alignment diagnostic"]
+    fn dump_text_boxes() {
+        let pdf = std::env::var("RBWA_BOX_DUMP_PDF").expect("RBWA_BOX_DUMP_PDF");
+        let page: i64 = std::env::var("RBWA_BOX_DUMP_PAGE")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+        let boxes = extract_text_file(&pdf, page).expect("extract");
+        println!("boxes={}", boxes.len());
+        for b in boxes.iter() {
+            println!(
+                "{:?}\t{:.5}\t{:.5}\t{:.5}\t{:.5}",
+                b.char, b.x, b.y, b.w, b.h
+            );
+        }
+    }
+
+    /// extract_text_file: normalized boxes of an arbitrary PDF file (the
+    /// translated pane's selection data source). Skips without libpdfium.
+    #[test]
+    fn extract_text_file_returns_normalized_boxes() {
+        let Ok(_) = pdfium() else {
+            eprintln!("skipping: libpdfium not on the search path");
+            return;
+        };
+        let path = std::env::temp_dir().join(format!("rbwa_etf_{}.pdf", std::process::id()));
+        with_pdfium_lock(|p| {
+            let mut doc = p.create_new_pdf()?;
+            let font = doc.fonts_mut().helvetica();
+            let mut page = doc.pages_mut().create_page_at_end(PdfPagePaperSize::a4())?;
+            page.objects_mut().create_text_object(
+                PdfPoints::new(60.0),
+                PdfPoints::new(700.0),
+                "Hello translated",
+                font,
+                PdfPoints::new(12.0),
+            )?;
+            doc.save_to_file(&path)?;
+            Ok(())
+        })
+        .expect("build pdf");
+
+        let boxes = extract_text_file(path.to_str().unwrap(), 0).expect("extract");
+        assert!(!boxes.is_empty());
+        let text: String = boxes.iter().map(|b| b.char.clone()).collect();
+        assert!(text.contains("Hello"), "text: {text}");
+        for b in &boxes {
+            assert!((0.0..=1.0).contains(&b.x) && (0.0..=1.0).contains(&b.y));
+            assert!(b.w > 0.0 && b.h > 0.0);
+        }
+        // The text sits in the upper half: y (top-left origin) < 0.5.
+        let avg_y = boxes.iter().map(|b| b.y as f64).sum::<f64>() / boxes.len() as f64;
+        assert!(avg_y < 0.5, "avg_y {avg_y}");
+
+        let _ = std::fs::remove_file(&path);
+    }
+
     #[test]
     fn concurrent_text_extraction_is_correct() {
         let Ok(_) = pdfium() else {

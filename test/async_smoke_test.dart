@@ -60,6 +60,7 @@ void main() {
       content: null,
       rects: const [NormRect(x: 0.1, y: 0.2, w: 0.5, h: 0.03)],
       color: '#abcdef',
+      source: 'original',
     );
     expect(created.error, isNull, reason: 'create: ${created.error}');
     expect(created.id, greaterThan(0));
@@ -70,6 +71,7 @@ void main() {
       page: 2,
       kind: TextAnnotationKind.note,
       text: 'phrase',
+      source: 'original',
       content: 'my note',
       rects: const [NormRect(x: 0.1, y: 0.25, w: 0.4, h: 0.03)],
       color: null,

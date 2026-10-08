@@ -388,6 +388,8 @@ pub fn delete_book(id: i64) -> i32 {
         // page_translation_cache rows cascade with the book row (FK).
         crate::translate::unmark_translating(id);
         let _ = crate::translate::clear_translation_artifacts(id);
+        // The engine's per-book LLM caches go with the book.
+        let _ = crate::translate::clear_output_cache(id);
         1
     } else {
         0
@@ -779,6 +781,50 @@ pub struct CharBoxResult {
     pub error: Option<String>,
 }
 
+/// Per-character boxes of one TRANSLATED page (the mono PDF under
+/// `translated/{book_id}/`), for selection + AI actions on the translated
+/// pane -- same normalization as [extract_text].
+///
+/// Async: pdfium text traversal is heavyweight and must not block the UI.
+pub async fn extract_translated_text(book_id: i64, page: i64) -> CharBoxResult {
+    #[cfg(feature = "ai")]
+    {
+        let path = match crate::translate::job::load_artifact(book_id) {
+            Some(t) => t.mono_path,
+            None => {
+                return CharBoxResult {
+                    boxes: Vec::new(),
+                    error: Some("该书的译本不存在或已被清理".into()),
+                }
+            }
+        };
+        let path = path.clone();
+        match tokio::task::spawn_blocking(move || {
+            crate::pdf::extract_text_file(&path, page)
+        })
+        .await
+        {
+            Ok(Ok(boxes)) => CharBoxResult { boxes, error: None },
+            Ok(Err(e)) => CharBoxResult {
+                boxes: Vec::new(),
+                error: Some(e.to_string()),
+            },
+            Err(e) => CharBoxResult {
+                boxes: Vec::new(),
+                error: Some(format!("提取任务失败: {e}")),
+            },
+        }
+    }
+    #[cfg(not(feature = "ai"))]
+    {
+        let _ = (book_id, page);
+        CharBoxResult {
+            boxes: Vec::new(),
+            error: Some("对照阅读需要 ai 构建特性".into()),
+        }
+    }
+}
+
 /// Result of creating an annotation: the new row id, or -1 on error.
 pub struct AnnotationCreateResult {
     pub id: i64,
@@ -821,6 +867,7 @@ pub fn list_annotations(book_id: i64) -> Vec<TextAnnotation> {
 /// Create a text-layer annotation (highlight / underline / strikethrough /
 /// note). `rects` holds one normalized rect per selected line (FEATURES
 /// 4.3.1); `text` is the selected text; `content` the note body (notes only).
+#[allow(clippy::too_many_arguments)] // mirrors the annotation's column set
 pub fn create_annotation(
     book_id: i64,
     page: i64,
@@ -829,9 +876,12 @@ pub fn create_annotation(
     content: Option<String>,
     rects: Vec<NormRect>,
     color: Option<String>,
+    source: String,
 ) -> AnnotationCreateResult {
     let conn = db::db();
-    match annotation_repo::create(&conn, book_id, page, kind, text, content, rects, color) {
+    match annotation_repo::create(
+        &conn, book_id, page, kind, text, content, rects, color, &source,
+    ) {
         Ok(id) => AnnotationCreateResult { id, error: None },
         Err(e) => AnnotationCreateResult {
             id: -1,
@@ -1905,11 +1955,14 @@ pub fn clear_book_translation(book_id: i64) -> i32 {
 }
 
 /// Renders page [page] (1-indexed) of the book's translated PDF (the engine's
-/// mono output) at [dpi_scale]x. `has_translation` false -> no artifact yet.
+/// mono output) so that the page is [target_width_px] pixels wide -- the pane
+/// passes its own display width, so we never rasterize more pixels than are
+/// shown (fixed high-dpi rendering was the translated pane's main scroll cost).
+/// `has_translation` false -> no artifact yet.
 pub async fn render_translated_page(
     book_id: i64,
     page: i64,
-    dpi_scale: f64,
+    target_width_px: i64,
 ) -> TranslatedPageBitmap {
     #[cfg(feature = "ai")]
     {
@@ -1924,7 +1977,7 @@ pub async fn render_translated_page(
         };
         let path = t.mono_path.clone();
         let result = tokio::task::spawn_blocking(move || {
-            crate::pdf::render_page_file(&path, page - 1, dpi_scale as f32)
+            crate::pdf::render_page_file_to_width(&path, page - 1, target_width_px)
         })
         .await;
         match result {
@@ -1953,7 +2006,7 @@ pub async fn render_translated_page(
     }
     #[cfg(not(feature = "ai"))]
     {
-        let _ = (book_id, page, dpi_scale);
+        let _ = (book_id, page, target_width_px);
         TranslatedPageBitmap {
             width: 0,
             height: 0,

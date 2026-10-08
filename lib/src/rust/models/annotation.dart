@@ -120,15 +120,14 @@ class NormRect {
           h == other.h;
 }
 
-/// A text-layer annotation (highlight / underline / strikethrough / note).
-/// `rects` holds one normalized rect per selected line (FEATURES 4.3.1/4.3.2);
-/// `text` is the selected text the mark was created from (sidebar display +
-/// Markdown export, FEATURES 4.5.1/4.5.2).
 class TextAnnotation {
   final PlatformInt64 id;
   final PlatformInt64 bookId;
   final PlatformInt64 page;
   final TextAnnotationKind kind;
+
+  /// 'original' | 'translated' (v9). Legacy rows read as 'original'.
+  final String source;
 
   /// Selected text the annotation was created from; None for legacy rows
   /// created before the column existed.
@@ -148,6 +147,7 @@ class TextAnnotation {
     required this.bookId,
     required this.page,
     required this.kind,
+    required this.source,
     this.text,
     this.content,
     required this.rects,
@@ -162,6 +162,7 @@ class TextAnnotation {
       bookId.hashCode ^
       page.hashCode ^
       kind.hashCode ^
+      source.hashCode ^
       text.hashCode ^
       content.hashCode ^
       rects.hashCode ^
@@ -178,6 +179,7 @@ class TextAnnotation {
           bookId == other.bookId &&
           page == other.page &&
           kind == other.kind &&
+          source == other.source &&
           text == other.text &&
           content == other.content &&
           rects == other.rects &&

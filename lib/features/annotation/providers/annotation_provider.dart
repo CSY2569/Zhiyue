@@ -10,6 +10,17 @@ import 'package:rbwa/src/rust/models/annotation.dart';
 /// Tracks the book through the viewer state, so switching books reloads the
 /// list automatically. Mutations invalidate the state to refetch from SQLite
 /// (a local query, so the UI updates instantly -- FEATURES 4.4.2).
+/// Which pane a text mark belongs to (mirrors the Rust `source` column).
+enum AnnotationPane {
+  original,
+  translated;
+
+  String get source => name;
+
+  static AnnotationPane fromSource(String source) =>
+      source == 'translated' ? AnnotationPane.translated : AnnotationPane.original;
+}
+
 class AnnotationNotifier extends AsyncNotifier<List<TextAnnotation>> {
   @override
   Future<List<TextAnnotation>> build() async {
@@ -30,6 +41,9 @@ class AnnotationNotifier extends AsyncNotifier<List<TextAnnotation>> {
     String? content,
     required List<NormRect> rects,
     String? color,
+    /// Which pane the mark was made on (v9): the original page or the
+    /// translated pane of the 对照 view.
+    AnnotationPane pane = AnnotationPane.original,
   }) async {
     final bookId = _bookId;
     if (bookId == null) return false;
@@ -41,6 +55,7 @@ class AnnotationNotifier extends AsyncNotifier<List<TextAnnotation>> {
       content: content,
       rects: rects,
       color: color,
+      source: pane.source,
     );
     if (result.error != null || result.id < 0) return false;
     ref.invalidateSelf();

@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
 import 'package:rbwa/features/annotation/providers/annotation_provider.dart';
+import 'package:rbwa/features/annotation/models/selection.dart'
+    show SelectionSource;
 import 'package:rbwa/features/annotation/providers/selection_provider.dart';
 import 'package:rbwa/features/annotation/widgets/highlight_layer.dart';
 import 'package:rbwa/src/rust/models/ai.dart';
@@ -84,6 +86,9 @@ class FloatingToolbar extends ConsumerWidget {
                   label: '复制',
                   onTap: () => _copy(context, ref, sel.text),
                 ),
+                // The full mark set works on BOTH panes: a mark made on the
+                // translated pane is stored with source='translated' and
+                // rendered only there (v9).
                 _ToolButton(
                   icon: Icons.border_color,
                   label: '高亮',
@@ -164,6 +169,9 @@ class FloatingToolbar extends ConsumerWidget {
           text: sel.text,
           rects: sel.lineRects,
           color: colorToHex(Theme.of(context).colorScheme.primary),
+          pane: sel.source == SelectionSource.translated
+              ? AnnotationPane.translated
+              : AnnotationPane.original,
         );
     ref.read(selectionProvider.notifier).clear();
     if (!ok) {

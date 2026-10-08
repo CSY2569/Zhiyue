@@ -189,6 +189,19 @@ Future<int> saveProgress({
   viewMode: viewMode,
 );
 
+/// Per-character boxes of one TRANSLATED page (the mono PDF under
+/// `translated/{book_id}/`), for selection + AI actions on the translated
+/// pane -- same normalization as [extract_text].
+///
+/// Async: pdfium text traversal is heavyweight and must not block the UI.
+Future<CharBoxResult> extractTranslatedText({
+  required PlatformInt64 bookId,
+  required PlatformInt64 page,
+}) => RustLib.instance.api.crateApiExtractTranslatedText(
+  bookId: bookId,
+  page: page,
+);
+
 /// Extract per-character boxes for a page (0-indexed), normalized to [0,1]
 /// with a top-left origin (Flutter coordinate space). Empty `boxes` means the
 /// page has no text layer (scanned page / image book -- OCR selection lands
@@ -216,6 +229,7 @@ Future<AnnotationCreateResult> createAnnotation({
   String? content,
   required List<NormRect> rects,
   String? color,
+  required String source,
 }) => RustLib.instance.api.crateApiCreateAnnotation(
   bookId: bookId,
   page: page,
@@ -224,6 +238,7 @@ Future<AnnotationCreateResult> createAnnotation({
   content: content,
   rects: rects,
   color: color,
+  source: source,
 );
 
 /// Update a note's body text (FEATURES 4.4.2). Returns 1 on success.
@@ -496,7 +511,7 @@ Future<int> cancelEngineInstall() =>
 /// failure.
 Future<int> uninstallEngine() => RustLib.instance.api.crateApiUninstallEngine();
 
-/// Starts a whole-book translation with the BabelDOC engine, streaming
+/// Starts a whole-book translation with the RetainPDF engine, streaming
 /// progress. Completion is observed by the stream ending; failures arrive as
 /// a final event carrying `error`. Returns nothing -- read the result with
 /// [get_book_translation].
@@ -517,15 +532,18 @@ Future<int> clearBookTranslation({required PlatformInt64 bookId}) =>
     RustLib.instance.api.crateApiClearBookTranslation(bookId: bookId);
 
 /// Renders page [page] (1-indexed) of the book's translated PDF (the engine's
-/// mono output) at [dpi_scale]x. `has_translation` false -> no artifact yet.
+/// mono output) so that the page is [target_width_px] pixels wide -- the pane
+/// passes its own display width, so we never rasterize more pixels than are
+/// shown (fixed high-dpi rendering was the translated pane's main scroll cost).
+/// `has_translation` false -> no artifact yet.
 Future<TranslatedPageBitmap> renderTranslatedPage({
   required PlatformInt64 bookId,
   required PlatformInt64 page,
-  required double dpiScale,
+  required PlatformInt64 targetWidthPx,
 }) => RustLib.instance.api.crateApiRenderTranslatedPage(
   bookId: bookId,
   page: page,
-  dpiScale: dpiScale,
+  targetWidthPx: targetWidthPx,
 );
 
 /// Reads the translation config (KV `translation_config`, plan §8).

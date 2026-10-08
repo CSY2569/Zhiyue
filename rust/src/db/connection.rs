@@ -213,6 +213,16 @@ fn migrate(conn: &Connection) -> AppResult<()> {
             conn.execute_batch("DROP TABLE IF EXISTS page_translation_cache;")?;
             record_version(conn)?;
         }
+        Some(8) => {
+            // v9 tags each text annotation with the pane it was made on
+            // ('original' | 'translated'): the 对照 view's translated pane
+            // gets the full mark set, and each pane renders only its own.
+            tracing::info!("migrating schema 8 -> 9 (annotations.source)");
+            conn.execute_batch(
+                "ALTER TABLE annotations ADD COLUMN source TEXT NOT NULL DEFAULT 'original';",
+            )?;
+            record_version(conn)?;
+        }
         Some(v) => {
             tracing::warn!(recorded = v, expected = SCHEMA_VERSION, "schema version mismatch -- migration not yet implemented");
         }
@@ -534,6 +544,57 @@ mod tests {
 
         // migrate is idempotent once up to date.
         migrate(&conn).unwrap();
+    }
+
+    /// A v8-era database: annotations exist WITHOUT the `source` column.
+    fn v8_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(SCHEMA_SQL).unwrap();
+        // Drop the v9 column to emulate the older shape (SQLite 3.35+).
+        conn.execute_batch(
+            "ALTER TABLE annotations DROP COLUMN source;
+             DELETE FROM schema_version;
+             INSERT INTO schema_version (version) VALUES (8);
+             INSERT INTO books (id, title, original_path, stored_path, file_type) \
+                 VALUES (1, 'b', '/o', '/s', 'pdf');
+             INSERT INTO annotations (book_id, page, kind, text, rects) \
+                 VALUES (1, 2, 'highlight', '旧标注', '[]');",
+        )
+        .unwrap();
+        conn
+    }
+
+    #[test]
+    fn migrate_v8_to_v9_tags_annotations_with_pane() {
+        let conn = v8_db();
+        conn.execute_batch(SCHEMA_SQL).unwrap();
+        migrate(&conn).unwrap();
+
+        let v: u32 = conn
+            .query_row("SELECT MAX(version) FROM schema_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(v, SCHEMA_VERSION);
+
+        // Pre-existing marks survive and read as the original pane.
+        let (text, source): (String, String) = conn
+            .query_row(
+                "SELECT text, source FROM annotations WHERE book_id = 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(text, "旧标注");
+        assert_eq!(source, "original");
+
+        // New rows can carry the translated pane.
+        conn.execute(
+            "INSERT INTO annotations (book_id, page, kind, source, text, rects) \
+             VALUES (1, 2, 'underline', 'translated', '译文', '[]')",
+            [],
+        )
+        .unwrap();
+
+        migrate(&conn).unwrap(); // idempotent
     }
 
     #[test]

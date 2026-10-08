@@ -69,12 +69,20 @@ pub struct NormRect {
 /// `rects` holds one normalized rect per selected line (FEATURES 4.3.1/4.3.2);
 /// `text` is the selected text the mark was created from (sidebar display +
 /// Markdown export, FEATURES 4.5.1/4.5.2).
+/// Which pane a text annotation was made on: the original page or the
+/// 对照 view's TRANSLATED pane. Both panes are 1:1 pages of the same book, so
+/// the pane tag (not a separate book/page) is what keeps their marks apart.
+pub const ANNOTATION_SOURCE_ORIGINAL: &str = "original";
+pub const ANNOTATION_SOURCE_TRANSLATED: &str = "translated";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TextAnnotation {
     pub id: i64,
     pub book_id: i64,
     pub page: i64,
     pub kind: TextAnnotationKind,
+    /// 'original' | 'translated' (v9). Legacy rows read as 'original'.
+    pub source: String,
     /// Selected text the annotation was created from; None for legacy rows
     /// created before the column existed.
     pub text: Option<String>,

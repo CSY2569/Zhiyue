@@ -868,7 +868,14 @@ class _PageItemState extends ConsumerState<_PageItem> {
     final pageAnns = ref.watch(annotationProvider.select((a) {
       final list = a.valueOrNull;
       if (list == null) return const <TextAnnotation>[];
-      return list.where((x) => x.page == widget.page).toList(growable: false);
+      // Only marks made on the ORIGINAL page: marks from the 对照 view's
+      // translated pane carry the same page number but live at different
+      // positions (v9 `source`).
+      return list
+          .where((x) =>
+              x.page == widget.page &&
+              AnnotationPane.fromSource(x.source) == AnnotationPane.original)
+          .toList(growable: false);
     }));
 
     return Container(
