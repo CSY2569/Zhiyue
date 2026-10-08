@@ -8,6 +8,7 @@ import 'package:rbwa/features/reader/providers/viewer_provider.dart';
 import 'package:rbwa/features/annotation/providers/annotation_provider.dart';
 import 'package:rbwa/features/annotation/widgets/highlight_layer.dart';
 import 'package:rbwa/features/annotation/widgets/selection_layer.dart';
+import 'package:rbwa/features/reader/widgets/themed_page_image.dart';
 import 'package:rbwa/src/rust/models/annotation.dart' show TextAnnotation;
 import 'package:rbwa/features/reader/widgets/pdf_page_scroll.dart'
     show kPageGap, pageHeightProvider;
@@ -367,10 +368,13 @@ class _TranslatedPageCard extends ConsumerWidget {
               alignment: Alignment.topCenter,
               clipBehavior: Clip.hardEdge,
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: theme.colorScheme.surfaceContainerLow,
                 boxShadow: [
                   BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
+                      color: theme.colorScheme.shadow.withValues(
+                          alpha: theme.brightness == Brightness.dark
+                              ? 0.45
+                              : 0.08),
                       blurRadius: 6,
                       offset: const Offset(0, 2)),
                 ],
@@ -416,8 +420,8 @@ class _TranslatedPageCard extends ConsumerWidget {
               child: Stack(
                 children: [
                   Positioned.fill(
-                    child: RawImage(
-                      image: data.image,
+                    child: ThemedPageImage(
+                      image: data.image!,
                       fit: BoxFit.fill,
                     ),
                   ),
