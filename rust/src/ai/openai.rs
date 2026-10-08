@@ -424,12 +424,9 @@ const ANTHROPIC_WEB_SEARCH_TOOL: &str = "web_search_20250305";
 /// the cap, so headroom beats a truncated reply).
 const ANTHROPIC_MAX_TOKENS: i64 = 8192;
 
-/// Anthropic-protocol endpoint for built-in search (6.2.3, DeepSeek): the
-/// Messages API lives at `{base}/anthropic/v1/messages`. DeepSeek executes
-/// hosted search only on this protocol -- its Responses endpoint accepts
-/// `{"type": "web_search"}` but silently ignores it (tools compatibility
-/// table). The `/v1` suffix is stripped like [responses_endpoint] so
-/// chat-style base URLs join cleanly.
+/// Anthropic-protocol endpoint for built-in search (6.2.3): the Messages
+/// API lives at `{base}/anthropic/v1/messages`. The `/v1` suffix is stripped
+/// like [responses_endpoint] so chat-style base URLs join cleanly.
 fn anthropic_endpoint(base_url: &str) -> String {
     let base = trimmed_or(base_url, "https://api.deepseek.com");
     let base = base.strip_suffix("/v1").unwrap_or(base);
@@ -507,11 +504,10 @@ fn parse_anthropic_event(event: &[u8]) -> Option<AppResult<String>> {
     }
 }
 
-/// Built-in web search through the Anthropic Messages protocol (DeepSeek's
-/// hosted search): streams `{base}/anthropic/v1/messages` with the
-/// `web_search_20250305` server tool. Auth is `x-api-key` per the Anthropic
-/// convention (`anthropic-version` is sent for real-Anthropic compatibility;
-/// DeepSeek ignores it).
+/// Built-in web search through the Anthropic Messages protocol: streams
+/// `{base}/anthropic/v1/messages` with the `web_search_20250305` server
+/// tool. Auth is `x-api-key` per the Anthropic convention
+/// (`anthropic-version` is sent for real-Anthropic compatibility).
 pub(crate) async fn web_search_builtin_anthropic(
     base_url: &str,
     api_key: &str,

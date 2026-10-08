@@ -130,9 +130,6 @@ pub struct AiConfig {
     /// OpenAI-style `{"type": "web_search"}` server tool to
     /// `{base}/responses`; "anthropic" sends the Anthropic-style
     /// `web_search_20250305` server tool to `{base}/anthropic/v1/messages`.
-    /// DeepSeek executes hosted search only on the latter -- its Responses
-    /// endpoint silently ignores web_search tools (2026-09 docs, tools
-    /// compatibility table).
     #[serde(default = "default_search_builtin_protocol")]
     pub search_builtin_protocol: String,
     /// Translation target language, default "中文" (6.1.3).

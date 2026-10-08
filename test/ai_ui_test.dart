@@ -352,7 +352,7 @@ void main() {
     expect(find.text('搜索 API Key'), findsNothing);
     expect(find.text('内置搜索协议'), findsOneWidget);
 
-    // Switching the protocol updates the description...
+    // Switching the protocol is accepted...
     await tester.tap(find.text('Anthropic'));
     await tester.pump();
     // ...and third-party search hides the picker again.
@@ -361,8 +361,7 @@ void main() {
     expect(find.text('内置搜索协议'), findsNothing);
     expect(find.text('搜索 API Key'), findsOneWidget);
 
-    // The selected protocol persists with the config (Anthropic = DeepSeek's
-    // hosted search, which its Responses endpoint ignores).
+    // The selected protocol persists with the config.
     await tester.tap(find.text('内置搜索'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Anthropic'));

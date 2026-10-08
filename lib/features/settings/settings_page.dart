@@ -37,8 +37,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _searchApiKey = TextEditingController();
   bool _webSearch = false;
   bool _searchBuiltin = false;
-  /// Built-in search wire protocol: 'responses' (OpenAI web_search tool) or
-  /// 'anthropic' (DeepSeek's hosted search lives only on that protocol).
+  /// Built-in search wire protocol: 'responses' (OpenAI-style Responses
+  /// web_search tool) or 'anthropic' (Anthropic Messages web_search tool).
   String _searchBuiltinProtocol = 'responses';
   /// Whether the general model accepts images (多模态); false -> a separate
   /// vision config is shown.
@@ -460,14 +460,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   ),
                   // Built-in search has two wire protocols: the OpenAI
                   // Responses web_search tool, or the Anthropic Messages
-                  // protocol -- DeepSeek executes hosted search only on the
-                  // latter (its Responses endpoint silently ignores the tool).
+                  // web_search server tool.
                   if (_searchBuiltin)
                     SettingsControlRow(
                       title: '内置搜索协议',
-                      description: _searchBuiltinProtocol == 'anthropic'
-                          ? 'Anthropic 协议：请求 {Base URL}/anthropic/v1/messages + web_search 服务端工具。DeepSeek 的真实联网搜索仅在此协议执行'
-                          : 'Responses 协议：请求 {Base URL}/responses + web_search 服务端工具。OpenAI 支持；DeepSeek 会静默忽略该工具（不会真正联网）',
                       child: SegmentedButton<String>(
                         segments: const [
                           ButtonSegment(
