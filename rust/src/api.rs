@@ -1409,9 +1409,7 @@ async fn builtin_search_stream(
     // follow-up passes verbatim, exactly as the main stream_chat path does.
     let wrapped_query = wrap_input(AiActionType::Search, query, is_follow_up);
     // Two wire protocols for hosted search (6.2.3): the OpenAI Responses
-    // web_search tool, or the Anthropic Messages protocol -- DeepSeek
-    // executes hosted search only on the latter (its Responses endpoint
-    // silently ignores web_search tools).
+    // web_search tool, or the Anthropic Messages web_search server tool.
     let search = if config.search_builtin_protocol == "anthropic" {
         ai::web_search_builtin_anthropic(
             &config.base_url,
