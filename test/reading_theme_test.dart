@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:rbwa/core/theme/app_theme.dart';
 import 'package:rbwa/core/theme/reading_theme.dart';
 
 void main() {
@@ -109,6 +110,32 @@ void main() {
       expect(readingPaletteFor(ReadingTheme.parchment).theme,
           ReadingTheme.parchment);
       expect(readingPaletteFor(ReadingTheme.night).theme, ReadingTheme.night);
+    });
+  });
+
+  group('AppTheme.forReadingTheme', () {
+    test('night yields dark brightness and canvas surface', () {
+      final t = AppTheme.forReadingTheme(ReadingTheme.night);
+      expect(t.brightness, Brightness.dark);
+      expect(t.scaffoldBackgroundColor, ReadingPalette.night.canvas);
+      expect(
+          t.colorScheme.surfaceContainerLow, ReadingPalette.night.pageCard);
+      expect(t.colorScheme.surfaceContainerHighest,
+          ReadingPalette.night.placeholder);
+      expect(t.extension<ReadingPalette>()?.theme, ReadingTheme.night);
+    });
+    test('parchment yields light brightness and canvas surface', () {
+      final t = AppTheme.forReadingTheme(ReadingTheme.parchment);
+      expect(t.brightness, Brightness.light);
+      expect(t.scaffoldBackgroundColor, ReadingPalette.parchment.canvas);
+      expect(
+          t.extension<ReadingPalette>()?.theme, ReadingTheme.parchment);
+    });
+    test('stock light/dark themes carry a default palette', () {
+      expect(AppTheme.light().extension<ReadingPalette>()?.theme,
+          ReadingTheme.paper);
+      expect(AppTheme.dark().extension<ReadingPalette>()?.theme,
+          ReadingTheme.night);
     });
   });
 }
