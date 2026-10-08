@@ -1296,4 +1296,14 @@ git commit -m "docs(features): built-in reading themes 8.11"
 - 缩略图栏（ThumbnailRail）位图着色——缩略图保持原始页面颜色，作为导航辨识。
 - 截图识图链路绕过主题着色——WYSIWYG 是该功能的既定契约。
 - 自定义主题色/用户调色板——只内置三套。
-- 自定义标题栏（router ShellRoute 层）跟随阅读主题——它属于窗口 chrome，仍走 app 亮暗。
+
+## 后续修正（用户反馈，待办）：主题应为全局而非仅阅读器
+
+用户明确：选纸白 / 羊皮纸 / 暗夜时**整个软件 UI**（书库、设置、标题栏）都要随之变化，不限于阅读器。已交付版本只把 `ReadingThemeScope` 包在阅读器路由上——范围收窄了。修正方案（改动很小，架构已就位）：
+
+1. **把解析挪到 `app.dart`**：`RbwaApp.build` 里 watch 两个控制器 + 平台亮度，resolve 出有效主题后，`MaterialApp(theme: AppTheme.forReadingTheme(effective), themeMode: ThemeMode.light)`（只给单一 ThemeData，不再用 light/dark 配对）；删除 `ReaderPage` 里的 `ReadingThemeScope` 包裹。
+2. **设置页合并两个设置**：现有「主题模式」（系统/亮/暗）与「阅读主题」语义重叠——建议删掉「主题模式」行，由「阅读主题 → 跟随亮度」承担系统跟随（FEATURES 8.2/8.3 文案随之并入 8.11）。若要保留两行需先定清语义再动手。
+3. **保持不变的部分**：`ThemedPageImage` 位图着色仍只在阅读面生效（书库封面/缩略图不染色）；`ReadingPalette` 扩展、控制器、持久化原样复用；标题栏（ShellRoute）随 MaterialApp 主题自动跟随。
+4. **测试**：scope 相关测试改打 `app.dart` 的接线（守卫断言 `app.dart` 含 `forReadingTheme`）；`ai_ui_test` 等直接 pump `AppTheme.light()` 的用例不受影响。
+
+原「非目标」中「自定义标题栏不跟随阅读主题」一条作废——全局化后自然跟随。
