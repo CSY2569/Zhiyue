@@ -54,6 +54,8 @@ class ReadingPalette extends ThemeExtension<ReadingPalette> {
   final Color placeholder;
 
   /// Body text on the reading surface (translated text path, chrome text).
+  /// Pure black on the light themes for maximum legibility; the night theme
+  /// keeps a soft light gray instead (black on dark is unreadable).
   final Color primaryText;
 
   /// Multiply tint for page bitmaps (light themes): white areas take the
@@ -74,7 +76,7 @@ class ReadingPalette extends ThemeExtension<ReadingPalette> {
     canvas: Color(0xFFF4F2ED),
     pageCard: Color(0xFFFFFFFF),
     placeholder: Color(0xFFE8E5DE),
-    primaryText: Color(0xFF2B2B28),
+    primaryText: Color(0xFF000000),
     pageTint: Color(0xFFFDFBF7),
   );
 
@@ -84,7 +86,7 @@ class ReadingPalette extends ThemeExtension<ReadingPalette> {
     canvas: Color(0xFFEDE3CC),
     pageCard: Color(0xFFFBF5E4),
     placeholder: Color(0xFFE2D6BA),
-    primaryText: Color(0xFF463727),
+    primaryText: Color(0xFF000000),
     pageTint: Color(0xFFF5ECD4),
   );
 

@@ -98,6 +98,13 @@ void main() {
       expect(ReadingPalette.parchment.brightness, Brightness.light);
       expect(ReadingPalette.night.brightness, Brightness.dark);
     });
+    test('light themes use pure black text, night stays light', () {
+      expect(ReadingPalette.paper.primaryText, const Color(0xFF000000));
+      expect(ReadingPalette.parchment.primaryText, const Color(0xFF000000));
+      // Night must never flip to black (unreadable on the dark canvas).
+      expect(ReadingPalette.night.primaryText.computeLuminance(),
+          greaterThan(0.4));
+    });
     test('light palettes use a multiply tint, night uses the matrix', () {
       expect(ReadingPalette.paper.pageTint, isNotNull);
       expect(ReadingPalette.paper.nightMatrix, isNull);
