@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import 'package:rbwa/core/theme/reading_theme.dart';
 import 'package:rbwa/core/theme/reading_theme_controller.dart';
-import 'package:rbwa/core/theme/theme_controller.dart';
 import 'package:rbwa/data/repositories/ai_repository.dart';
 import 'package:rbwa/features/ai/providers/ai_config_provider.dart';
 import 'package:rbwa/features/bilingual/widgets/translation_settings_section.dart';
@@ -232,7 +231,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final themeMode = ref.watch(themeControllerProvider);
     final readingTheme = ref.watch(readingThemeControllerProvider);
     final config = ref.watch(aiConfigProvider).valueOrNull;
     _hydrate(config);
@@ -260,35 +258,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 icon: Icons.palette_outlined,
                 children: [
                   SettingsControlRow(
-                    title: '主题模式',
-                    child: SegmentedButton<ThemeMode>(
-                      segments: const [
-                        ButtonSegment(
-                          value: ThemeMode.system,
-                          label: Text('跟随系统'),
-                          icon: Icon(Icons.brightness_auto_outlined, size: 16),
-                        ),
-                        ButtonSegment(
-                          value: ThemeMode.light,
-                          label: Text('亮色'),
-                          icon: Icon(Icons.light_mode_outlined, size: 16),
-                        ),
-                        ButtonSegment(
-                          value: ThemeMode.dark,
-                          label: Text('暗色'),
-                          icon: Icon(Icons.dark_mode_outlined, size: 16),
-                        ),
-                      ],
-                      selected: {themeMode},
-                      showSelectedIcon: false,
-                      onSelectionChanged: (s) => ref
-                          .read(themeControllerProvider.notifier)
-                          .set(s.first),
-                    ),
-                  ),
-                  SettingsControlRow(
-                    title: '阅读主题',
-                    description: '阅读器界面与页面配色；「跟随亮度」在亮色下为纸白、暗色下为暗夜',
+                    title: '主题',
+                    description: '应用整体界面与阅读页配色；「跟随亮度」随系统亮暗自动切换（亮→纸白、暗→暗夜）',
                     child: SegmentedButton<ReadingTheme>(
                       segments: const [
                         ButtonSegment(

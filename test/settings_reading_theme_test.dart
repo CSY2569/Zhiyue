@@ -36,7 +36,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('阅读主题'), findsOneWidget);
+    expect(find.text('主题'), findsOneWidget);
+    expect(find.text('主题模式'), findsNothing,
+        reason: 'the old light/dark row was merged into the theme picker');
     await tester.tap(find.text('羊皮纸'));
     await tester.pumpAndSettle();
     expect(fake.writes['reading_theme'], 'parchment');

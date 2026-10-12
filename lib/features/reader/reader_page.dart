@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:rbwa/core/theme/reading_theme_controller.dart';
 import 'package:rbwa/core/widgets/panel_resize_handle.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
 import 'package:rbwa/features/ai/widgets/ai_panel_side.dart';
@@ -249,109 +248,107 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       );
     }
 
-    return ReadingThemeScope(
-      child: Scaffold(
-        body: Focus(
-          autofocus: true,
-          onKeyEvent: _onKeyEvent,
-          child: Stack(
-            children: [
-              Column(
-                children: [
-                  const ReaderToolbar(),
-                  Expanded(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        // Keep the reading area usable when several panels are
-                        // open (plan §1 v4.2): clamp the earlier-opened panel
-                        // first, then any remaining panel.
-                        _enforceContentMinimum(
-                          constraints.maxWidth,
-                          aiOpen: aiOpen,
-                          sidebarOpen: state.openSidebar != null,
-                          sidebarWidth: state.openSidebar == null
-                              ? 0
-                              : ref
-                                    .read(panelLayoutProvider)
-                                    .widthFor(state.openSidebar!),
-                          context: context,
-                        );
-                        return Row(
-                          children: [
-                            if (state.openSidebar != null) ...[
-                              _buildSidebar(state),
-                              // Drag the sidebar's right edge to resize it
-                              // (FEATURES 3.4.4); the content Expanded reflows.
-                              PanelResizeHandle(
-                                onResize: (dx) => ref
-                                    .read(panelLayoutProvider.notifier)
-                                    .resizeSidebar(state.openSidebar!, dx),
-                                onResizeEnd: () => ref
-                                    .read(panelLayoutProvider.notifier)
-                                    .commit(),
-                              ),
-                            ],
-                            Expanded(
-                              child: translateOpen
-                                  ? _buildSplitContent(context, state)
-                                  : _buildContent(context, state),
+    return Scaffold(
+      body: Focus(
+        autofocus: true,
+        onKeyEvent: _onKeyEvent,
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                const ReaderToolbar(),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      // Keep the reading area usable when several panels are
+                      // open (plan §1 v4.2): clamp the earlier-opened panel
+                      // first, then any remaining panel.
+                      _enforceContentMinimum(
+                        constraints.maxWidth,
+                        aiOpen: aiOpen,
+                        sidebarOpen: state.openSidebar != null,
+                        sidebarWidth: state.openSidebar == null
+                            ? 0
+                            : ref
+                                  .read(panelLayoutProvider)
+                                  .widthFor(state.openSidebar!),
+                        context: context,
+                      );
+                      return Row(
+                        children: [
+                          if (state.openSidebar != null) ...[
+                            _buildSidebar(state),
+                            // Drag the sidebar's right edge to resize it
+                            // (FEATURES 3.4.4); the content Expanded reflows.
+                            PanelResizeHandle(
+                              onResize: (dx) => ref
+                                  .read(panelLayoutProvider.notifier)
+                                  .resizeSidebar(state.openSidebar!, dx),
+                              onResizeEnd: () => ref
+                                  .read(panelLayoutProvider.notifier)
+                                  .commit(),
                             ),
-                            if (aiOpen) ...[
-                              // The AI panel stays a resizable side panel;
-                              // its handle is right-aligned, so a drag left
-                              // (negative dx) widens it.
-                              PanelResizeHandle(
-                                onResize: (dx) => ref
-                                    .read(panelLayoutProvider.notifier)
-                                    .resizeAiPanel(-dx),
-                                onResizeEnd: () => ref
-                                    .read(panelLayoutProvider.notifier)
-                                    .commit(),
-                              ),
-                              AiPanelSide(
-                                bookId: book?.id,
-                                bookTitle: book?.title,
-                              ),
-                            ],
                           ],
-                        );
-                      },
-                    ),
+                          Expanded(
+                            child: translateOpen
+                                ? _buildSplitContent(context, state)
+                                : _buildContent(context, state),
+                          ),
+                          if (aiOpen) ...[
+                            // The AI panel stays a resizable side panel;
+                            // its handle is right-aligned, so a drag left
+                            // (negative dx) widens it.
+                            PanelResizeHandle(
+                              onResize: (dx) => ref
+                                  .read(panelLayoutProvider.notifier)
+                                  .resizeAiPanel(-dx),
+                              onResizeEnd: () => ref
+                                  .read(panelLayoutProvider.notifier)
+                                  .commit(),
+                            ),
+                            AiPanelSide(
+                              bookId: book?.id,
+                              bookTitle: book?.title,
+                            ),
+                          ],
+                        ],
+                      );
+                    },
                   ),
-                ],
-              ),
-              // Floating selection UI (rendered above everything, in the
-              // app-level Overlay so they are never clipped). The scan prompt
-              // (FEATURES 7.1.2) lives inside each page instead: it anchors to
-              // the page's top-left corner and scrolls with it.
-              // Mark tool bar (FEATURES §5): floats above the reading area
-              // while a mark tool is armed.
-              Positioned(
-                top: 8,
-                left: 0,
-                right: 0,
-                child: Center(child: MarkToolBar()),
-              ),
-              OverlayPortal(
-                controller: _toolbarController,
-                overlayChildBuilder: (_) =>
-                    FloatingToolbar(bookId: book?.id, bookTitle: book?.title),
-              ),
-              OverlayPortal(
-                controller: _composerController,
-                overlayChildBuilder: (_) => const NoteComposer(),
-              ),
-              OverlayPortal(
-                controller: _noteController,
-                overlayChildBuilder: (_) => const NotePopup(),
-              ),
-              OverlayPortal(
-                controller: _aiCardController,
-                overlayChildBuilder: (_) =>
-                    ResultCard(bookId: book?.id, bookTitle: book?.title),
-              ),
-            ],
-          ),
+                ),
+              ],
+            ),
+            // Floating selection UI (rendered above everything, in the
+            // app-level Overlay so they are never clipped). The scan prompt
+            // (FEATURES 7.1.2) lives inside each page instead: it anchors to
+            // the page's top-left corner and scrolls with it.
+            // Mark tool bar (FEATURES §5): floats above the reading area
+            // while a mark tool is armed.
+            Positioned(
+              top: 8,
+              left: 0,
+              right: 0,
+              child: Center(child: MarkToolBar()),
+            ),
+            OverlayPortal(
+              controller: _toolbarController,
+              overlayChildBuilder: (_) =>
+                  FloatingToolbar(bookId: book?.id, bookTitle: book?.title),
+            ),
+            OverlayPortal(
+              controller: _composerController,
+              overlayChildBuilder: (_) => const NoteComposer(),
+            ),
+            OverlayPortal(
+              controller: _noteController,
+              overlayChildBuilder: (_) => const NotePopup(),
+            ),
+            OverlayPortal(
+              controller: _aiCardController,
+              overlayChildBuilder: (_) =>
+                  ResultCard(bookId: book?.id, bookTitle: book?.title),
+            ),
+          ],
         ),
       ),
     );
