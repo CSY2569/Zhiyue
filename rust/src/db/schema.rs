@@ -26,9 +26,9 @@
 /// for consistent naming); the per-page `page_translation_cache` added by
 /// the same version was dropped again in v8.
 /// 8: retire the built-in translation pipeline (replaced by the downloadable
-/// BabelDOC engine) -- `page_translation_cache` DROPPED, its rows have no
+/// external engine) -- `page_translation_cache` DROPPED, its rows have no
 /// consumer; `translation_glossary` stays.
-pub const SCHEMA_VERSION: u32 = 8;
+pub const SCHEMA_VERSION: u32 = 9;
 
 /// Indexes for per-book AI conversation windows (v3, FEATURES 6.5.4).
 ///
@@ -108,6 +108,7 @@ CREATE TABLE IF NOT EXISTS annotations (
     book_id     INTEGER NOT NULL,
     page        INTEGER NOT NULL,
     kind        TEXT NOT NULL,                 -- 'highlight'|'underline'|'strikethrough'|'note'
+    source      TEXT NOT NULL DEFAULT 'original', -- 'original' | 'translated' pane (v9)
     text        TEXT,                          -- selected text the mark was created from
     content     TEXT,                          -- note text (nullable for mark-only)
     rects       TEXT NOT NULL,                 -- JSON array of normalized rects [{x,y,w,h}, ...]
@@ -235,7 +236,7 @@ CREATE INDEX IF NOT EXISTS ai_messages_thread ON ai_messages(thread_id, created_
 --     `source_lang`/`target_lang` are optional DeepL-style language-pair
 --     restrictions; null = the entry applies to every translation.
 --     (The per-page `page_translation_cache` of the retired built-in
---     pipeline is gone -- v8 drops it; translation moved to the BabelDOC
+--     pipeline is gone -- v8 drops it; translation moved to an external
 --     engine, whose artifacts live under `translated/{book_id}/` on disk.)
 -- ===========================================================================
 CREATE TABLE IF NOT EXISTS translation_glossary (

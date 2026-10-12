@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 
 import 'package:rbwa/core/widgets/toolbar_icon_button.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
@@ -42,19 +43,19 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
         children: [
           // Sidebar toggles (3.4) -- leftmost.
           ToolbarIconButton(
-            icon: Icons.view_list_outlined,
+            icon: LucideIcons.list,
             tooltip: '缩略图',
             active: state.openSidebar == SidebarType.thumbnails,
             onTap: () => notifier.toggleSidebar(SidebarType.thumbnails),
           ),
           ToolbarIconButton(
-            icon: Icons.account_tree_outlined,
+            icon: LucideIcons.network,
             tooltip: '目录',
             active: state.openSidebar == SidebarType.outline,
             onTap: () => notifier.toggleSidebar(SidebarType.outline),
           ),
           ToolbarIconButton(
-            icon: Icons.bookmark_border,
+            icon: LucideIcons.bookmark,
             tooltip: '标注',
             active: state.openSidebar == SidebarType.annotations,
             onTap: () => notifier.toggleSidebar(SidebarType.annotations),
@@ -62,13 +63,12 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
           // 对照阅读 (bilingual reading, M7): double-page-style spread --
           // the reading area splits into original (left) + translation
           // (right) at the same display size. The spread actions (export /
-          // whole-book) return together with the BabelDOC engine integration.
+          // whole-book) return together with further engine integrations.
           ToolbarIconButton(
-            icon: Icons.translate,
+            icon: LucideIcons.languages,
             tooltip: '对照阅读',
             active: ref.watch(translationPaneProvider.select((s) => s.open)),
-            onTap: () =>
-                ref.read(translationPaneProvider.notifier).toggle(),
+            onTap: () => ref.read(translationPaneProvider.notifier).toggle(),
           ),
           const VDivider(),
           // View mode selector (3.1): one popup for the three modes.
@@ -76,7 +76,7 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
           const VDivider(),
           // Zoom (3.2.1)
           IconButton(
-            icon: const Icon(Icons.zoom_out, size: 20),
+            icon: const Icon(LucideIcons.zoomOut, size: 20),
             tooltip: '缩小',
             onPressed: notifier.zoomOut,
           ),
@@ -89,19 +89,19 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.zoom_in, size: 20),
+            icon: const Icon(LucideIcons.zoomIn, size: 20),
             tooltip: '放大',
             onPressed: notifier.zoomIn,
           ),
           IconButton(
-            icon: const Icon(Icons.restart_alt, size: 18),
+            icon: const Icon(LucideIcons.rotateCcw, size: 20),
             tooltip: '恢复缩放',
             onPressed: notifier.resetZoom,
           ),
           const VDivider(),
           // Paging (3.3.1)
           IconButton(
-            icon: const Icon(Icons.chevron_left, size: 20),
+            icon: const Icon(LucideIcons.chevronLeft, size: 20),
             tooltip: '上一页',
             onPressed: state.currentPage > 1 ? notifier.prevPage : null,
           ),
@@ -113,7 +113,7 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.chevron_right, size: 20),
+            icon: const Icon(LucideIcons.chevronRight, size: 20),
             tooltip: '下一页',
             onPressed: state.currentPage < state.pageCount
                 ? notifier.nextPage
@@ -124,7 +124,7 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
           // itself floats above the reading area (MarkToolBar) so it has
           // room for the tools + style controls.
           ToolbarIconButton(
-            icon: Icons.brush_outlined,
+            icon: LucideIcons.brush,
             tooltip: '批注',
             active: ref.watch(markToolProvider.select((s) => s.tool != null)),
             onTap: () {
@@ -138,11 +138,13 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
           // selection; the captured pixels go straight to the vision model
           // and the answer streams into the result card (所选即所得).
           IconButton(
-            icon: const Icon(Icons.document_scanner_outlined, size: 20),
+            icon: const Icon(LucideIcons.scanText, size: 20),
             tooltip: '识图',
             onPressed: () {
               final overlay = Overlay.of(context, rootOverlay: true);
-              ref.read(screenshotProvider.notifier).begin(
+              ref
+                  .read(screenshotProvider.notifier)
+                  .begin(
                     overlay,
                     bookId: state.book?.id,
                     bookTitle: state.book?.title,
@@ -151,7 +153,7 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
           ),
           // AI side panel (FEATURES 6.5) -- independent of the three sidebars.
           ToolbarIconButton(
-            icon: Icons.auto_awesome_outlined,
+            icon: LucideIcons.sparkles,
             tooltip: 'AI',
             active: ref.watch(aiProvider.select((s) => s.aiPanelOpen)),
             onTap: () => ref.read(aiProvider.notifier).togglePanel(),
@@ -210,11 +212,11 @@ class _ModeSelector extends ConsumerWidget {
   static (IconData, String) _modeInfo(ViewMode mode) {
     switch (mode) {
       case ViewMode.single:
-        return (Icons.view_stream_outlined, '单页');
+        return (LucideIcons.rows3, '单页');
       case ViewMode.doubleScroll:
-        return (Icons.view_agenda_outlined, '双滚');
+        return (LucideIcons.columns2, '双滚');
       case ViewMode.doublePage:
-        return (Icons.menu_book_outlined, '双翻');
+        return (LucideIcons.bookOpenText, '双翻');
     }
   }
 
@@ -234,12 +236,16 @@ class _ModeSelector extends ConsumerWidget {
             value: m,
             child: Row(
               children: [
-                Icon(_modeInfo(m).$1, size: 18),
+                Icon(_modeInfo(m).$1, size: 20),
                 const SizedBox(width: 8),
                 Text(_modeInfo(m).$2),
                 if (m == mode) ...[
                   const Spacer(),
-                  Icon(Icons.check, size: 16, color: theme.colorScheme.primary),
+                  Icon(
+                    LucideIcons.check,
+                    size: 16,
+                    color: theme.colorScheme.primary,
+                  ),
                 ],
               ],
             ),
@@ -254,12 +260,14 @@ class _ModeSelector extends ConsumerWidget {
             const SizedBox(width: 4),
             Text(label, style: theme.textTheme.bodySmall),
             const SizedBox(width: 2),
-            Icon(Icons.arrow_drop_down,
-                size: 18, color: theme.colorScheme.outline),
+            Icon(
+              LucideIcons.chevronDown,
+              size: 20,
+              color: theme.colorScheme.outline,
+            ),
           ],
         ),
       ),
     );
   }
 }
-

@@ -6,7 +6,7 @@ import 'package:rbwa/src/rust/models/translate.dart';
 /// Wrapper around the FRB bilingual-reading bindings (M7).
 ///
 /// The built-in per-page pipeline was retired in favor of the downloadable
-/// BabelDOC engine; this repository now carries the engine-independent
+/// RetainPDF engine; this repository now carries the engine-independent
 /// surface (config KV, glossary, in-flight registry, artifact cleanup).
 /// Engine install/status methods arrive with the engine integration.
 class TranslationRepository {
@@ -51,7 +51,7 @@ class TranslationRepository {
   Future<int> deleteGlossaryEntry(int id) =>
       rust.deleteTranslationGlossary(id: id);
 
-  // --- whole-book translation (BabelDOC engine) --------------------------
+  // --- whole-book translation (RetainPDF engine) -------------------------
 
   /// Starts a whole-book translation, streaming progress. Failures arrive as
   /// a final event carrying [BookTranslateEvent.error].
@@ -70,19 +70,25 @@ class TranslationRepository {
   Future<int> clearBookTranslation(int bookId) =>
       rust.clearBookTranslation(bookId: bookId);
 
-  /// Renders page [page] (1-indexed) of the translated PDF at [dpiScale]x.
+  /// Per-character boxes of one TRANSLATED page (0-indexed), for selection
+  /// and AI actions on the translated pane.
+  Future<rust.CharBoxResult> extractTranslatedText(int bookId, int page) =>
+      rust.extractTranslatedText(bookId: bookId, page: page);
+
+  /// Renders page [page] (1-indexed) of the translated PDF at about
+  /// [targetWidthPx] pixels wide (the pane's display width).
   Future<rust.TranslatedPageBitmap> renderTranslatedPage({
     required int bookId,
     required int page,
-    double dpiScale = 1.0,
+    int targetWidthPx = 1024,
   }) =>
       rust.renderTranslatedPage(
         bookId: bookId,
         page: page,
-        dpiScale: dpiScale,
+        targetWidthPx: targetWidthPx,
       );
 
-  // --- translation engine (BabelDOC, opt-in download) --------------------
+  // --- translation engine (RetainPDF, bundled) ---------------------------
 
   /// Current engine state (probes disk).
   Future<EngineStatus> getEngineStatus() => rust.getEngineStatus();

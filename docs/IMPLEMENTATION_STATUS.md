@@ -321,6 +321,173 @@
 
 **已知边界**：整本粒度（无分块/随进度）；进度为粗阶段（引擎的 rich 进度条非 TTY 下不可解析）；`--pages` 分块与 dual 导出 UI 待接入；引擎内置版首次翻译若缺资产会自动联网补齐。
 
+
+### 3.18 引擎整体替换：内置 RetainPDF 管线（2026-10-07，分支 feat/retain-engine）
+
+**决策**：BabelDOC（AGPL-3.0，按需下载 ~1.5GB）整体替换为 **RetainPDF 管线**
+（`retainpdf-pipeline` 4.2.6，MIT，随包内置 ~286MB）。上游管线以
+`document.v1.json` 为翻译输入、Typst 重排输出，支持扫描版与公式直通；
+其 `generic_flat_ocr` 适配器使智阅无需任何云 OCR 即可喂入自有文字层/本地 OCR。
+
+**集成形态**（引擎细节见 `rust/src/translate/`）：
+- **vendoring**：`third_party/retainpdf/`（pipeline 源码 + 宋体 + PIN，钉提交 d365ed8）
+- **引擎目录**：`scripts/build_retain_engine.sh` 组装独立 CPython 3.11 + site-packages
+  （Pin 依赖：Pillow/PyMuPDF/pikepdf/requests/urllib3）+ Typst 0.15.1 + `@preview`
+  cmarker/mitex + 字体 + `engine.json`；随包内置（`<exe_dir>/retainpdf`），开发用
+  `RBWA_RETAIN_ENGINE_DIR` 指向组装目录
+- **输入桥**（新 `flat_ocr.rs`，旧管线 `extract.rs` 聚类代码移植）：文字层
+  （pdfium 字体元数据）与本地 OCR 两条路径 → 扁平块（heading/body/abstract/
+  caption/footnote/header/footer + 整段公式）→ `generic_flat_ocr` JSON
+- **运行器**（重写 `job.rs`）：两步 CLI（`normalize-ocr` → `book`），stdout JSONL
+  进度映射（解析版式/翻译中/排版输出），取消杀进程，产物安装为
+  `translated/{book_id}/translated.pdf` + manifest（`BookTranslation` 模型不变、
+  FFI 签名不变、无需 codegen）
+- **术语表**：接入引擎 `glossary_entries`（level=preferred）
+- **移除**：BabelDOC 下载器/安装器（engine.rs 从 1126 行缩至 ~250 行）、
+  设置页下载/卸载 UI
+
+**验证**（全零真实 API）：
+- Rust 106 测试 + clippy 干净；`flat_ocr` 含真实 PDF 集成测试（pdfium 造两页版面，
+  断言标题/图注/公式分类、页眉页脚与页码剔除、段落合并、bbox 在页内）
+- **端到端**（`#[ignore] translate_book_end_to_end`）：临时 DB + 夹具书 + mock LLM
+  （`scripts/dev/mock_llm.py`，理解管线四种协议）+ **真实 Python 管线**，断言
+  2 页 1:1、译文进入 PDF、事件流有翻译中与终态成功
+- 零 LLM 冒烟：Rust 桥产物 → `normalize-ocr` 校验 → `render-only` overlay 产出
+- Flutter 192 测试全绿、`flutter analyze` 0
+
+**已知边界（v1）**：目标语言固定简体中文（上游硬编码）；整本粒度（随进度/手动
+待后续）；无 dual 并排导出（窗格渲染单 PDF）；引擎不可应用内卸载（随包内置）。
+
+**docs 同步**：FEATURES §7.4、THIRD_PARTY §2（含 PyMuPDF AGPL 独立进程登记）、
+ARCHITECTURE `translate` 行、README 概览。
+
+---
+
+### 3.19 修复：评审门禁对续接单元成员的截断误判（2026-10-07）
+
+**现象**：整本翻译在**全部批次翻完后**报错，界面只有
+`引擎退出码 1：translation/python_unhandled_exception: 任务失败，但暂未识别出明确根因`，
+不产任何产物。用户实跑 10 页文档（6 处）与 88 页论文（4 处）均复现。
+
+**根因（上游 4.2.6 缺陷，已用实跑数据实锤）**：评审的截断检查
+（`quality._truncated_translation_issue`：源文 ≥200 字符且译文 <15%）在
+`review_translation_item` 里拿 `unit_source_text(item)` = **续接单元合并全文**
+比对 `item["translated_text"]` = **条目自身的片段译文**。跨页续接单元的小成员
+必然误判（如 887 字符单元中的 86 字符片段 → 0.097 < 0.15）；用户 10 页文档的
+6 个被拦条目全部是 `route_path: continuation_group_members`，其中 `p009-b000`
+源文 28 字符、译文 56 字符（比值 2.0）也被判"截断"——只有单元口径才可能触发。
+门禁 `enforce_no_blocking_review_errors` 全有或全无：一个误判让整本任务作废。
+
+**补丁**（vendored 管线，记录见 `third_party/retainpdf/PIN.md` §本地补丁）：
+`patches/0001-truncation-item-scope.patch` —— 截断检查改用**条目级源文**
+（`protected_source_text`/`source_text`，缺省回退调用方口径）；其余检查
+（占位符/公式/上下文泄漏）不变。
+
+**错误呈现**（`rust/src/translate/job.rs`）：`structured_failure_summary`
+优先取 `detail`（真实原因）而非通用 `summary`，并按字符边界截断到 400 字符；
+上游的"未识别出明确根因"不再掩盖门禁信息。
+
+**验证（全零 API）**：mock 端到端重跑——88 页论文 27.2s 通过（修复前必挂）、
+用户 10 页文档 5.8s 通过；Rust 107 测试 + clippy 0；AppImage 重打供实机复验。
+测试框架新增 `RBWA_E2E_BOOK_PDF`（用外部 PDF 做规模复现，仅 mock、无真实端点）。
+
+**遗留**：门禁对**其他** error 类（真截断/英文残留等）仍是全有或全无——
+单条目判死整本在桌面场景代价大，是否放宽需另行决策；已具备向
+<https://github.com/wxyhgk/retain-pdf> 提 issue 的最小复现材料。
+
+---
+
+### 3.20 译文页选中与 AI 划词（2026-10-08）
+
+**需求（7.4.10）**：对照窗格里的译文要能像原文一样划词后使用 AI 动作
+（翻译 / 解释 / 搜索）与复制。前提成立：引擎产出的是矢量文本 PDF（实测
+每页可提取词框，如用户译本第 3 页 155 词/1125 字符）。
+
+**实现**（复用现有选中机制，无新交互范式）：
+- Rust：`pdf::extract_text_file`（任意 PDF 文件的字符框提取，归一化同
+  `extract_text`）+ FFI `extract_translated_text(book_id, page)`（读
+  manifest 的 mono_path，spawn_blocking 提取）；FRB codegen 同步
+- Dart：`translated_char_box_cache.dart`（8 页 LRU，监听
+  `translationRevisionProvider`——译本出现/更换/删除自动失效）
+- `SelectionLayer` 增 `translated` 模式：boxes 来自译文缓存、选中带
+  `SelectionSource.translated`、tap 不触发标注/OCR 修正
+- `Selection` 模型增 `source` 字段（默认 original，向后兼容）
+- `FloatingToolbar` 按来源缩减：译文选中只显示 翻译/解释/搜索/复制
+  （文本层标注锚定原文的标注库，译文侧不提供——如实不虚标）
+- 译文页卡片：LayoutBuilder 计算 contain 的实际显示矩形，选中层与其
+  精确对齐（归一化字符框坐标才不会偏移）
+- 测试：Rust `extract_text_file` 归一化单测（pdfium 造页）；Dart
+  `translated_selection_test.dart`（两种来源的按钮集合断言）；
+  Rust 108 + Flutter 194 全绿、analyze/clippy 0
+
+**修复（同日，几何回归）**：选中层最初用 `Positioned.fill` 铺满卡片，而译文图
+像是 `BoxFit.contain` 居中后的更小矩形（含留白）——两者坐标系不同尺度，导致
+选中框与文字错位、行首行尾多选/少选（标题上尤其明显）。改为在 contain 的实际
+显示矩形内叠放图像与选中层（`Align(topCenter)+SizedBox(fitted)`），并新增几何
+回归测试（断言选中层矩形与图像矩形完全重合；已验证旧实现下必然失败）。同时确认
+pdfium 对该矢量 PDF 的**逐字框本身准确**（等宽步进、连字符高度正确），错位来源
+只在坐标系映射。
+
+**已知边界**：译文的选中是「按显示文本」选中（选中的是译文自身文字，
+不是原文对应段）；`中英互译`目标下对译文再按「翻译」会翻回中文——这是
+AI 动作的正常语义。
+
+---
+
+### 3.21 译文页标注全量开放（窗格隔离，schema v9）（2026-10-08）
+
+**需求**：译文页也要能用下划线 / 高亮 / 删除线 / 笔记（此前只开放 AI + 复制）。
+
+**数据模型（schema v8 -> v9）**：`annotations` 增 `source TEXT NOT NULL
+DEFAULT 'original'`（'original' | 'translated'）。两栏页号相同，靠窗格标签
+而不是新表/新书来隔离；旧行读作 'original'（迁移测试覆盖：既有标注存活）。
+
+- Rust：`TextAnnotation.source`；repo SELECT/INSERT 带 source；FFI
+  `create_annotation(..., source)`（FRB codegen 同步）；导出标注时译文条目加
+  「（译文）」；迁移 v8->v9 + 单测
+- Dart：`AnnotationPane` 枚举与透传；**原文页只渲染/命中 source=original**
+  的标注，译文页只渲染 source=translated；译文页加 `HighlightLayer`（与选中层
+  同矩形）；`SelectionLayer` 在译文模式恢复标注点按（OCR 低置信修正仍仅原文）；
+  工具栏恢复全量 8 按钮，创建标注按选中来源写 pane；标注列表对译文标注加「译」徽标
+- 验证：Rust 110 测试 + clippy 0；Flutter **199 测试** + analyze 0（新增：译文
+  选中 8 按钮断言、窗格隔离断言、译文页油漆层断言、几何回归）
+
+**已知边界**：删除/重新翻译译本不影响已建标注（坐标按页保存，译本回来即再显示）；
+译文标注不参与原文页的检索/命中高亮（本质是两套文本）。
+
+---
+
+### 3.22 性能优化：译文渲染管线 + 引擎缓存（2026-10-08）
+
+体检发现三处拖累"流畅度"的实现，逐一修复：
+
+**① 译文页图像无界驻留 + 过采样渲染**（最大头）
+- 旧：`translatedPageImageProvider` 为非 autoDispose 的 family，**翻过的每页
+  解码图像永久驻留内存**；且固定 `dpi 3.0`（A4 ≈ 1785×2526 ≈ 4.5MP/页），
+  与窗格实际显示宽度（常仅 ~700px）无关。
+- 新：`translated_bitmap_cache.dart`（同构于原文页的 `bitmap_cache`）——按
+  **显示宽度分档**（256px 桶，`render_translated_page` 改收 `target_width_px`，
+  Rust 侧按页宽换算 scale 并钳制 0.5–4.0）渲染，像素量降 3–5 倍；LRU 12 条且
+  **淘汰时 dispose ui.Image**（原文缓存只删引用不 dispose，靠 finalizer）；
+  provider 改 `autoDispose`，内存随视口而非全书增长；译本变更（revision）整缓存清空。
+- 并发同键渲染去重（ListView 一帧多次请求共享一次 Rust 渲染）。
+
+**② 引擎状态探测全目录遍历**
+- 旧：`get_engine_status` → `engine_disk_usage` 每次**走 300MB/数万文件树**，
+  且是同步 FFI，打开设置页卡 UI。
+- 新：构建时把 `size_bytes` 写进 `engine.json`（两个打包脚本），状态直接读清单；
+  无该字段的旧清单回退为**每进程一次**遍历（`OnceLock` 缓存）。
+
+**③ 翻译无跨次缓存**
+- 旧：`OUTPUT_ROOT` 在随任务删除的 job 目录里 → 重试/重译**重新支付全部 LLM 调用**。
+- 新：每书持久 `{data_dir}/retain_output/{book_id}`（管线的翻译单元缓存/领域缓存/
+  排版记忆跨次命中）；`enforce_output_cache_cap` 全局 2GB 上限按 mtime 驱逐
+  （跳过 pinned/在飞）；删书级联清理；artifact LRU 驱逐时同步清理。
+
+**验证**：Rust 111 测试（新增 manifest 体积优先、输出缓存目录）+ clippy 0；
+Flutter 201 测试（新增宽度分档单测）+ analyze 0；mock 端到端 6.4s 通过。
+
+---
 ## 4. 后续开发方向
 
 ### 4.1 近期（补齐规格 P2 缺口）

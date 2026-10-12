@@ -23,7 +23,8 @@ mod image_book;
 
 #[cfg(feature = "pdf")]
 pub use pdfium::{
-    close, extract_document_text, extract_text, open, outline, page_has_text, render_page,
+    close, extract_document_text, extract_text, extract_text_file, open, outline,
+    page_has_text, render_page, render_page_file_to_width,
     render_page_file, render_thumbnail_file, shared_handle, thumbnail, with_document_file,
     with_pdfium_lock,
 };

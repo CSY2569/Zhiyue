@@ -12,7 +12,7 @@ import 'package:rbwa/src/rust/models/progress.dart' show ViewMode;
 /// single-page view, and closing restores what the user had.
 ///
 /// The per-page translation state of the retired built-in pipeline is gone;
-/// the right column is driven by the downloadable BabelDOC engine (staged).
+/// the right column is driven by the bundled RetainPDF engine (staged).
 class TranslationPaneState {
   const TranslationPaneState({
     this.open = false,

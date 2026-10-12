@@ -1,0 +1,42 @@
+--- a/pipeline/retainpdf_pipeline/translate/llm/validation/quality.py
++++ b/pipeline/retainpdf_pipeline/translate/llm/validation/quality.py
+@@ -242,7 +242,17 @@
+                 message="Translated output still contains JSON/protocol shell",
+             )
+         )
+-    truncation = _truncated_translation_issue(item_id, source_text, translated_text)
++    # Local patch (see third_party/retainpdf/PIN.md): compare LIKE WITH LIKE.
++    # `translated_text` here is the ITEM's own output; for a continuation-group
++    # member the incoming `source_text` is the MERGED unit text, so a short
++    # member fragment (e.g. 86 chars of an 887-char unit) was always flagged
++    # `truncated_translation` (ratio 0.097 < 0.15) and the review gate then
++    # aborted the whole book. Reference the item's own source instead; items
++    # without one keep the caller's scope (unit-vs-unit fallback rows).
++    truncation_reference = _item_scope_source_text(item) or source_text
++    truncation = _truncated_translation_issue(
++        item_id, truncation_reference, translated_text
++    )
+     if truncation is not None:
+         issues.append(truncation)
+     context_bleed = _context_bleed_leaked_math(item, source_text, translated_text)
+@@ -295,6 +305,20 @@
+     return [match.group(0).strip() for match in INLINE_MATH_SPAN_RE.finditer(str(text or "")) if match.group(0).strip()]
+ 
+ 
++def _item_scope_source_text(item: dict) -> str:
++    """The item's OWN source text (fragment scope), not the merged unit.
++
++    [unit_source_text] returns the whole continuation unit for group members;
++    length-based checks must not compare an item's own translation against the
++    merged multi-block paragraph (see `_review_translated_text`).
++    """
++    return str(
++        item.get("protected_source_text")
++        or item.get("source_text")
++        or ""
++    ).strip()
++
++
+ def _truncated_translation_issue(
+     item_id: str,
+     source_text: str,

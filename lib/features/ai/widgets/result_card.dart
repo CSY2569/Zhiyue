@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 
 import 'package:rbwa/core/widgets/toolbar_icon_button.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
@@ -36,26 +37,29 @@ class ResultCard extends ConsumerWidget {
 
     final theme = Theme.of(context);
     final screen = MediaQuery.sizeOf(context);
-    final cardSize =
-        ref.watch(panelLayoutProvider.select((p) => p.cardSize));
+    final cardSize = ref.watch(panelLayoutProvider.select((p) => p.cardSize));
     final pos = state.cardPos;
     final thread = state.threadOf(state.activeThreadId);
     final messages = thread?.messages ?? const <AiChatMessage>[];
     // The bottom bubble streams while this thread's answer is in flight.
-    final streamingHere = state.cardStreaming &&
+    final streamingHere =
+        state.cardStreaming &&
         thread != null &&
         state.streamingThreadId == thread.id;
     final tail = streamingHere ? state.streamingText : null;
-    final conversation =
-        _conversationText(messages, streamingTail: tail);
+    final conversation = _conversationText(messages, streamingTail: tail);
     // Bubbles reflow with the card width (was a hardcoded 380).
     final bubbleMax = (cardSize.width - 24).clamp(200.0, 1000.0);
     // Keep the card on screen; the lower bound guards against a card wider
     // than the window (clamp would otherwise get lower > upper).
-    final maxLeft =
-        (screen.width - cardSize.width - 8).clamp(8.0, double.infinity);
-    final maxTop =
-        (screen.height - cardSize.height - 8).clamp(8.0, double.infinity);
+    final maxLeft = (screen.width - cardSize.width - 8).clamp(
+      8.0,
+      double.infinity,
+    );
+    final maxTop = (screen.height - cardSize.height - 8).clamp(
+      8.0,
+      double.infinity,
+    );
 
     return Positioned(
       left: pos.dx.clamp(8.0, maxLeft),
@@ -82,8 +86,11 @@ class ResultCard extends ConsumerWidget {
                       padding: const EdgeInsets.fromLTRB(12, 4, 4, 0),
                       child: Row(
                         children: [
-                          Icon(Icons.auto_awesome,
-                              size: 16, color: theme.colorScheme.primary),
+                          Icon(
+                            LucideIcons.sparkles,
+                            size: 16,
+                            color: theme.colorScheme.primary,
+                          ),
                           const SizedBox(width: 6),
                           Text('AI 结果', style: theme.textTheme.titleSmall),
                           const Spacer(),
@@ -91,28 +98,29 @@ class ResultCard extends ConsumerWidget {
                           // (6.4.1).
                           if (streamingHere)
                             ToolbarIconButton(
-                              icon: Icons.stop_circle_outlined,
+                              icon: LucideIcons.circleStop,
                               tooltip: '停止生成',
                               onTap: () => ref
                                   .read(aiProvider.notifier)
                                   .cancelStreaming(),
                             ),
                           ToolbarIconButton(
-                            icon: Icons.copy_outlined,
+                            icon: LucideIcons.copy,
                             tooltip: '复制对话',
                             onTap: () => copyTextWithSnack(
-                                context, conversation,
-                                okLabel: '已复制对话'),
+                              context,
+                              conversation,
+                              okLabel: '已复制对话',
+                            ),
                           ),
                           ToolbarIconButton(
-                            icon: Icons.open_in_full_outlined,
+                            icon: LucideIcons.maximize,
                             tooltip: '展开到侧栏',
-                            onTap: () => ref
-                                .read(aiProvider.notifier)
-                                .moveCardToPanel(),
+                            onTap: () =>
+                                ref.read(aiProvider.notifier).moveCardToPanel(),
                           ),
                           ToolbarIconButton(
-                            icon: Icons.close,
+                            icon: LucideIcons.x,
                             tooltip: '关闭',
                             onTap: () =>
                                 ref.read(aiProvider.notifier).closeCard(),
@@ -137,8 +145,8 @@ class ResultCard extends ConsumerWidget {
                                   content: tail,
                                   streaming: true,
                                   maxWidth: bubbleMax,
-                                  aiColor: theme
-                                      .colorScheme.surfaceContainerHighest,
+                                  aiColor:
+                                      theme.colorScheme.surfaceContainerHighest,
                                 ),
                         ...messages.reversed.map(
                           (m) => AiMessageBubble(
@@ -149,8 +157,7 @@ class ResultCard extends ConsumerWidget {
                             actionType: m.actionType,
                             createdAt: m.createdAt,
                             maxWidth: bubbleMax,
-                            aiColor:
-                                theme.colorScheme.surfaceContainerHighest,
+                            aiColor: theme.colorScheme.surfaceContainerHighest,
                           ),
                         ),
                       ],
@@ -176,15 +183,16 @@ class ResultCard extends ConsumerWidget {
                   child: GestureDetector(
                     key: const Key('card-resize-handle'),
                     behavior: HitTestBehavior.opaque,
-                    onPanUpdate: (d) =>
-                        ref.read(panelLayoutProvider.notifier).resizeCard(d.delta),
+                    onPanUpdate: (d) => ref
+                        .read(panelLayoutProvider.notifier)
+                        .resizeCard(d.delta),
                     onPanEnd: (_) =>
                         ref.read(panelLayoutProvider.notifier).commit(),
                     child: Padding(
                       padding: const EdgeInsets.all(2),
                       child: Icon(
-                        Icons.drag_handle,
-                        size: 14,
+                        LucideIcons.gripVertical,
+                        size: 16,
                         color: theme.colorScheme.outline,
                       ),
                     ),
@@ -228,11 +236,7 @@ class ResultCard extends ConsumerWidget {
 /// Conversation input on the card: multi-turn follow-up (FEATURES 6.5.2).
 /// Enter sends / Shift+Enter adds a newline (8.9); disabled while streaming.
 class _CardInput extends ConsumerStatefulWidget {
-  const _CardInput({
-    required this.streaming,
-    this.bookId,
-    this.bookTitle,
-  });
+  const _CardInput({required this.streaming, this.bookId, this.bookTitle});
 
   final bool streaming;
   final int? bookId;
@@ -256,11 +260,9 @@ class _CardInputState extends ConsumerState<_CardInput> {
     if (text.isEmpty || widget.streaming) return;
     _input.clear();
     // Routes to the active thread, or starts a new chat thread (6.5.1).
-    ref.read(aiProvider.notifier).sendInput(
-          text,
-          bookId: widget.bookId,
-          bookTitle: widget.bookTitle,
-        );
+    ref
+        .read(aiProvider.notifier)
+        .sendInput(text, bookId: widget.bookId, bookTitle: widget.bookTitle);
   }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
@@ -287,7 +289,7 @@ class _CardInputState extends ConsumerState<_CardInput> {
             isDense: true,
             border: const OutlineInputBorder(),
             suffixIcon: IconButton(
-              icon: const Icon(Icons.send, size: 18),
+              icon: const Icon(LucideIcons.send, size: 20),
               tooltip: '发送',
               visualDensity: VisualDensity.compact,
               onPressed: widget.streaming ? null : _send,

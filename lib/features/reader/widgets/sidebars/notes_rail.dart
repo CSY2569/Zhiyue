@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 
 import 'package:rbwa/core/widgets/confirm_dialog.dart';
 import 'package:rbwa/core/widgets/empty_state.dart';
@@ -31,7 +32,8 @@ class NotesRail extends ConsumerWidget {
     final hasMarks = marks.isNotEmpty;
     final empty = anns.isEmpty && marks.isEmpty;
     final width = ref.watch(
-        panelLayoutProvider.select((p) => p.annotationsWidth));
+      panelLayoutProvider.select((p) => p.annotationsWidth),
+    );
 
     return SizedBox(
       width: width,
@@ -48,8 +50,12 @@ class NotesRail extends ConsumerWidget {
                   ? const _EmptyHint()
                   : ListView(
                       padding: const EdgeInsets.symmetric(vertical: 4),
-                      children:
-                          _flatItems(anns, marks, annVisibility, markVisibility),
+                      children: _flatItems(
+                        anns,
+                        marks,
+                        annVisibility,
+                        markVisibility,
+                      ),
                     ),
             ),
             if (hasMarks) const _ClearMarksBar(),
@@ -87,10 +93,7 @@ class NotesRail extends ConsumerWidget {
 /// (画笔 / 形状 / 便签 / 图章). Toggling only changes the color -- the box
 /// size stays constant. Only enabled kinds show in the flat list below.
 class _FilterBar extends ConsumerWidget {
-  const _FilterBar({
-    required this.annVisibility,
-    required this.markVisibility,
-  });
+  const _FilterBar({required this.annVisibility, required this.markVisibility});
 
   final Set<TextAnnotationKind> annVisibility;
   final Set<ImageMarkKind> markVisibility;
@@ -123,7 +126,7 @@ class _FilterBar extends ConsumerWidget {
                 color: selected ? primary : theme.colorScheme.outlineVariant,
               ),
             ),
-            child: Icon(icon, size: 15, color: selected ? primary : idle),
+            child: Icon(icon, size: 16, color: selected ? primary : idle),
           ),
         ),
       );
@@ -171,10 +174,10 @@ class _FilterBar extends ConsumerWidget {
           for (final kind in ImageMarkKind.values)
             toggle(
               icon: switch (kind) {
-                ImageMarkKind.brush => Icons.brush_outlined,
-                ImageMarkKind.shape => Icons.rectangle_outlined,
-                ImageMarkKind.sticky => Icons.sticky_note_2_outlined,
-                ImageMarkKind.stamp => Icons.image_outlined,
+                ImageMarkKind.brush => LucideIcons.brush,
+                ImageMarkKind.shape => LucideIcons.squareDashed,
+                ImageMarkKind.sticky => LucideIcons.stickyNote,
+                ImageMarkKind.stamp => LucideIcons.image,
               },
               tooltip: switch (kind) {
                 ImageMarkKind.brush => '画笔',
@@ -210,11 +213,12 @@ class _AnnotationTile extends ConsumerWidget {
         color: theme.colorScheme.errorContainer,
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 16),
-        child: Icon(Icons.delete_outline,
-            color: theme.colorScheme.onErrorContainer),
+        child: Icon(
+          LucideIcons.trash2,
+          color: theme.colorScheme.onErrorContainer,
+        ),
       ),
-      onDismissed: (_) =>
-          ref.read(annotationProvider.notifier).delete(ann.id),
+      onDismissed: (_) => ref.read(annotationProvider.notifier).delete(ann.id),
       child: InkWell(
         onTap: onJump == null ? null : () => onJump!(ann.page),
         child: Padding(
@@ -222,8 +226,33 @@ class _AnnotationTile extends ConsumerWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(textAnnotationIcon(ann.kind),
-                  size: 16, color: theme.colorScheme.primary),
+              Icon(
+                textAnnotationIcon(ann.kind),
+                size: 16,
+                color: theme.colorScheme.primary,
+              ),
+              // Marks made on the 对照 view's translated pane look identical
+              // to original ones otherwise: give them a pane badge.
+              if (AnnotationPane.fromSource(ann.source) ==
+                  AnnotationPane.translated) ...[
+                const SizedBox(width: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 1,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '译',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSecondaryContainer,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(width: 8),
               Expanded(
                 child: Column(
@@ -248,7 +277,7 @@ class _AnnotationTile extends ConsumerWidget {
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.delete_outline, size: 18),
+                icon: const Icon(LucideIcons.trash2, size: 20),
                 visualDensity: VisualDensity.compact,
                 tooltip: '删除标注',
                 onPressed: () =>
@@ -275,11 +304,12 @@ class _MarkTile extends ConsumerWidget {
     final theme = Theme.of(context);
     final label = switch (mark.kind) {
       ImageMarkKind.brush => '画笔（${mark.brushPoints.length} 点）',
-      ImageMarkKind.shape => '形状：${switch (mark.shapeType) {
-        'ellipse' => '椭圆',
-        'arrow' => '箭头',
-        _ => '矩形',
-      }}',
+      ImageMarkKind.shape =>
+        '形状：${switch (mark.shapeType) {
+          'ellipse' => '椭圆',
+          'arrow' => '箭头',
+          _ => '矩形',
+        }}',
       ImageMarkKind.sticky => mark.stickyText ?? '便签',
       ImageMarkKind.stamp => mark.stampFile?.split('/').last ?? '图章',
     };
@@ -291,10 +321,10 @@ class _MarkTile extends ConsumerWidget {
           children: [
             Icon(
               switch (mark.kind) {
-                ImageMarkKind.brush => Icons.brush_outlined,
-                ImageMarkKind.shape => Icons.rectangle_outlined,
-                ImageMarkKind.sticky => Icons.sticky_note_2_outlined,
-                ImageMarkKind.stamp => Icons.image_outlined,
+                ImageMarkKind.brush => LucideIcons.brush,
+                ImageMarkKind.shape => LucideIcons.squareDashed,
+                ImageMarkKind.sticky => LucideIcons.stickyNote,
+                ImageMarkKind.stamp => LucideIcons.image,
               },
               size: 16,
               color: theme.colorScheme.primary,
@@ -309,7 +339,7 @@ class _MarkTile extends ConsumerWidget {
               ),
             ),
             IconButton(
-              icon: const Icon(Icons.close, size: 16),
+              icon: const Icon(LucideIcons.x, size: 16),
               tooltip: '删除标记',
               visualDensity: VisualDensity.compact,
               onPressed: () =>
@@ -328,7 +358,7 @@ class _EmptyHint extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return EmptyState(
-      icon: Icons.edit_note,
+      icon: LucideIcons.penLine,
       iconSize: 48,
       title: '暂无标注',
       titleStyle: Theme.of(context).textTheme.titleSmall,
@@ -359,7 +389,7 @@ class _ClearMarksBar extends ConsumerWidget {
             await ref.read(imageMarkProvider.notifier).clearAll();
           }
         },
-        icon: const Icon(Icons.delete_sweep_outlined, size: 16),
+        icon: const Icon(LucideIcons.broom, size: 16),
         label: const Text('清空全部标记'),
       ),
     );
@@ -384,9 +414,8 @@ class _ExportBar extends ConsumerWidget {
                 child: OutlinedButton.icon(
                   onPressed: () =>
                       exportAnnotations(context, ref, format: 'markdown'),
-                  icon: const Icon(Icons.description_outlined, size: 16),
-                  label: const Text('Markdown',
-                      style: TextStyle(fontSize: 12)),
+                  icon: const Icon(LucideIcons.fileText, size: 16),
+                  label: const Text('Markdown', style: TextStyle(fontSize: 12)),
                 ),
               ),
               const SizedBox(width: 8),
@@ -394,7 +423,7 @@ class _ExportBar extends ConsumerWidget {
                 child: OutlinedButton.icon(
                   onPressed: () =>
                       exportAnnotations(context, ref, format: 'json'),
-                  icon: const Icon(Icons.data_object, size: 16),
+                  icon: const Icon(LucideIcons.braces, size: 16),
                   label: const Text('JSON', style: TextStyle(fontSize: 12)),
                 ),
               ),
@@ -405,7 +434,7 @@ class _ExportBar extends ConsumerWidget {
             width: double.infinity,
             child: OutlinedButton.icon(
               onPressed: () => exportMergedImage(context, ref),
-              icon: const Icon(Icons.image_outlined, size: 16),
+              icon: const Icon(LucideIcons.image, size: 16),
               label: const Text('导出拼合图片（含批注）'),
             ),
           ),

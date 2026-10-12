@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 
 import 'package:rbwa/core/widgets/toolbar_icon_button.dart';
 import 'package:rbwa/features/annotation/providers/image_mark_provider.dart';
@@ -35,7 +36,9 @@ class MarkToolBar extends ConsumerWidget {
     final markNotifier = ref.read(imageMarkProvider.notifier);
     final theme = Theme.of(context);
     final showStyle =
-        tool == MarkTool.brush || tool == MarkTool.shape || tool == MarkTool.stamp;
+        tool == MarkTool.brush ||
+        tool == MarkTool.shape ||
+        tool == MarkTool.stamp;
 
     return Material(
       elevation: 2,
@@ -47,13 +50,13 @@ class MarkToolBar extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             ToolbarIconButton(
-              icon: Icons.near_me_outlined,
+              icon: LucideIcons.navigation,
               tooltip: '选择/移动',
               active: tool == MarkTool.select,
               onTap: () => notifier.setTool(MarkTool.select),
             ),
             ToolbarIconButton(
-              icon: Icons.brush_outlined,
+              icon: LucideIcons.brush,
               tooltip: '画笔',
               active: tool == MarkTool.brush,
               onTap: () => notifier.setTool(MarkTool.brush),
@@ -61,7 +64,7 @@ class MarkToolBar extends ConsumerWidget {
             // Shape tool: a popup also picks the shape type (5.4).
             _ShapeTool(active: tool == MarkTool.shape),
             ToolbarIconButton(
-              icon: Icons.sticky_note_2_outlined,
+              icon: LucideIcons.stickyNote,
               tooltip: '便签',
               active: tool == MarkTool.sticky,
               onTap: () => notifier.setTool(MarkTool.sticky),
@@ -69,13 +72,13 @@ class MarkToolBar extends ConsumerWidget {
             _StampTool(active: tool == MarkTool.stamp),
             const VDivider(),
             ToolbarIconButton(
-              icon: Icons.undo,
+              icon: LucideIcons.undo,
               tooltip: '撤销 (Ctrl+Z)',
               enabled: markNotifier.canUndo,
               onTap: markNotifier.canUndo ? () => markNotifier.undo() : null,
             ),
             ToolbarIconButton(
-              icon: Icons.redo,
+              icon: LucideIcons.redo,
               tooltip: '重做 (Ctrl+Shift+Z)',
               enabled: markNotifier.canRedo,
               onTap: markNotifier.canRedo ? () => markNotifier.redo() : null,
@@ -98,9 +101,7 @@ class MarkToolBar extends ConsumerWidget {
                 ),
               ),
               ToolbarIconButton(
-                icon: toolState.fill
-                    ? Icons.circle
-                    : Icons.circle_outlined,
+                icon: toolState.fill ? LucideIcons.circle : LucideIcons.circle,
                 tooltip: toolState.fill ? '实心填充开' : '空心（无填充）',
                 active: toolState.fill,
                 onTap: notifier.toggleFill,
@@ -108,7 +109,7 @@ class MarkToolBar extends ConsumerWidget {
             ],
             const VDivider(),
             ToolbarIconButton(
-              icon: Icons.check,
+              icon: LucideIcons.check,
               tooltip: '退出批注',
               onTap: () => notifier.setTool(null),
             ),
@@ -128,11 +129,12 @@ class _ShapeTool extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final type = ref.watch(markToolProvider.select((s) => s.shapeType));
     return PopupMenuButton<String>(
-      tooltip: '形状（${switch (type) {
-        'ellipse' => '椭圆',
-        'arrow' => '箭头',
-        _ => '矩形',
-      }}）',
+      tooltip:
+          '形状（${switch (type) {
+            'ellipse' => '椭圆',
+            'arrow' => '箭头',
+            _ => '矩形',
+          }}）',
       initialValue: type,
       onSelected: (t) {
         ref.read(markToolProvider.notifier).setShapeType(t);
@@ -144,14 +146,11 @@ class _ShapeTool extends ConsumerWidget {
         PopupMenuItem(value: 'arrow', child: Text('箭头')),
       ],
       child: IconButton(
-        icon: Icon(
-          switch (type) {
-            'ellipse' => Icons.circle_outlined,
-            'arrow' => Icons.arrow_right_alt,
-            _ => Icons.rectangle_outlined,
-          },
-          size: 18,
-        ),
+        icon: Icon(switch (type) {
+          'ellipse' => LucideIcons.circle,
+          'arrow' => LucideIcons.arrowRight,
+          _ => LucideIcons.squareDashed,
+        }, size: 20),
         color: active ? Theme.of(context).colorScheme.primary : null,
         visualDensity: VisualDensity.compact,
         onPressed: () =>
@@ -169,16 +168,18 @@ class _StampTool extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final hasFile =
-        ref.watch(markToolProvider.select((s) => s.stampFile != null));
+    final hasFile = ref.watch(
+      markToolProvider.select((s) => s.stampFile != null),
+    );
     return IconButton(
-      icon: const Icon(Icons.image_outlined, size: 18),
+      icon: const Icon(LucideIcons.image, size: 20),
       color: active ? theme.colorScheme.primary : null,
       tooltip: hasFile ? '图章（已选图片，点击页面放置）' : '图章（先选择图片）',
       visualDensity: VisualDensity.compact,
       onPressed: () async {
-        final result =
-            await FilePicker.platform.pickFiles(type: FileType.image);
+        final result = await FilePicker.platform.pickFiles(
+          type: FileType.image,
+        );
         final path = result?.files.single.path;
         if (path == null || path.isEmpty) return;
         ref.read(markToolProvider.notifier).setStampFile(path);
@@ -221,4 +222,3 @@ class _ColorDot extends StatelessWidget {
     );
   }
 }
-

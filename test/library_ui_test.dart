@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:rbwa/features/library/providers/library_providers.dart';
 import 'helpers/widget_harness.dart';
 import 'package:rbwa/features/library/widgets/book_tile.dart';
@@ -219,7 +220,7 @@ void main() {
     await tester.pump();
 
     expect(find.byType(Image), findsOneWidget);
-    expect(find.byIcon(Icons.picture_as_pdf_outlined), findsNothing);
+    expect(find.byIcon(LucideIcons.fileText), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -228,7 +229,7 @@ void main() {
     await tester.pumpWidget(_tile(_book()));
 
     expect(find.byType(Image), findsNothing);
-    expect(find.byIcon(Icons.picture_as_pdf_outlined), findsOneWidget);
+    expect(find.byIcon(LucideIcons.fileText), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

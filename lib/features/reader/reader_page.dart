@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:rbwa/core/widgets/panel_resize_handle.dart';
@@ -74,10 +75,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     // Selection state drives the floating overlays (FEATURES 4.2/4.4).
     _selectionSub = ref.listenManual(selectionProvider, (prev, next) {
       _setVisible(
-          _toolbarController,
-          next.selection != null &&
-              next.toolbarAnchor != null &&
-              next.composerPos == null);
+        _toolbarController,
+        next.selection != null &&
+            next.toolbarAnchor != null &&
+            next.composerPos == null,
+      );
       _setVisible(_composerController, next.composerPos != null);
       _setVisible(_noteController, next.noteTargetId != null);
     });
@@ -93,8 +95,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     // (its screen anchor no longer matches the content). A book change also
     // follows the per-book conversation window in the AI panel (6.5.4).
     _viewerSub = ref.listenManual(
-      viewerProvider.select(
-          (s) => (s.book?.id, s.zoom, s.mode, s.currentPage)),
+      viewerProvider.select((s) => (s.book?.id, s.zoom, s.mode, s.currentPage)),
       (prev, next) {
         if (prev != next) {
           ref.read(selectionProvider.notifier).clear();
@@ -106,7 +107,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     );
 
     // The bilingual-reading queue subscription was removed together with the
-    // built-in translation pipeline; the BabelDOC engine integration will add
+    // built-in translation pipeline; the engine integration will add
     // its own task wiring.
   }
 
@@ -145,8 +146,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       // reading minimum first (the sidebar collapses below if still tight).
       if (aiOpen && deficit > 0) {
         final cur = ref.read(panelLayoutProvider);
-        final next = (cur.aiPanelWidth - deficit)
-            .clamp(PanelLayout.minAiPanelWidth, cur.aiPanelWidth);
+        final next = (cur.aiPanelWidth - deficit).clamp(
+          PanelLayout.minAiPanelWidth,
+          cur.aiPanelWidth,
+        );
         deficit -= cur.aiPanelWidth - next;
         notifier.clampAiPanel(next);
       }
@@ -156,9 +159,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       if (deficit > 0 && sidebarOpen) {
         if (!_sidebarCollapseNotified) {
           _sidebarCollapseNotified = true;
-          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-            const SnackBar(content: Text('阅读区空间不足，已自动收起左侧栏')),
-          );
+          ScaffoldMessenger.maybeOf(
+            context,
+          )?.showSnackBar(const SnackBar(content: Text('阅读区空间不足，已自动收起左侧栏')));
         }
         final side = ref.read(viewerProvider).openSidebar;
         if (side != null) {
@@ -215,16 +218,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(viewerProvider);
     final aiOpen = ref.watch(aiProvider.select((s) => s.aiPanelOpen));
-    final translateOpen =
-        ref.watch(translationPaneProvider.select((s) => s.open));
+    final translateOpen = ref.watch(
+      translationPaneProvider.select((s) => s.open),
+    );
     // Book snapshot for the AI widgets (per-book conversation windows,
     // 6.5.4); the AI notifier itself never reads the viewer state.
     final book = state.book;
 
     if (state.loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     if (state.error != null) {
@@ -233,7 +235,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, size: 48),
+              const Icon(LucideIcons.circleAlert, size: 48),
               const SizedBox(height: 12),
               Text(state.error!, style: Theme.of(context).textTheme.bodyLarge),
               const SizedBox(height: 16),
@@ -266,12 +268,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                         constraints.maxWidth,
                         aiOpen: aiOpen,
                         sidebarOpen: state.openSidebar != null,
-                        sidebarWidth:
-                            state.openSidebar == null
-                                ? 0
-                                : ref
-                                    .read(panelLayoutProvider)
-                                    .widthFor(state.openSidebar!),
+                        sidebarWidth: state.openSidebar == null
+                            ? 0
+                            : ref
+                                  .read(panelLayoutProvider)
+                                  .widthFor(state.openSidebar!),
                         context: context,
                       );
                       return Row(
@@ -332,10 +333,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             ),
             OverlayPortal(
               controller: _toolbarController,
-              overlayChildBuilder: (_) => FloatingToolbar(
-                bookId: book?.id,
-                bookTitle: book?.title,
-              ),
+              overlayChildBuilder: (_) =>
+                  FloatingToolbar(bookId: book?.id, bookTitle: book?.title),
             ),
             OverlayPortal(
               controller: _composerController,
@@ -347,10 +346,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             ),
             OverlayPortal(
               controller: _aiCardController,
-              overlayChildBuilder: (_) => ResultCard(
-                bookId: book?.id,
-                bookTitle: book?.title,
-              ),
+              overlayChildBuilder: (_) =>
+                  ResultCard(bookId: book?.id, bookTitle: book?.title),
             ),
           ],
         ),
@@ -365,13 +362,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           onJump: (page) => _jumpToPage(page + 1), // 0-indexed -> 1-indexed
         );
       case SidebarType.outline:
-        return OutlineTree(
-          onJump: (page) => _jumpToPage(page + 1),
-        );
+        return OutlineTree(onJump: (page) => _jumpToPage(page + 1));
       case SidebarType.annotations:
-        return NotesRail(
-          onJump: (page) => _jumpToPage(page + 1),
-        );
+        return NotesRail(onJump: (page) => _jumpToPage(page + 1));
     }
   }
 

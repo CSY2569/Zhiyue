@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 
 import 'package:rbwa/core/widgets/confirm_dialog.dart';
 import 'package:rbwa/core/widgets/empty_state.dart';
@@ -28,8 +29,7 @@ class _AiConversationsPageState extends ConsumerState<AiConversationsPage> {
     final threads = ref.watch(aiProvider).threads;
     // The selection survives window deletion (the right pane falls back to
     // the hint below); a stale id is harmless.
-    final selected =
-        threads.where((t) => t.id == _selectedId).firstOrNull;
+    final selected = threads.where((t) => t.id == _selectedId).firstOrNull;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -50,45 +50,43 @@ class _AiConversationsPageState extends ConsumerState<AiConversationsPage> {
             child: threads.isEmpty
                 ? const _EmptyGuide()
                 : ListView(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                      child: Text(
-                        '对话窗口',
-                        style: Theme.of(context)
-                            .textTheme
-                            .labelMedium
-                            ?.copyWith(
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                        child: Text(
+                          '对话窗口',
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                        ),
                       ),
-                    ),
-                    for (final t in threads)
-                      ListTile(
-                        dense: true,
-                        selected: t.id == _selectedId,
-                        leading: Icon(aiActionIcon(t.action), size: 18),
-                        title: Text(
-                          t.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      for (final t in threads)
+                        ListTile(
+                          dense: true,
+                          selected: t.id == _selectedId,
+                          leading: Icon(aiActionIcon(t.action), size: 20),
+                          title: Text(
+                            t.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            '${t.messages.length} 条消息',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          trailing: IconButton(
+                            icon: const Icon(LucideIcons.trash2, size: 20),
+                            tooltip: '删除对话',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => _confirmDelete(t),
+                          ),
+                          onTap: () => setState(() => _selectedId = t.id),
                         ),
-                        subtitle: Text(
-                          '${t.messages.length} 条消息',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline, size: 18),
-                          tooltip: '删除对话',
-                          visualDensity: VisualDensity.compact,
-                          onPressed: () => _confirmDelete(t),
-                        ),
-                        onTap: () => setState(() => _selectedId = t.id),
-                      ),
-                  ],
-              ),
-            ),
+                    ],
+                  ),
+          ),
         ),
         // Right: the selected book's full conversation.
         Expanded(
@@ -106,9 +104,8 @@ class _AiConversationsPageState extends ConsumerState<AiConversationsPage> {
                       Text(
                         '共 ${selected.messages.length} 条消息',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color:
-                                  Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                       const Divider(height: 16),
                       for (final m in selected.messages)
@@ -149,7 +146,7 @@ class _EmptyGuide extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const EmptyState(
-      icon: Icons.forum_outlined,
+      icon: LucideIcons.messagesSquare,
       title: '暂无 AI 对话',
       message: '在阅读时使用翻译 / 解释 / 搜索 / 识图，\n对话会按书保存在这里',
     );
@@ -163,7 +160,7 @@ class _NoSelection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const EmptyState(
-      icon: Icons.chevron_left,
+      icon: LucideIcons.chevronLeft,
       message: '点击左侧书籍查看对话内容',
     );
   }

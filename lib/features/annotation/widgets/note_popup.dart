@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 
 import 'package:rbwa/features/annotation/annotation_icons.dart';
 import 'package:rbwa/features/annotation/providers/annotation_provider.dart';
@@ -46,8 +47,9 @@ class _NotePopupState extends ConsumerState<NotePopup> {
     if (!mounted) return;
     ref.read(selectionProvider.notifier).closeNote();
     if (!ok) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('保存失败')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('保存失败')));
     }
   }
 
@@ -56,8 +58,9 @@ class _NotePopupState extends ConsumerState<NotePopup> {
     if (!mounted) return;
     ref.read(selectionProvider.notifier).closeNote();
     if (!ok) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('删除失败')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('删除失败')));
     }
   }
 
@@ -66,15 +69,21 @@ class _NotePopupState extends ConsumerState<NotePopup> {
     final id = ref.watch(selectionProvider.select((s) => s.noteTargetId));
     if (id == null) return const SizedBox.shrink();
 
-    final ann = ref.watch(annotationProvider
-        .select((a) => a.valueOrNull?.where((x) => x.id == id).firstOrNull));
+    final ann = ref.watch(
+      annotationProvider.select(
+        (a) => a.valueOrNull?.where((x) => x.id == id).firstOrNull,
+      ),
+    );
     if (ann == null) return const SizedBox.shrink(); // already deleted
     _syncContent(ann);
 
     final screen = MediaQuery.sizeOf(context);
-    final pos = _dragPos ??
-        Offset(screen.width / 2 - _size.width / 2,
-            screen.height / 2 - _size.height / 2 - 40);
+    final pos =
+        _dragPos ??
+        Offset(
+          screen.width / 2 - _size.width / 2,
+          screen.height / 2 - _size.height / 2 - 40,
+        );
     final theme = Theme.of(context);
 
     return Positioned(
@@ -82,8 +91,9 @@ class _NotePopupState extends ConsumerState<NotePopup> {
       top: pos.dy,
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
-        onPanUpdate: (d) =>
-            setState(() => _dragPos = Offset(pos.dx + d.delta.dx, pos.dy + d.delta.dy)),
+        onPanUpdate: (d) => setState(
+          () => _dragPos = Offset(pos.dx + d.delta.dx, pos.dy + d.delta.dy),
+        ),
         child: Material(
           elevation: 4,
           borderRadius: BorderRadius.circular(8),
@@ -98,19 +108,23 @@ class _NotePopupState extends ConsumerState<NotePopup> {
                 children: [
                   Row(
                     children: [
-                      Icon(textAnnotationIcon(ann.kind),
-                          size: 18, color: theme.colorScheme.primary),
+                      Icon(
+                        textAnnotationIcon(ann.kind),
+                        size: 20,
+                        color: theme.colorScheme.primary,
+                      ),
                       const SizedBox(width: 6),
-                      Text('第 ${ann.page + 1} 页 · 笔记',
-                          style: theme.textTheme.titleSmall),
+                      Text(
+                        '第 ${ann.page + 1} 页 · 笔记',
+                        style: theme.textTheme.titleSmall,
+                      ),
                       const Spacer(),
                       IconButton(
-                        icon: const Icon(Icons.close, size: 18),
+                        icon: const Icon(LucideIcons.x, size: 20),
                         visualDensity: VisualDensity.compact,
                         tooltip: '关闭',
-                        onPressed: () => ref
-                            .read(selectionProvider.notifier)
-                            .closeNote(),
+                        onPressed: () =>
+                            ref.read(selectionProvider.notifier).closeNote(),
                       ),
                     ],
                   ),
@@ -119,8 +133,9 @@ class _NotePopupState extends ConsumerState<NotePopup> {
                     ann.text ?? '(无选区文本)',
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Expanded(
@@ -141,7 +156,7 @@ class _NotePopupState extends ConsumerState<NotePopup> {
                     children: [
                       TextButton.icon(
                         onPressed: () => _delete(ann.id),
-                        icon: const Icon(Icons.delete_outline, size: 18),
+                        icon: const Icon(LucideIcons.trash2, size: 20),
                         label: const Text('删除'),
                         style: TextButton.styleFrom(
                           foregroundColor: theme.colorScheme.error,

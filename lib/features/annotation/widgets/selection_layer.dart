@@ -7,6 +7,7 @@ import 'package:rbwa/features/annotation/models/selection.dart';
 import 'package:rbwa/features/annotation/providers/char_box_cache.dart';
 import 'package:rbwa/features/annotation/providers/low_confidence_provider.dart';
 import 'package:rbwa/features/annotation/providers/selection_provider.dart';
+import 'package:rbwa/features/bilingual/providers/translated_char_box_cache.dart';
 import 'package:rbwa/features/annotation/selection_geometry.dart';
 import 'package:rbwa/features/reader/providers/ocr_helpers.dart';
 import 'package:rbwa/features/reader/providers/scan_provider.dart';
@@ -36,11 +37,17 @@ class SelectionLayer extends ConsumerStatefulWidget {
     required this.bookId,
     required this.page, // 0-indexed
     required this.annotations, // annotations of this page
+    this.translated = false,
   });
 
   final int bookId;
   final int page;
   final List<TextAnnotation> annotations;
+
+  /// Selecting on the TRANSLATED pane (对照 view): char boxes come from the
+  /// translated-PDF cache and annotations / OCR markers stay off. The page
+  /// index is the book's absolute page (both panes are 1:1).
+  final bool translated;
 
   @override
   ConsumerState<SelectionLayer> createState() => _SelectionLayerState();
@@ -94,14 +101,21 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
   void _preloadBoxes() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      ref
-          .read(charBoxCacheProvider.notifier)
-          .getOrFetch(widget.bookId, widget.page);
+      if (widget.translated) {
+        ref
+            .read(translatedCharBoxCacheProvider.notifier)
+            .getOrFetch(widget.bookId, widget.page);
+      } else {
+        ref
+            .read(charBoxCacheProvider.notifier)
+            .getOrFetch(widget.bookId, widget.page);
+      }
     });
   }
 
-  List<CharBox>? get _boxes =>
-      ref.watch(charBoxCacheProvider.select((m) => m[widget.page]));
+  List<CharBox>? get _boxes => widget.translated
+      ? ref.watch(translatedCharBoxCacheProvider.select((m) => m[widget.page]))
+      : ref.watch(charBoxCacheProvider.select((m) => m[widget.page]));
 
   /// Build line layouts for OCR (line-level) boxes. Called after boxes arrive
   /// when [isLineLevelBoxes] is true. The page width in pixels is the layer's
@@ -133,6 +147,9 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
     final anchor = _dragAnchor;
     if (boxes == null || anchor == null) return;
     final layouts = _lineLayouts;
+    final source = widget.translated
+        ? SelectionSource.translated
+        : SelectionSource.original;
     if (layouts != null) {
       final sel = Selection(
         page: widget.page,
@@ -140,6 +157,7 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
         currentIndex: idx,
         text: selectionTextFromLines(boxes, anchor, idx),
         lineRects: selectionRectsFromLines(boxes, layouts, anchor, idx),
+        source: source,
       );
       ref.read(selectionProvider.notifier).updateSelection(sel);
     } else {
@@ -149,9 +167,21 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
         currentIndex: idx,
         text: selectionText(boxes, anchor, idx),
         lineRects: selectionRects(boxes, anchor, idx),
+        source: source,
       );
       ref.read(selectionProvider.notifier).updateSelection(sel);
     }
+  }
+
+  /// Whether [sel] was made on THIS layer: same page AND same pane (the
+  /// original page and the translated pane share page indices, so the page
+  /// alone would let both panes paint one another's selection).
+  bool _owns(Selection? sel) {
+    if (sel == null || sel.page != widget.page) return false;
+    final expected = widget.translated
+        ? SelectionSource.translated
+        : SelectionSource.original;
+    return sel.source == expected;
   }
 
   void _onPanDown(DragDownDetails d) => _dragDownPos = d.localPosition;
@@ -197,7 +227,7 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
     // Anchor the floating toolbar above the selection's first line, in
     // global coordinates (the toolbar lives in an Overlay).
     final sel = ref.read(selectionProvider).selection;
-    if (sel == null || sel.page != widget.page || sel.lineRects.isEmpty) {
+    if (!_owns(sel) || sel!.lineRects.isEmpty) {
       return;
     }
     final render = context.findRenderObject() as RenderBox?;
@@ -241,7 +271,8 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
       return;
     }
     // Tap a low-confidence OCR marker -> edit that line's text (7.1.7).
-    final low = _lowConfidenceAt(norm);
+    // Meaningless on the translated pane (its text is not OCR output).
+    final low = widget.translated ? null : _lowConfidenceAt(norm);
     if (low != null) {
       _editOcrLine(low.index, low.line);
       return;
@@ -334,9 +365,7 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
         if (mounted) _ensureLineLayouts(boxes);
       });
     }
-    final mine = selection != null && selection.page == widget.page
-        ? selection
-        : null;
+    final mine = _owns(selection) ? selection : null;
     final color = Theme.of(context).colorScheme.primary;
 
     return GestureDetector(

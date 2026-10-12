@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 
 import 'package:rbwa/core/widgets/empty_state.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
@@ -40,11 +41,9 @@ class _AiPanelSideState extends ConsumerState<AiPanelSide> {
     if (text.isEmpty) return;
     _input.clear();
     // Routes to the active thread, or starts a new chat thread (6.5.1).
-    ref.read(aiProvider.notifier).sendInput(
-          text,
-          bookId: widget.bookId,
-          bookTitle: widget.bookTitle,
-        );
+    ref
+        .read(aiProvider.notifier)
+        .sendInput(text, bookId: widget.bookId, bookTitle: widget.bookTitle);
   }
 
   /// Enter sends (when not shift); Shift+Enter falls through to the default
@@ -64,8 +63,7 @@ class _AiPanelSideState extends ConsumerState<AiPanelSide> {
     final active = state.threadOf(state.activeThreadId);
     // Input is disabled while an answer is streaming (no concurrent sends).
     final inputEnabled = state.streamingThreadId == null;
-    final width =
-        ref.watch(panelLayoutProvider.select((p) => p.aiPanelWidth));
+    final width = ref.watch(panelLayoutProvider.select((p) => p.aiPanelWidth));
 
     return SizedBox(
       width: width,
@@ -78,8 +76,11 @@ class _AiPanelSideState extends ConsumerState<AiPanelSide> {
               padding: const EdgeInsets.fromLTRB(12, 8, 4, 0),
               child: Row(
                 children: [
-                  Icon(Icons.auto_awesome,
-                      size: 16, color: theme.colorScheme.primary),
+                  Icon(
+                    LucideIcons.sparkles,
+                    size: 16,
+                    color: theme.colorScheme.primary,
+                  ),
                   const SizedBox(width: 6),
                   // Shrinkable title: at narrow panel widths the action
                   // buttons take priority, so the title ellipsizes instead of
@@ -97,7 +98,7 @@ class _AiPanelSideState extends ConsumerState<AiPanelSide> {
                   // lives on the 「AI 对话」 page (6.5.3).
                   if (active != null)
                     IconButton(
-                      icon: const Icon(Icons.arrow_back, size: 18),
+                      icon: const Icon(LucideIcons.arrowLeft, size: 20),
                       tooltip: '对话列表',
                       visualDensity: VisualDensity.compact,
                       onPressed: () =>
@@ -107,14 +108,14 @@ class _AiPanelSideState extends ConsumerState<AiPanelSide> {
                     TextButton.icon(
                       onPressed: () =>
                           ref.read(aiProvider.notifier).clearThreads(),
-                      icon: const Icon(Icons.delete_sweep_outlined, size: 16),
+                      icon: const Icon(LucideIcons.broom, size: 16),
                       label: const Text('清空'),
                       style: TextButton.styleFrom(
                         visualDensity: VisualDensity.compact,
                       ),
                     ),
                   IconButton(
-                    icon: const Icon(Icons.close, size: 18),
+                    icon: const Icon(LucideIcons.x, size: 20),
                     tooltip: '关闭 AI 面板',
                     visualDensity: VisualDensity.compact,
                     onPressed: () =>
@@ -155,7 +156,7 @@ class _AiPanelSideState extends ConsumerState<AiPanelSide> {
     // action -- the window list must not reappear (6.5.3 view-only clear).
     if (state.panelCleared || state.threads.isEmpty) {
       return const EmptyState(
-        icon: Icons.auto_awesome_outlined,
+        icon: LucideIcons.sparkles,
         title: 'AI 助手',
         message: '选择文字翻译 / 解释 / 搜索，\n或直接在下方向 AI 提问',
       );
@@ -166,12 +167,12 @@ class _AiPanelSideState extends ConsumerState<AiPanelSide> {
       // button.
       if (!state.showingThreadList) {
         return EmptyState(
-          icon: Icons.auto_awesome_outlined,
+          icon: LucideIcons.sparkles,
           title: 'AI 助手',
           message: '选择文字翻译 / 解释 / 搜索，\n或直接在下方向 AI 提问',
           action: OutlinedButton.icon(
             onPressed: () => ref.read(aiProvider.notifier).showWindowList(),
-            icon: const Icon(Icons.history, size: 16),
+            icon: const Icon(LucideIcons.history, size: 16),
             label: const Text('查看历史对话'),
             style: OutlinedButton.styleFrom(
               visualDensity: VisualDensity.compact,
@@ -215,14 +216,15 @@ class _ThreadList extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
           child: Text(
             '对话窗口',
-            style: theme.textTheme.labelMedium
-                ?.copyWith(color: theme.colorScheme.primary),
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.primary,
+            ),
           ),
         ),
         for (final t in threads)
           ListTile(
             dense: true,
-            leading: Icon(aiActionIcon(t.action), size: 18),
+            leading: Icon(aiActionIcon(t.action), size: 20),
             title: Text(t.title, maxLines: 1, overflow: TextOverflow.ellipsis),
             subtitle: Text(
               '${t.messages.length} 条消息',
@@ -260,8 +262,10 @@ class _ChatView extends StatelessWidget {
     return SelectionArea(
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final bubbleMax =
-              (constraints.maxWidth - 20).clamp(120.0, double.infinity);
+          final bubbleMax = (constraints.maxWidth - 20).clamp(
+            120.0,
+            double.infinity,
+          );
           // reverse: the newest message sits at the bottom and the list opens
           // there, so a long history does not show its oldest turn first (the
           // result card uses the same idiom). Children are laid out
@@ -294,4 +298,3 @@ class _ChatView extends StatelessWidget {
     );
   }
 }
-

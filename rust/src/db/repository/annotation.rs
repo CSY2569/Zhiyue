@@ -11,25 +11,29 @@ use crate::models::annotation::{NormRect, TextAnnotation, TextAnnotationKind};
 
 /// Columns selected from `annotations`, in the order `row_to_annotation`
 /// expects.
-const SELECT_COLS: &str = "id, book_id, page, kind, text, content, rects, \
+const SELECT_COLS: &str = "id, book_id, page, kind, source, text, content, rects, \
      color, created_at, updated_at";
 
 /// Map a `rusqlite::Row` to a `TextAnnotation`, deserializing the rects JSON.
 fn row_to_annotation(row: &Row) -> rusqlite::Result<TextAnnotation> {
     let kind_str: String = row.get(3)?;
-    let rects_json: String = row.get(6)?;
+    let source: Option<String> = row.get(4)?;
+    let rects_json: String = row.get(7)?;
     Ok(TextAnnotation {
         id: row.get(0)?,
         book_id: row.get(1)?,
         page: row.get(2)?,
         kind: TextAnnotationKind::from_db_str(&kind_str)
             .unwrap_or(TextAnnotationKind::Highlight),
-        text: row.get(4)?,
-        content: row.get(5)?,
+        source: source
+            .filter(|v| !v.trim().is_empty())
+            .unwrap_or_else(|| crate::models::annotation::ANNOTATION_SOURCE_ORIGINAL.to_string()),
+        text: row.get(5)?,
+        content: row.get(6)?,
         rects: serde_json::from_str(&rects_json).unwrap_or_default(),
-        color: row.get(7)?,
-        created_at: row.get(8)?,
-        updated_at: row.get(9)?,
+        color: row.get(8)?,
+        created_at: row.get(9)?,
+        updated_at: row.get(10)?,
     })
 }
 
@@ -59,14 +63,29 @@ pub fn create(
     content: Option<String>,
     rects: Vec<NormRect>,
     color: Option<String>,
+    source: &str,
 ) -> AppResult<i64> {
     let rects_json = serde_json::to_string(&rects)
         .map_err(|e| AppError::Internal(format!("serialize rects: {e}")))?;
+    let source = if source.trim().is_empty() {
+        crate::models::annotation::ANNOTATION_SOURCE_ORIGINAL
+    } else {
+        source.trim()
+    };
     conn.execute(
         "INSERT INTO annotations \
-             (book_id, page, kind, text, content, rects, color) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        params![book_id, page, kind.as_str(), text, content, rects_json, color],
+             (book_id, page, kind, source, text, content, rects, color) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![
+            book_id,
+            page,
+            kind.as_str(),
+            source,
+            text,
+            content,
+            rects_json,
+            color
+        ],
     )?;
     Ok(conn.last_insert_rowid())
 }
@@ -121,6 +140,40 @@ mod tests {
         NormRect { x, y, w, h }
     }
 
+    /// Marks are tagged with the pane they were made on; the default and
+    /// legacy rows read as 'original'.
+    #[test]
+    fn translated_source_roundtrip() {
+        let conn = test_conn();
+        let rects = vec![rect(0.2, 0.3, 0.4, 0.02)];
+        let id = create(
+            &conn, 1, 5, TextAnnotationKind::Underline,
+            Some("译文文字".into()), None, rects, Some("#00ff00".into()),
+            crate::models::annotation::ANNOTATION_SOURCE_TRANSLATED,
+        )
+        .unwrap();
+
+        let all = list(&conn, 1).unwrap();
+        let made = all.iter().find(|a| a.id == id).expect("row");
+        assert_eq!(
+            made.source,
+            crate::models::annotation::ANNOTATION_SOURCE_TRANSLATED
+        );
+
+        // An empty source falls back to 'original' (older call sites).
+        let id2 = create(
+            &conn, 1, 5, TextAnnotationKind::Highlight,
+            Some("原文".into()), None, vec![rect(0.1, 0.1, 0.2, 0.02)], None, "",
+        )
+        .unwrap();
+        let all = list(&conn, 1).unwrap();
+        let plain = all.iter().find(|a| a.id == id2).expect("row");
+        assert_eq!(
+            plain.source,
+            crate::models::annotation::ANNOTATION_SOURCE_ORIGINAL
+        );
+    }
+
     #[test]
     fn create_list_roundtrip() {
         let conn = test_conn();
@@ -129,6 +182,7 @@ mod tests {
         let id = create(
             &conn, 1, 3, TextAnnotationKind::Highlight,
             Some("selected text".into()), None, rects.clone(), Some("#ff0000".into()),
+            crate::models::annotation::ANNOTATION_SOURCE_ORIGINAL,
         )
         .unwrap();
         assert!(id > 0);
@@ -136,6 +190,7 @@ mod tests {
         let id2 = create(
             &conn, 1, 3, TextAnnotationKind::Note,
             Some("note text".into()), Some("my note".into()), rects.clone(), None,
+            crate::models::annotation::ANNOTATION_SOURCE_ORIGINAL,
         )
         .unwrap();
         assert!(id2 > id);
@@ -143,7 +198,7 @@ mod tests {
         // Other book must be isolated.
         let id3 = create(
             &conn, 2, 0, TextAnnotationKind::Underline,
-            None, None, vec![rect(0.0, 0.0, 0.1, 0.1)], None,
+            None, None, vec![rect(0.0, 0.0, 0.1, 0.1)], None, crate::models::annotation::ANNOTATION_SOURCE_ORIGINAL,
         )
         .unwrap();
         assert!(id3 > id2);
@@ -168,6 +223,7 @@ mod tests {
         let id = create(
             &conn, 1, 0, TextAnnotationKind::Note,
             Some("sel".into()), None, vec![rect(0.1, 0.1, 0.2, 0.05)], None,
+            crate::models::annotation::ANNOTATION_SOURCE_ORIGINAL,
         )
         .unwrap();
 
@@ -188,7 +244,7 @@ mod tests {
         let conn = test_conn();
         let id = create(
             &conn, 1, 0, TextAnnotationKind::Strikethrough,
-            None, None, vec![], None,
+            None, None, vec![], None, crate::models::annotation::ANNOTATION_SOURCE_ORIGINAL,
         )
         .unwrap();
         let anns = list(&conn, 1).unwrap();

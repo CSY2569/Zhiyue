@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:rbwa/core/widgets/empty_state.dart';
@@ -57,8 +58,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     }
     setState(() => _loading = true);
     try {
-      final res =
-          await ref.read(searchRepositoryProvider).searchBooks(query);
+      final res = await ref.read(searchRepositoryProvider).searchBooks(query);
       if (!mounted) return;
       setState(() {
         _hits = res.error == null ? res.hits : null;
@@ -104,13 +104,13 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                 onChanged: _onChanged,
                 decoration: InputDecoration(
                   hintText: '搜索全文…（文字版 PDF 与已扫描页面）',
-                  prefixIcon: const Icon(Icons.search, size: 20),
+                  prefixIcon: const Icon(LucideIcons.search, size: 20),
                   isDense: true,
                   border: const OutlineInputBorder(),
                   suffixIcon: _controller.text.isEmpty
                       ? null
                       : IconButton(
-                          icon: const Icon(Icons.clear, size: 18),
+                          icon: const Icon(LucideIcons.x, size: 20),
                           tooltip: '清空',
                           visualDensity: VisualDensity.compact,
                           onPressed: () {
@@ -134,7 +134,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     }
     if (_error != null) {
       return EmptyState(
-        icon: Icons.error_outline,
+        icon: LucideIcons.circleAlert,
         title: '搜索失败',
         message: _error,
       );
@@ -142,16 +142,17 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     final hits = _hits;
     if (hits == null) {
       return const EmptyState(
-        icon: Icons.search,
+        icon: LucideIcons.search,
         title: '全文搜索',
         message: '输入关键词，搜索所有书籍的文字版页面\n与已扫描（OCR）页面的内容',
       );
     }
     if (hits.isEmpty) {
       return EmptyState(
-        icon: Icons.search_off,
+        icon: LucideIcons.searchX,
         title: '没有找到结果',
-        message: '没有内容包含「${_controller.text.trim()}」\n'
+        message:
+            '没有内容包含「${_controller.text.trim()}」\n'
             '未扫描的扫描版页面与图片书不参与搜索',
       );
     }
@@ -178,12 +179,9 @@ class _ResultsList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final books = ref.watch(libraryBooksProvider).valueOrNull ??
-        const [];
-    String titleOf(int bookId) => books
-        .where((b) => b.id == bookId)
-        .map((b) => b.title)
-        .firstOrNull ??
+    final books = ref.watch(libraryBooksProvider).valueOrNull ?? const [];
+    String titleOf(int bookId) =>
+        books.where((b) => b.id == bookId).map((b) => b.title).firstOrNull ??
         '书籍 #$bookId';
 
     // Group preserving book order (hits are sorted by book then page).
@@ -200,8 +198,9 @@ class _ResultsList extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: Text(
               titleOf(entry.key),
-              style: theme.textTheme.titleSmall
-                  ?.copyWith(color: theme.colorScheme.primary),
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: theme.colorScheme.primary,
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -209,7 +208,7 @@ class _ResultsList extends ConsumerWidget {
           for (final hit in entry.value)
             ListTile(
               dense: true,
-              leading: const Icon(Icons.description_outlined, size: 18),
+              leading: const Icon(LucideIcons.fileText, size: 20),
               title: Text(
                 '第 ${hit.page + 1} 页',
                 style: theme.textTheme.bodySmall,
@@ -222,8 +221,9 @@ class _ResultsList extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
           child: Text(
             '仅索引文字版页面与已扫描页面；图片书与未扫描页不在搜索结果中',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.outline),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.outline,
+            ),
           ),
         ),
       ],
@@ -241,8 +241,9 @@ class _SnippetText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final base = theme.textTheme.bodySmall
-        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    final base = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
     final q = query.toLowerCase();
     final lower = snippet.toLowerCase();
     final spans = <TextSpan>[];
@@ -256,10 +257,12 @@ class _SnippetText extends StatelessWidget {
       if (idx > from) {
         spans.add(TextSpan(text: snippet.substring(from, idx)));
       }
-      spans.add(TextSpan(
-        text: snippet.substring(idx, idx + q.length),
-        style: const TextStyle(fontWeight: FontWeight.bold),
-      ));
+      spans.add(
+        TextSpan(
+          text: snippet.substring(idx, idx + q.length),
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+      );
       from = idx + q.length;
     }
     return Text.rich(

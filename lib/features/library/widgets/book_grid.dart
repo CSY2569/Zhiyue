@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 
 import 'package:rbwa/core/widgets/empty_state.dart';
 import 'package:rbwa/features/library/providers/library_providers.dart';
@@ -32,7 +33,7 @@ class BookGrid extends ConsumerWidget {
 
     if (books.isEmpty) {
       return const EmptyState(
-        icon: Icons.search_off,
+        icon: LucideIcons.searchX,
         iconSize: 56,
         title: '没有匹配的书籍',
         message: '尝试调整搜索词或筛选条件',

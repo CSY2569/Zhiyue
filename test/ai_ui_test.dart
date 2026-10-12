@@ -99,8 +99,15 @@ void main() {
     await tester.pumpWidget(_scope(const SettingsPage(), repo));
     await tester.pumpAndSettle();
 
-    // The API 协议 control sits next to the text model.
+    // The API 协议 control sits next to the text model. It lives below the
+    // 外观 / 阅读器 sections, so scroll it into the built region first --
+    // ensureVisible alone only works on widgets the ListView already built.
     final responses = find.widgetWithText(SegmentedButton<String>, 'Responses');
+    await tester.scrollUntilVisible(
+      responses,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.ensureVisible(responses);
     await tester.pump();
     await tester.tap(find.text('Responses'));

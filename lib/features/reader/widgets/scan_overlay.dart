@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 
 import 'package:rbwa/features/reader/providers/scan_provider.dart';
 
@@ -34,7 +35,7 @@ class ScanOverlay extends ConsumerWidget {
       case ScanPhase.prompt:
         return _bar(
           theme,
-          icon: Icons.document_scanner_outlined,
+          icon: LucideIcons.scanText,
           text: '本页没有文本层，可整页扫描识别后选中 / 标记',
           actions: [
             TextButton(
@@ -42,7 +43,7 @@ class ScanOverlay extends ConsumerWidget {
               child: const Text('扫描识别'),
             ),
             IconButton(
-              icon: const Icon(Icons.close, size: 16),
+              icon: const Icon(LucideIcons.x, size: 16),
               tooltip: '关闭提示',
               visualDensity: VisualDensity.compact,
               onPressed: () => notifier.dismiss(page),
@@ -52,7 +53,7 @@ class ScanOverlay extends ConsumerWidget {
       case ScanPhase.scanning:
         return _bar(
           theme,
-          icon: Icons.document_scanner_outlined,
+          icon: LucideIcons.scanText,
           text: '正在识别…',
           actions: [
             const SizedBox(
@@ -65,14 +66,14 @@ class ScanOverlay extends ConsumerWidget {
       case ScanPhase.success:
         return _bar(
           theme,
-          icon: Icons.check_circle_outline,
+          icon: LucideIcons.circleCheck,
           text: state.lowConfidence > 0
               ? '识别完成，本页文字现在可以选中和标记了。'
-                  '${state.lowConfidence} 行置信度较低，建议对照原文复核'
+                    '${state.lowConfidence} 行置信度较低，建议对照原文复核'
               : '识别完成，本页文字现在可以选中和标记了',
           actions: [
             IconButton(
-              icon: const Icon(Icons.close, size: 16),
+              icon: const Icon(LucideIcons.x, size: 16),
               tooltip: '关闭提示',
               visualDensity: VisualDensity.compact,
               onPressed: () => notifier.dismiss(page),
@@ -82,11 +83,11 @@ class ScanOverlay extends ConsumerWidget {
       case ScanPhase.empty:
         return _bar(
           theme,
-          icon: Icons.info_outline,
+          icon: LucideIcons.info,
           text: '未识别到文字。数学 / 外语区域可使用「识图」框选处理',
           actions: [
             IconButton(
-              icon: const Icon(Icons.close, size: 16),
+              icon: const Icon(LucideIcons.x, size: 16),
               tooltip: '关闭提示',
               visualDensity: VisualDensity.compact,
               onPressed: () => notifier.dismiss(page),
@@ -96,11 +97,11 @@ class ScanOverlay extends ConsumerWidget {
       case ScanPhase.error:
         return _bar(
           theme,
-          icon: Icons.error_outline,
+          icon: LucideIcons.circleAlert,
           text: state.error ?? '扫描失败',
           actions: [
             IconButton(
-              icon: const Icon(Icons.close, size: 16),
+              icon: const Icon(LucideIcons.x, size: 16),
               tooltip: '关闭提示',
               visualDensity: VisualDensity.compact,
               onPressed: () => notifier.dismiss(page),
@@ -110,8 +111,12 @@ class ScanOverlay extends ConsumerWidget {
     }
   }
 
-  Widget _bar(ThemeData theme,
-      {required IconData icon, required String text, required List<Widget> actions}) {
+  Widget _bar(
+    ThemeData theme, {
+    required IconData icon,
+    required String text,
+    required List<Widget> actions,
+  }) {
     return Material(
       elevation: 2,
       color: theme.colorScheme.surfaceContainerHigh,
@@ -121,7 +126,7 @@ class ScanOverlay extends ConsumerWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 18, color: theme.colorScheme.primary),
+            Icon(icon, size: 20, color: theme.colorScheme.primary),
             const SizedBox(width: 8),
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),

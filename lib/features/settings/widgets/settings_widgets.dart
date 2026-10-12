@@ -49,7 +49,7 @@ class SettingsSection extends StatelessWidget {
                 if (icon != null) ...[
                   Padding(
                     padding: const EdgeInsets.only(top: 1),
-                    child: Icon(icon, size: 18, color: theme.colorScheme.primary),
+                    child: Icon(icon, size: 20, color: theme.colorScheme.primary),
                   ),
                   const SizedBox(width: 10),
                 ],

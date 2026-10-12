@@ -1,8 +1,10 @@
-import 'package:flutter/gestures.dart' show kPrimaryMouseButton, kSecondaryMouseButton;
+import 'package:flutter/gestures.dart'
+    show kPrimaryMouseButton, kSecondaryMouseButton;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'
     show KeyDownEvent, LogicalKeyboardKey, SystemMouseCursors;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 
 import 'screenshot_provider.dart';
 
@@ -103,8 +105,7 @@ class _FreeScreenshotOverlayState extends ConsumerState<FreeScreenshotOverlay> {
                     accentColor: theme.colorScheme.primary,
                   ),
                 ),
-              if (previewing)
-                _PreviewCard(state: state, notifier: notifier),
+              if (previewing) _PreviewCard(state: state, notifier: notifier),
             ],
           ),
         ),
@@ -241,7 +242,7 @@ class _PreviewCard extends StatelessWidget {
                   Row(
                     children: [
                       Icon(
-                        Icons.error_outline,
+                        LucideIcons.circleAlert,
                         size: 20,
                         color: theme.colorScheme.error,
                       ),
@@ -252,8 +253,9 @@ class _PreviewCard extends StatelessWidget {
                   const SizedBox(height: 8),
                   Text(
                     state.error ?? '未知错误',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: theme.colorScheme.error),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.error,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   Row(

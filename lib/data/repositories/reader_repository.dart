@@ -78,6 +78,8 @@ class ReaderRepository {
     String? content,
     required List<NormRect> rects,
     String? color,
+    /// 'original' | 'translated' -- which pane the mark was made on (v9).
+    String source = 'original',
   }) =>
       rust.createAnnotation(
         bookId: bookId,
@@ -85,6 +87,7 @@ class ReaderRepository {
         kind: kind,
         text: text,
         content: content,
+        source: source,
         rects: rects,
         color: color,
       );

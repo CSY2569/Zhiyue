@@ -2,11 +2,11 @@ import 'dart:convert' show jsonDecode, jsonEncode;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 
 import 'package:rbwa/data/repositories/library_repository.dart';
 import 'package:rbwa/data/repositories/settings_repository.dart';
 import 'package:rbwa/data/repositories/translation_repository.dart';
-import 'package:rbwa/features/ai/providers/ai_config_provider.dart';
 import 'package:rbwa/features/bilingual/providers/translation_config_provider.dart';
 import 'package:rbwa/features/bilingual/widgets/engine_settings_card.dart';
 import 'package:rbwa/features/settings/widgets/settings_widgets.dart';
@@ -113,9 +113,9 @@ class _TranslationSettingsSectionState
     await ref.read(translationConfigProvider.notifier).save(config);
     if (!mounted) return;
     setState(() => _saving = false);
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      const SnackBar(content: Text('已保存对照阅读设置')),
-    );
+    ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(const SnackBar(content: Text('已保存对照阅读设置')));
   }
 
   @override
@@ -123,67 +123,32 @@ class _TranslationSettingsSectionState
     final theme = Theme.of(context);
     final config = ref.watch(translationConfigProvider).valueOrNull;
     _hydrate(config);
-    final targetLang = ref.watch(translateTargetLangProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // --- 翻译引擎（BabelDOC，按需下载） --------------------------------
+        // --- 翻译引擎（RetainPDF，随包内置） --------------------------------
         const EngineSettingsCard(),
-        // --- 翻译服务 ---------------------------------------------------
+        // --- 翻译服务（RetainPDF 引擎：复用 AI 设置，无 provider 选择） -----
         SettingsSection(
           title: '翻译服务',
-          icon: Icons.cloud_outlined,
-          description: '提供译文服务；引擎就绪后用于对照阅读与译文导出',
+          icon: LucideIcons.cloud,
+          description: '引擎复用「AI 设置」中的 OpenAI 兼容服务（地址 / Key / 模型）',
           children: [
-            SettingsControlRow(
-              title: '服务提供方',
-              topPadding: 2,
-              child: SegmentedButton<TranslationProviderKind>(
-                segments: const [
-                  ButtonSegment(
-                      value: TranslationProviderKind.reuseAi,
-                      label: Text('复用 AI')),
-                  ButtonSegment(
-                      value: TranslationProviderKind.deepL, label: Text('DeepL')),
-                  ButtonSegment(
-                      value: TranslationProviderKind.openAiCompat,
-                      label: Text('自定义')),
-                ],
-                selected: {_provider},
-                showSelectedIcon: false,
-                onSelectionChanged: (s) => setState(() => _provider = s.first),
-              ),
-            ),
-            if (_provider != TranslationProviderKind.reuseAi) ...[
-              SettingsTextField(
-                controller: _baseUrl,
-                label: '服务地址',
-                hint: 'https://api-free.deepl.com 或 OpenAI 兼容地址',
-              ),
-              SettingsTextField(
-                controller: _apiKey,
-                label: 'API Key',
-                hint: '仅保存在本机',
-                obscure: true,
-              ),
-            ],
-            if (_provider == TranslationProviderKind.openAiCompat)
-              SettingsTextField(
-                controller: _model,
-                label: '模型',
-                hint: '如 gpt-4o-mini',
-              ),
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Row(
                 children: [
-                  Icon(Icons.translate,
-                      size: 16, color: theme.colorScheme.outline),
+                  Icon(
+                    LucideIcons.languages,
+                    size: 16,
+                    color: theme.colorScheme.outline,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '目标语言沿用「AI 设置 → 翻译」：$targetLang',
+                      '目标语言：简体中文（RetainPDF 引擎固定，暂不可配置；'
+                      '「AI 设置 → 翻译」中的目标语言对对照阅读暂不生效）',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -192,29 +157,13 @@ class _TranslationSettingsSectionState
                 ],
               ),
             ),
-            SettingsControlRow(
-              title: '源语言',
-              child: DropdownButton<String>(
-                value: _sourceLang,
-                items: const [
-                  DropdownMenuItem(value: 'auto', child: Text('自动判定')),
-                  DropdownMenuItem(value: '中文', child: Text('中文')),
-                  DropdownMenuItem(value: '英文', child: Text('英文')),
-                  DropdownMenuItem(value: '日文', child: Text('日文')),
-                  DropdownMenuItem(value: '法文', child: Text('法文')),
-                  DropdownMenuItem(value: '德文', child: Text('德文')),
-                ],
-                onChanged: (v) =>
-                    v == null ? null : setState(() => _sourceLang = v),
-              ),
-            ),
           ],
         ),
 
         // --- 翻译方式 ---------------------------------------------------
         SettingsSection(
           title: '翻译方式',
-          icon: Icons.schedule_outlined,
+          icon: LucideIcons.clock,
           children: [
             SettingsControlRow(
               title: '何时翻译',
@@ -227,12 +176,17 @@ class _TranslationSettingsSectionState
               child: SegmentedButton<TranslationMode>(
                 segments: const [
                   ButtonSegment(
-                      value: TranslationMode.wholeBook, label: Text('整本')),
+                    value: TranslationMode.wholeBook,
+                    label: Text('整本'),
+                  ),
                   ButtonSegment(
-                      value: TranslationMode.withProgress,
-                      label: Text('随进度')),
+                    value: TranslationMode.withProgress,
+                    label: Text('随进度'),
+                  ),
                   ButtonSegment(
-                      value: TranslationMode.manual, label: Text('手动')),
+                    value: TranslationMode.manual,
+                    label: Text('手动'),
+                  ),
                 ],
                 selected: {_mode},
                 showSelectedIcon: false,
@@ -240,29 +194,33 @@ class _TranslationSettingsSectionState
               ),
             ),
             SettingsControlRow(
-              title: '整本翻译后台行为',
+              title: '整本翻译后台行为（暂未生效）',
               description: switch (_background) {
                 TranslationBackgroundBehavior.ask => '首次触发整本翻译时询问',
-                TranslationBackgroundBehavior.continue_ =>
-                  '后台继续：切书/关面板不取消',
+                TranslationBackgroundBehavior.continue_ => '后台继续：切书/关面板不取消',
                 TranslationBackgroundBehavior.pauseResume => '切书暂停，回来续传',
                 TranslationBackgroundBehavior.cancel => '离开即取消',
               },
               child: SegmentedButton<TranslationBackgroundBehavior>(
                 segments: const [
                   ButtonSegment(
-                      value: TranslationBackgroundBehavior.continue_,
-                      label: Text('后台继续')),
+                    value: TranslationBackgroundBehavior.continue_,
+                    label: Text('后台继续'),
+                  ),
                   ButtonSegment(
-                      value: TranslationBackgroundBehavior.pauseResume,
-                      label: Text('暂停续传')),
+                    value: TranslationBackgroundBehavior.pauseResume,
+                    label: Text('暂停续传'),
+                  ),
                   ButtonSegment(
-                      value: TranslationBackgroundBehavior.cancel,
-                      label: Text('离开取消')),
+                    value: TranslationBackgroundBehavior.cancel,
+                    label: Text('离开取消'),
+                  ),
                 ],
-                selected: {_background == TranslationBackgroundBehavior.ask
-                    ? TranslationBackgroundBehavior.continue_
-                    : _background},
+                selected: {
+                  _background == TranslationBackgroundBehavior.ask
+                      ? TranslationBackgroundBehavior.continue_
+                      : _background,
+                },
                 showSelectedIcon: false,
                 onSelectionChanged: (s) =>
                     setState(() => _background = s.first),
@@ -270,7 +228,7 @@ class _TranslationSettingsSectionState
             ),
             SettingsSwitchRow(
               title: '扫描版自动 OCR',
-              description: '扫描页无文字层时先本地识别再翻译（低置信会标注）',
+              description: '扫描页无文字层时先本地识别再翻译（当前版本始终启用）',
               value: _autoOcr,
               onChanged: (v) => setState(() => _autoOcr = v),
             ),
@@ -280,11 +238,11 @@ class _TranslationSettingsSectionState
         // --- 性能与存储 -------------------------------------------------
         SettingsSection(
           title: '性能与存储',
-          icon: Icons.speed_outlined,
+          icon: LucideIcons.gauge,
           children: [
             SettingsControlRow(
-              title: '整本翻译并发数',
-              description: '并发 $_concurrency 页（过高可能触发限流）',
+              title: '整本翻译并发数（暂未生效）',
+              description: '当前版本固定为 8 个并行翻译请求',
               topPadding: 2,
               child: Slider(
                 value: _concurrency.toDouble(),
@@ -292,7 +250,7 @@ class _TranslationSettingsSectionState
                 max: 8,
                 divisions: 7,
                 label: '$_concurrency',
-                onChanged: (v) => setState(() => _concurrency = v.round()),
+                onChanged: null,
               ),
             ),
             SettingsControlRow(
@@ -314,7 +272,7 @@ class _TranslationSettingsSectionState
         // --- 术语表 -----------------------------------------------------
         SettingsSection(
           title: '术语表',
-          icon: Icons.menu_book_outlined,
+          icon: LucideIcons.bookOpenText,
           description: '固定译名，全书保持一致',
           children: [
             Row(
@@ -335,7 +293,7 @@ class _TranslationSettingsSectionState
                 Padding(
                   padding: const EdgeInsets.only(left: 4, top: 6),
                   child: IconButton.filledTonal(
-                    icon: const Icon(Icons.add, size: 18),
+                    icon: const Icon(LucideIcons.plus, size: 20),
                     tooltip: '添加术语',
                     onPressed: () async {
                       final s = _glossarySource.text.trim();
@@ -357,8 +315,9 @@ class _TranslationSettingsSectionState
                 padding: const EdgeInsets.only(top: 4, bottom: 2),
                 child: Text(
                   '暂无术语',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.outline),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
                 ),
               )
             else
@@ -368,7 +327,7 @@ class _TranslationSettingsSectionState
                   contentPadding: EdgeInsets.zero,
                   title: Text('${e.sourceTerm} → ${e.targetTerm}'),
                   trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline, size: 18),
+                    icon: const Icon(LucideIcons.trash2, size: 20),
                     tooltip: '删除',
                     visualDensity: VisualDensity.compact,
                     onPressed: () async {
@@ -385,7 +344,7 @@ class _TranslationSettingsSectionState
         // --- 固定保留 ---------------------------------------------------
         SettingsSection(
           title: '固定保留',
-          icon: Icons.push_pin_outlined,
+          icon: LucideIcons.pin,
           description: '勾选的书不会被缓存清理',
           children: const [_PinnedBooksEditor()],
         ),
@@ -394,7 +353,7 @@ class _TranslationSettingsSectionState
           padding: const EdgeInsets.only(top: 4),
           child: FilledButton.icon(
             onPressed: _saving ? null : _save,
-            icon: const Icon(Icons.save_outlined, size: 18),
+            icon: const Icon(LucideIcons.save, size: 20),
             label: Text(_saving ? '保存中…' : '保存对照阅读设置'),
             style: FilledButton.styleFrom(
               minimumSize: const Size.fromHeight(44),
@@ -455,7 +414,9 @@ class _PinnedBooksEditorState extends ConsumerState<_PinnedBooksEditor> {
 
   Future<void> _toggle(int bookId, bool on) async {
     setState(() => on ? _pinned.add(bookId) : _pinned.remove(bookId));
-    await ref.read(settingsRepositoryProvider).setSetting(
+    await ref
+        .read(settingsRepositoryProvider)
+        .setSetting(
           'translation_pinned_books',
           jsonEncode(_pinned.toList()..sort()),
         );
@@ -473,8 +434,9 @@ class _PinnedBooksEditorState extends ConsumerState<_PinnedBooksEditor> {
     if (_books.isEmpty) {
       return Text(
         '书库暂无书籍。',
-        style: theme.textTheme.bodySmall
-            ?.copyWith(color: theme.colorScheme.outline),
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.outline,
+        ),
       );
     }
     return Column(

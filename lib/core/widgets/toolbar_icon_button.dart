@@ -9,7 +9,7 @@ class ToolbarIconButton extends StatelessWidget {
     required this.tooltip,
     this.active = false,
     this.enabled = true,
-    this.iconSize = 18,
+    this.iconSize = 20,
     this.onTap,
   });
 
@@ -49,7 +49,7 @@ class VDivider extends StatelessWidget {
     return Container(
       width: 1,
       height: 24,
-      margin: const EdgeInsets.symmetric(horizontal: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 6),
       color: Theme.of(context).colorScheme.outlineVariant,
     );
   }

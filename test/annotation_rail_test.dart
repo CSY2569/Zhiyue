@@ -37,6 +37,7 @@ TextAnnotation ann(
       bookId: 1,
       page: page,
       kind: kind,
+      source: 'original',
       text: text,
       content: content,
       rects: const [NormRect(x: 0.1, y: 0.1, w: 0.2, h: 0.02)],

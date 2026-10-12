@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 
-/// Application theme definitions (FEATURES 8.2).
+import 'package:rbwa/core/theme/reading_theme.dart';
+
+/// Application theme definitions (FEATURES 8.2 / 8.11).
 ///
 /// Material 3 light + dark schemes. The seed color is a calm reading-friendly
-/// teal; both schemes are generated from it. Milestone M1 only needs the
-/// schemes themselves; persistence is handled by [ThemeController].
+/// teal; both schemes are generated from it. The reader route additionally
+/// overrides the scheme per reading theme via [forReadingTheme] -- canvas /
+/// card / text colors then come from the active [ReadingPalette], which is
+/// attached as a theme extension so widgets can reach the bitmap filters.
 class AppTheme {
   AppTheme._();
 
@@ -15,7 +19,7 @@ class AppTheme {
       seedColor: _seed,
       brightness: Brightness.light,
     );
-    return _base(scheme);
+    return _base(scheme).copyWith(extensions: const [ReadingPalette.paper]);
   }
 
   static ThemeData dark() {
@@ -23,7 +27,25 @@ class AppTheme {
       seedColor: _seed,
       brightness: Brightness.dark,
     );
-    return _base(scheme);
+    return _base(scheme).copyWith(extensions: const [ReadingPalette.night]);
+  }
+
+  /// Theme for the reader route under [theme] (FEATURES 8.11): scaffold
+  /// background becomes the palette canvas, cards / placeholders take the
+  /// palette surfaces, and the palette itself rides along as an extension.
+  static ThemeData forReadingTheme(ReadingTheme theme) {
+    final palette = readingPaletteFor(theme);
+    final seeded = ColorScheme.fromSeed(
+      seedColor: _seed,
+      brightness: palette.brightness,
+    );
+    final scheme = seeded.copyWith(
+      surface: palette.canvas,
+      onSurface: palette.primaryText,
+      surfaceContainerLow: palette.pageCard,
+      surfaceContainerHighest: palette.placeholder,
+    );
+    return _base(scheme).copyWith(extensions: [palette]);
   }
 
   static ThemeData _base(ColorScheme scheme) {
