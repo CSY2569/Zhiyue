@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:rbwa/core/theme/theme_controller.dart';
@@ -36,7 +37,7 @@ class LibraryPage extends ConsumerWidget {
             ),
             body: _Body(onBookTap: (b) => _openBook(context, ref, b)),
             floatingActionButton: FloatingActionButton.extended(
-              icon: const Icon(Icons.add),
+              icon: const Icon(LucideIcons.plus),
               label: const Text('导入文档'),
               onPressed: () => _import(context, ref),
             ),
@@ -49,9 +50,7 @@ class LibraryPage extends ConsumerWidget {
   void _toggleTheme(WidgetRef ref) {
     final notifier = ref.read(themeControllerProvider.notifier);
     final current = ref.read(themeControllerProvider);
-    notifier.set(
-      current == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark,
-    );
+    notifier.set(current == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark);
   }
 
   void _openBook(BuildContext context, WidgetRef ref, Book book) {
@@ -66,23 +65,36 @@ class LibraryPage extends ConsumerWidget {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: const [
-        'pdf', 'png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif', 'tiff', 'tif',
+        'pdf',
+        'png',
+        'jpg',
+        'jpeg',
+        'webp',
+        'bmp',
+        'gif',
+        'tiff',
+        'tif',
       ],
       allowMultiple: true,
     );
     if (result == null || result.files.isEmpty) return;
 
-    final paths =
-        result.files.where((f) => f.path != null).map((f) => f.path!).toList();
+    final paths = result.files
+        .where((f) => f.path != null)
+        .map((f) => f.path!)
+        .toList();
     if (paths.isEmpty) return;
 
-    final summary =
-        await ref.read(libraryBooksProvider.notifier).importFiles(paths);
+    final summary = await ref
+        .read(libraryBooksProvider.notifier)
+        .importFiles(paths);
     if (!context.mounted) return;
 
     final parts = <String>[];
     if (summary.imported > 0) parts.add('导入 ${summary.imported} 本');
-    if (summary.alreadyExisted > 0) parts.add('已存在 ${summary.alreadyExisted} 本');
+    if (summary.alreadyExisted > 0) {
+      parts.add('已存在 ${summary.alreadyExisted} 本');
+    }
     if (summary.failed > 0) parts.add('失败 ${summary.failed} 本');
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(parts.isEmpty ? '未导入任何文档' : parts.join('，'))),
@@ -148,7 +160,8 @@ class _Body extends ConsumerWidget {
     final ok = await showConfirmDialog(
       context,
       title: '删除书籍',
-      content: '确定删除「${book.title}」？\n阅读进度、标注、OCR 缓存将一并清除。\n'
+      content:
+          '确定删除「${book.title}」？\n阅读进度、标注、OCR 缓存将一并清除。\n'
           'AI 对话将保留，可在书库菜单或 AI 面板中查看。',
     );
     if (ok) {
@@ -165,7 +178,7 @@ class _EmptyLibraryGuide extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return EmptyState(
-      icon: Icons.menu_book_outlined,
+      icon: LucideIcons.bookOpenText,
       iconSize: 80,
       title: '书库为空',
       titleStyle: theme.textTheme.headlineSmall,

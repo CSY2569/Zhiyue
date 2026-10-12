@@ -3,6 +3,7 @@ import 'dart:typed_data' show Uint8List;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 
 import 'package:rbwa/features/ai/widgets/ai_utils.dart';
 import 'package:rbwa/features/ai/widgets/latex.dart';
@@ -29,8 +30,10 @@ class AiMessageBubble extends StatelessWidget {
 
   final AiRole role;
   final String content;
+
   /// In-memory screenshot of the live vision turn.
   final Uint8List? imagePng;
+
   /// Persisted screenshot restored from history (absolute file path).
   final String? imagePath;
   final bool streaming;
@@ -59,7 +62,7 @@ class AiMessageBubble extends StatelessWidget {
       File(imagePath!),
       fit: BoxFit.contain,
       errorBuilder: (_, _, _) =>
-          const Icon(Icons.broken_image_outlined, color: Colors.black45),
+          const Icon(LucideIcons.imageOff, color: Colors.black45),
     );
   }
 
@@ -225,14 +228,14 @@ String aiActionLabel(AiActionType action) {
 IconData aiActionIcon(AiActionType action) {
   switch (action) {
     case AiActionType.translate:
-      return Icons.translate;
+      return LucideIcons.languages;
     case AiActionType.explain:
-      return Icons.lightbulb_outline;
+      return LucideIcons.lightbulb;
     case AiActionType.search:
-      return Icons.search;
+      return LucideIcons.search;
     case AiActionType.chat:
-      return Icons.chat_outlined;
+      return LucideIcons.messageSquare;
     case AiActionType.vision:
-      return Icons.document_scanner_outlined;
+      return LucideIcons.scanText;
   }
 }

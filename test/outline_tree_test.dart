@@ -1,3 +1,4 @@
+import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -64,7 +65,7 @@ void main() {
     expect(find.text('Section 1.2'), findsNothing);
 
     // Tapping the chevron reveals them.
-    await tester.tap(find.byIcon(Icons.chevron_right));
+    await tester.tap(find.byIcon(LucideIcons.chevronRight));
     await tester.pumpAndSettle();
     expect(find.text('Section 1.1'), findsOneWidget);
     expect(find.text('Section 1.2'), findsOneWidget);
@@ -78,6 +79,6 @@ void main() {
     expect(find.text('Section 1.1'), findsOneWidget);
     expect(find.text('Section 1.2'), findsOneWidget);
     // Fully expanded: the chapter shows the collapse chevron.
-    expect(find.byIcon(Icons.expand_more), findsOneWidget);
+    expect(find.byIcon(LucideIcons.chevronDown), findsOneWidget);
   });
 }

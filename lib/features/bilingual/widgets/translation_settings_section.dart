@@ -2,6 +2,7 @@ import 'dart:convert' show jsonDecode, jsonEncode;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 
 import 'package:rbwa/data/repositories/library_repository.dart';
 import 'package:rbwa/data/repositories/settings_repository.dart';
@@ -112,9 +113,9 @@ class _TranslationSettingsSectionState
     await ref.read(translationConfigProvider.notifier).save(config);
     if (!mounted) return;
     setState(() => _saving = false);
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      const SnackBar(content: Text('已保存对照阅读设置')),
-    );
+    ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(const SnackBar(content: Text('已保存对照阅读设置')));
   }
 
   @override
@@ -131,15 +132,18 @@ class _TranslationSettingsSectionState
         // --- 翻译服务（RetainPDF 引擎：复用 AI 设置，无 provider 选择） -----
         SettingsSection(
           title: '翻译服务',
-          icon: Icons.cloud_outlined,
+          icon: LucideIcons.cloud,
           description: '引擎复用「AI 设置」中的 OpenAI 兼容服务（地址 / Key / 模型）',
           children: [
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Row(
                 children: [
-                  Icon(Icons.translate,
-                      size: 16, color: theme.colorScheme.outline),
+                  Icon(
+                    LucideIcons.languages,
+                    size: 16,
+                    color: theme.colorScheme.outline,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -159,7 +163,7 @@ class _TranslationSettingsSectionState
         // --- 翻译方式 ---------------------------------------------------
         SettingsSection(
           title: '翻译方式',
-          icon: Icons.schedule_outlined,
+          icon: LucideIcons.clock,
           children: [
             SettingsControlRow(
               title: '何时翻译',
@@ -172,12 +176,17 @@ class _TranslationSettingsSectionState
               child: SegmentedButton<TranslationMode>(
                 segments: const [
                   ButtonSegment(
-                      value: TranslationMode.wholeBook, label: Text('整本')),
+                    value: TranslationMode.wholeBook,
+                    label: Text('整本'),
+                  ),
                   ButtonSegment(
-                      value: TranslationMode.withProgress,
-                      label: Text('随进度')),
+                    value: TranslationMode.withProgress,
+                    label: Text('随进度'),
+                  ),
                   ButtonSegment(
-                      value: TranslationMode.manual, label: Text('手动')),
+                    value: TranslationMode.manual,
+                    label: Text('手动'),
+                  ),
                 ],
                 selected: {_mode},
                 showSelectedIcon: false,
@@ -188,26 +197,30 @@ class _TranslationSettingsSectionState
               title: '整本翻译后台行为（暂未生效）',
               description: switch (_background) {
                 TranslationBackgroundBehavior.ask => '首次触发整本翻译时询问',
-                TranslationBackgroundBehavior.continue_ =>
-                  '后台继续：切书/关面板不取消',
+                TranslationBackgroundBehavior.continue_ => '后台继续：切书/关面板不取消',
                 TranslationBackgroundBehavior.pauseResume => '切书暂停，回来续传',
                 TranslationBackgroundBehavior.cancel => '离开即取消',
               },
               child: SegmentedButton<TranslationBackgroundBehavior>(
                 segments: const [
                   ButtonSegment(
-                      value: TranslationBackgroundBehavior.continue_,
-                      label: Text('后台继续')),
+                    value: TranslationBackgroundBehavior.continue_,
+                    label: Text('后台继续'),
+                  ),
                   ButtonSegment(
-                      value: TranslationBackgroundBehavior.pauseResume,
-                      label: Text('暂停续传')),
+                    value: TranslationBackgroundBehavior.pauseResume,
+                    label: Text('暂停续传'),
+                  ),
                   ButtonSegment(
-                      value: TranslationBackgroundBehavior.cancel,
-                      label: Text('离开取消')),
+                    value: TranslationBackgroundBehavior.cancel,
+                    label: Text('离开取消'),
+                  ),
                 ],
-                selected: {_background == TranslationBackgroundBehavior.ask
-                    ? TranslationBackgroundBehavior.continue_
-                    : _background},
+                selected: {
+                  _background == TranslationBackgroundBehavior.ask
+                      ? TranslationBackgroundBehavior.continue_
+                      : _background,
+                },
                 showSelectedIcon: false,
                 onSelectionChanged: (s) =>
                     setState(() => _background = s.first),
@@ -225,7 +238,7 @@ class _TranslationSettingsSectionState
         // --- 性能与存储 -------------------------------------------------
         SettingsSection(
           title: '性能与存储',
-          icon: Icons.speed_outlined,
+          icon: LucideIcons.gauge,
           children: [
             SettingsControlRow(
               title: '整本翻译并发数（暂未生效）',
@@ -259,7 +272,7 @@ class _TranslationSettingsSectionState
         // --- 术语表 -----------------------------------------------------
         SettingsSection(
           title: '术语表',
-          icon: Icons.menu_book_outlined,
+          icon: LucideIcons.bookOpenText,
           description: '固定译名，全书保持一致',
           children: [
             Row(
@@ -280,7 +293,7 @@ class _TranslationSettingsSectionState
                 Padding(
                   padding: const EdgeInsets.only(left: 4, top: 6),
                   child: IconButton.filledTonal(
-                    icon: const Icon(Icons.add, size: 18),
+                    icon: const Icon(LucideIcons.plus, size: 20),
                     tooltip: '添加术语',
                     onPressed: () async {
                       final s = _glossarySource.text.trim();
@@ -302,8 +315,9 @@ class _TranslationSettingsSectionState
                 padding: const EdgeInsets.only(top: 4, bottom: 2),
                 child: Text(
                   '暂无术语',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.outline),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
                 ),
               )
             else
@@ -313,7 +327,7 @@ class _TranslationSettingsSectionState
                   contentPadding: EdgeInsets.zero,
                   title: Text('${e.sourceTerm} → ${e.targetTerm}'),
                   trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline, size: 18),
+                    icon: const Icon(LucideIcons.trash2, size: 20),
                     tooltip: '删除',
                     visualDensity: VisualDensity.compact,
                     onPressed: () async {
@@ -330,7 +344,7 @@ class _TranslationSettingsSectionState
         // --- 固定保留 ---------------------------------------------------
         SettingsSection(
           title: '固定保留',
-          icon: Icons.push_pin_outlined,
+          icon: LucideIcons.pin,
           description: '勾选的书不会被缓存清理',
           children: const [_PinnedBooksEditor()],
         ),
@@ -339,7 +353,7 @@ class _TranslationSettingsSectionState
           padding: const EdgeInsets.only(top: 4),
           child: FilledButton.icon(
             onPressed: _saving ? null : _save,
-            icon: const Icon(Icons.save_outlined, size: 18),
+            icon: const Icon(LucideIcons.save, size: 20),
             label: Text(_saving ? '保存中…' : '保存对照阅读设置'),
             style: FilledButton.styleFrom(
               minimumSize: const Size.fromHeight(44),
@@ -400,7 +414,9 @@ class _PinnedBooksEditorState extends ConsumerState<_PinnedBooksEditor> {
 
   Future<void> _toggle(int bookId, bool on) async {
     setState(() => on ? _pinned.add(bookId) : _pinned.remove(bookId));
-    await ref.read(settingsRepositoryProvider).setSetting(
+    await ref
+        .read(settingsRepositoryProvider)
+        .setSetting(
           'translation_pinned_books',
           jsonEncode(_pinned.toList()..sort()),
         );
@@ -418,8 +434,9 @@ class _PinnedBooksEditorState extends ConsumerState<_PinnedBooksEditor> {
     if (_books.isEmpty) {
       return Text(
         '书库暂无书籍。',
-        style: theme.textTheme.bodySmall
-            ?.copyWith(color: theme.colorScheme.outline),
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.outline,
+        ),
       );
     }
     return Column(

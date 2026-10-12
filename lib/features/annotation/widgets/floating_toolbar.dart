@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
 import 'package:rbwa/features/annotation/providers/annotation_provider.dart';
@@ -51,9 +52,8 @@ class FloatingToolbar extends ConsumerWidget {
       top: pos.dy,
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
-        onPanUpdate: (d) => ref
-            .read(selectionProvider.notifier)
-            .moveToolbar(pos + d.delta),
+        onPanUpdate: (d) =>
+            ref.read(selectionProvider.notifier).moveToolbar(pos + d.delta),
         child: Material(
           elevation: 4,
           borderRadius: BorderRadius.circular(8),
@@ -65,24 +65,22 @@ class FloatingToolbar extends ConsumerWidget {
               runSpacing: 2,
               children: [
                 _ToolButton(
-                  icon: Icons.translate,
+                  icon: LucideIcons.languages,
                   label: '翻译',
-                  onTap: () =>
-                      _aiAction(context, ref, AiActionType.translate),
+                  onTap: () => _aiAction(context, ref, AiActionType.translate),
                 ),
                 _ToolButton(
-                  icon: Icons.lightbulb_outline,
+                  icon: LucideIcons.lightbulb,
                   label: '解释',
-                  onTap: () =>
-                      _aiAction(context, ref, AiActionType.explain),
+                  onTap: () => _aiAction(context, ref, AiActionType.explain),
                 ),
                 _ToolButton(
-                  icon: Icons.search,
+                  icon: LucideIcons.search,
                   label: '搜索',
                   onTap: () => _aiAction(context, ref, AiActionType.search),
                 ),
                 _ToolButton(
-                  icon: Icons.copy,
+                  icon: LucideIcons.copy,
                   label: '复制',
                   onTap: () => _copy(context, ref, sel.text),
                 ),
@@ -90,24 +88,25 @@ class FloatingToolbar extends ConsumerWidget {
                 // translated pane is stored with source='translated' and
                 // rendered only there (v9).
                 _ToolButton(
-                  icon: Icons.border_color,
+                  icon: LucideIcons.highlighter,
                   label: '高亮',
-                  onTap: () => _mark(context, ref, TextAnnotationKind.highlight),
+                  onTap: () =>
+                      _mark(context, ref, TextAnnotationKind.highlight),
                 ),
                 _ToolButton(
-                  icon: Icons.format_underlined,
+                  icon: LucideIcons.underline,
                   label: '下划线',
                   onTap: () =>
                       _mark(context, ref, TextAnnotationKind.underline),
                 ),
                 _ToolButton(
-                  icon: Icons.format_strikethrough,
+                  icon: LucideIcons.strikethrough,
                   label: '删除线',
                   onTap: () =>
                       _mark(context, ref, TextAnnotationKind.strikethrough),
                 ),
                 _ToolButton(
-                  icon: Icons.note_add_outlined,
+                  icon: LucideIcons.filePlus2,
                   label: '笔记',
                   onTap: () => _openComposer(context, ref),
                 ),
@@ -124,8 +123,10 @@ class FloatingToolbar extends ConsumerWidget {
   Offset _autoPosition(Rect anchor, Size screen) {
     var top = anchor.top - 8 - _estHeight;
     if (top < 0) top = anchor.bottom + 8;
-    final left = (anchor.left + anchor.width / 2 - _estWidth / 2)
-        .clamp(8.0, screen.width - _estWidth - 8);
+    final left = (anchor.left + anchor.width / 2 - _estWidth / 2).clamp(
+      8.0,
+      screen.width - _estWidth - 8,
+    );
     return Offset(left, top);
   }
 
@@ -138,12 +139,9 @@ class FloatingToolbar extends ConsumerWidget {
   ) async {
     final sel = ref.read(selectionProvider).selection;
     if (sel == null) return;
-    await ref.read(aiProvider.notifier).startAction(
-          action,
-          sel.text,
-          bookId: bookId,
-          bookTitle: bookTitle,
-        );
+    await ref
+        .read(aiProvider.notifier)
+        .startAction(action, sel.text, bookId: bookId, bookTitle: bookTitle);
     ref.read(selectionProvider.notifier).clear();
   }
 
@@ -163,7 +161,9 @@ class FloatingToolbar extends ConsumerWidget {
     final sel = state.selection;
     if (sel == null) return;
     final messenger = ScaffoldMessenger.of(context);
-    final ok = await ref.read(annotationProvider.notifier).create(
+    final ok = await ref
+        .read(annotationProvider.notifier)
+        .create(
           kind: kind,
           page: sel.page,
           text: sel.text,
@@ -217,8 +217,9 @@ class _ToolButton extends StatelessWidget {
             const SizedBox(width: 4),
             Text(
               label,
-              style: theme.textTheme.labelSmall
-                  ?.copyWith(color: theme.colorScheme.onSurface),
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurface,
+              ),
             ),
           ],
         ),

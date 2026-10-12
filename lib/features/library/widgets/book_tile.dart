@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 
 import 'package:rbwa/features/search/providers/search_providers.dart';
 import 'package:rbwa/src/rust/models/book.dart';
@@ -59,7 +60,7 @@ class BookTile extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.menu_book_outlined),
+              leading: const Icon(LucideIcons.bookOpenText),
               title: const Text('打开'),
               onTap: () {
                 Navigator.pop(ctx);
@@ -67,9 +68,9 @@ class BookTile extends StatelessWidget {
               },
             ),
             ListTile(
-              leading: Icon(book.favorite
-                  ? Icons.star_rounded
-                  : Icons.star_border_rounded),
+              leading: Icon(
+                book.favorite ? LucideIcons.star : LucideIcons.star,
+              ),
               title: Text(book.favorite ? '取消收藏' : '收藏'),
               onTap: () {
                 Navigator.pop(ctx);
@@ -77,7 +78,7 @@ class BookTile extends StatelessWidget {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.label_outline),
+              leading: const Icon(LucideIcons.tag),
               title: const Text('分配到分类…'),
               onTap: () {
                 Navigator.pop(ctx);
@@ -85,7 +86,7 @@ class BookTile extends StatelessWidget {
               },
             ),
             ListTile(
-              leading: Icon(Icons.delete_outline, color: errorColor),
+              leading: Icon(LucideIcons.trash2, color: errorColor),
               title: Text('删除', style: TextStyle(color: errorColor)),
               onTap: () {
                 Navigator.pop(ctx);
@@ -150,7 +151,9 @@ class _Card extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(child: _Cover(book: book, theme: theme)),
+            Expanded(
+              child: _Cover(book: book, theme: theme),
+            ),
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 8, 4, 8),
               child: Row(
@@ -166,9 +169,7 @@ class _Card extends StatelessWidget {
                   ),
                   IconButton(
                     icon: Icon(
-                      book.favorite
-                          ? Icons.star_rounded
-                          : Icons.star_border_rounded,
+                      book.favorite ? LucideIcons.star : LucideIcons.star,
                       size: 20,
                       color: book.favorite
                           ? Colors.amber
@@ -206,7 +207,7 @@ class _Cover extends ConsumerWidget {
     // Highlight the badge while the background full-text index build runs.
     final indexing =
         ref.watch(searchIndexStatusProvider.select((m) => m[book.id])) ==
-            'building';
+        'building';
     Widget content;
     final cover = book.coverPath;
     // PDF covers are rendered at import (covers/{id}.png, FEATURES 2.6);
@@ -268,8 +269,8 @@ class _Cover extends ConsumerWidget {
 
   Widget _placeholder() {
     final icon = book.fileType == BookType.pdf
-        ? Icons.picture_as_pdf_outlined
-        : Icons.image_outlined;
+        ? LucideIcons.fileText
+        : LucideIcons.image;
     return Container(
       color: theme.colorScheme.surfaceContainerHighest,
       child: Icon(icon, size: 40, color: theme.colorScheme.outline),

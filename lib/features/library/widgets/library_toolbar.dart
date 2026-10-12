@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:rbwa/features/library/providers/library_providers.dart';
@@ -12,7 +13,8 @@ import 'package:rbwa/features/library/providers/library_providers.dart';
 /// settings actions. Filters (favorites / type / category) live exclusively
 /// in the left rail, so they are not duplicated here; a small "clear
 /// filters" affordance appears when a filter is active.
-class LibraryToolbar extends ConsumerStatefulWidget implements PreferredSizeWidget {
+class LibraryToolbar extends ConsumerStatefulWidget
+    implements PreferredSizeWidget {
   const LibraryToolbar({
     super.key,
     required this.onToggleTheme,
@@ -61,7 +63,7 @@ class _LibraryToolbarState extends ConsumerState<LibraryToolbar> {
           onChanged: _onSearchChanged,
           decoration: InputDecoration(
             hintText: '搜索书名…',
-            prefixIcon: const Icon(Icons.search, size: 20),
+            prefixIcon: const Icon(LucideIcons.search, size: 20),
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(vertical: 0),
             border: OutlineInputBorder(
@@ -72,7 +74,7 @@ class _LibraryToolbarState extends ConsumerState<LibraryToolbar> {
             fillColor: theme.colorScheme.surfaceContainerHigh,
             suffixIcon: _searchController.text.isNotEmpty
                 ? IconButton(
-                    icon: const Icon(Icons.clear, size: 18),
+                    icon: const Icon(LucideIcons.x, size: 20),
                     onPressed: () {
                       _searchController.clear();
                       _onSearchChanged('');
@@ -84,17 +86,17 @@ class _LibraryToolbarState extends ConsumerState<LibraryToolbar> {
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.manage_search),
+          icon: const Icon(LucideIcons.fileSearch),
           tooltip: '全文搜索',
           onPressed: () => context.go('/search'),
         ),
         IconButton(
-          icon: const Icon(Icons.brightness_6_outlined),
+          icon: const Icon(LucideIcons.sunMoon),
           tooltip: '切换主题',
           onPressed: widget.onToggleTheme,
         ),
         IconButton(
-          icon: const Icon(Icons.settings_outlined),
+          icon: const Icon(LucideIcons.settings),
           tooltip: '设置',
           onPressed: widget.onOpenSettings,
         ),

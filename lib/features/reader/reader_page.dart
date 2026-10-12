@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:rbwa/core/widgets/panel_resize_handle.dart';
@@ -234,7 +235,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, size: 48),
+              const Icon(LucideIcons.circleAlert, size: 48),
               const SizedBox(height: 12),
               Text(state.error!, style: Theme.of(context).textTheme.bodyLarge),
               const SizedBox(height: 16),

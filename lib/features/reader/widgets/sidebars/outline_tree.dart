@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 
 import 'package:rbwa/data/repositories/reader_repository.dart';
 import 'package:rbwa/features/reader/providers/outline_settings.dart';
@@ -57,8 +58,7 @@ class _OutlineTreeState extends ConsumerState<OutlineTree> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final width =
-        ref.watch(panelLayoutProvider.select((p) => p.outlineWidth));
+    final width = ref.watch(panelLayoutProvider.select((p) => p.outlineWidth));
     return SizedBox(
       width: width,
       child: Material(
@@ -76,8 +76,7 @@ class _OutlineTreeState extends ConsumerState<OutlineTree> {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Text('加载目录失败: $_error',
-              style: theme.textTheme.bodySmall),
+          child: Text('加载目录失败: $_error', style: theme.textTheme.bodySmall),
         ),
       );
     }
@@ -89,8 +88,11 @@ class _OutlineTreeState extends ConsumerState<OutlineTree> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.account_tree_outlined,
-                  size: 40, color: theme.colorScheme.outline),
+              Icon(
+                LucideIcons.network,
+                size: 40,
+                color: theme.colorScheme.outline,
+              ),
               const SizedBox(height: 8),
               Text('无目录大纲', style: theme.textTheme.bodySmall),
             ],
@@ -104,12 +106,16 @@ class _OutlineTreeState extends ConsumerState<OutlineTree> {
     return ListView(
       key: ValueKey(expandAll),
       padding: const EdgeInsets.symmetric(vertical: 8),
-      children: entries.map((e) => _OutlineNode(
-        entry: e,
-        depth: 0,
-        defaultExpanded: expandAll,
-        onJump: (page) => widget.onJump(page),
-      )).toList(),
+      children: entries
+          .map(
+            (e) => _OutlineNode(
+              entry: e,
+              depth: 0,
+              defaultExpanded: expandAll,
+              onJump: (page) => widget.onJump(page),
+            ),
+          )
+          .toList(),
     );
   }
 }
@@ -169,9 +175,9 @@ class _OutlineNodeState extends State<_OutlineNode> {
                     onTap: () => setState(() => _expanded = !_expanded),
                     child: Icon(
                       _expanded
-                          ? Icons.expand_more
-                          : Icons.chevron_right,
-                      size: 18,
+                          ? LucideIcons.chevronDown
+                          : LucideIcons.chevronRight,
+                      size: 20,
                       color: theme.colorScheme.outline,
                     ),
                   )
@@ -180,9 +186,7 @@ class _OutlineNodeState extends State<_OutlineNode> {
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    widget.entry.title.isEmpty
-                        ? '(未命名)'
-                        : widget.entry.title,
+                    widget.entry.title.isEmpty ? '(未命名)' : widget.entry.title,
                     style: theme.textTheme.bodySmall,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -200,12 +204,14 @@ class _OutlineNodeState extends State<_OutlineNode> {
           ),
         ),
         if (hasChildren && _expanded)
-          ...widget.entry.children.map((child) => _OutlineNode(
-                entry: child,
-                depth: widget.depth + 1,
-                defaultExpanded: widget.defaultExpanded,
-                onJump: widget.onJump,
-              )),
+          ...widget.entry.children.map(
+            (child) => _OutlineNode(
+              entry: child,
+              depth: widget.depth + 1,
+              defaultExpanded: widget.defaultExpanded,
+              onJump: widget.onJump,
+            ),
+          ),
       ],
     );
   }

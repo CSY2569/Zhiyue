@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'package:rbwa/router/app_router.dart';
@@ -18,11 +19,7 @@ import 'package:rbwa/router/app_router.dart';
 /// `context.go()` (no GoRouterState is available); it uses the [appRouter]
 /// singleton directly.
 class AppTitleBar extends StatelessWidget {
-  const AppTitleBar({
-    super.key,
-    this.title = '智阅',
-    this.showBack = false,
-  });
+  const AppTitleBar({super.key, this.title = '智阅', this.showBack = false});
 
   /// Centered title text (book name in reader mode, app name otherwise).
   final String title;
@@ -40,7 +37,7 @@ class AppTitleBar extends StatelessWidget {
         children: [
           if (showBack)
             IconButton(
-              icon: const Icon(Icons.arrow_back, size: 18),
+              icon: const Icon(LucideIcons.arrowLeft, size: 20),
               tooltip: '返回书库',
               onPressed: () => appRouter.go('/library'),
             )
@@ -73,12 +70,12 @@ class _WindowControls extends StatelessWidget {
     return Row(
       children: [
         IconButton(
-          icon: Icon(Icons.minimize, size: 18, color: iconColor),
+          icon: Icon(LucideIcons.minus, size: 20, color: iconColor),
           tooltip: '最小化',
           onPressed: () => windowManager.minimize(),
         ),
         IconButton(
-          icon: Icon(Icons.crop_square, size: 16, color: iconColor),
+          icon: Icon(LucideIcons.square, size: 16, color: iconColor),
           tooltip: '最大化/还原',
           onPressed: () async {
             if (await windowManager.isMaximized()) {
@@ -89,7 +86,7 @@ class _WindowControls extends StatelessWidget {
           },
         ),
         IconButton(
-          icon: Icon(Icons.close, size: 18, color: iconColor),
+          icon: Icon(LucideIcons.x, size: 20, color: iconColor),
           tooltip: '关闭',
           onPressed: () => windowManager.close(),
         ),

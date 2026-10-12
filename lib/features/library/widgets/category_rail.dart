@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:rbwa/features/library/models/library_filter.dart';
@@ -34,38 +35,35 @@ class CategoryRail extends ConsumerWidget {
           children: [
             _SectionLabel('书库'),
             _FixedItem(
-              icon: Icons.grid_view_outlined,
+              icon: LucideIcons.layoutGrid,
               label: '全部',
               selected: filter.view == LibraryView.all,
-              onTap: () =>
-                  ref.read(libraryFilterProvider.notifier).showAll(),
+              onTap: () => ref.read(libraryFilterProvider.notifier).showAll(),
             ),
             _FixedItem(
-              icon: Icons.star_rounded,
+              icon: LucideIcons.star,
               label: '收藏',
               selected: filter.view == LibraryView.favorite,
               onTap: () =>
                   ref.read(libraryFilterProvider.notifier).showFavorites(),
             ),
             _FixedItem(
-              icon: Icons.picture_as_pdf_outlined,
+              icon: LucideIcons.fileText,
               label: 'PDF',
               selected: filter.view == LibraryView.pdf,
-              onTap: () =>
-                  ref.read(libraryFilterProvider.notifier).showPdf(),
+              onTap: () => ref.read(libraryFilterProvider.notifier).showPdf(),
             ),
             _FixedItem(
-              icon: Icons.image_outlined,
+              icon: LucideIcons.image,
               label: '图片',
               selected: filter.view == LibraryView.image,
-              onTap: () =>
-                  ref.read(libraryFilterProvider.notifier).showImage(),
+              onTap: () => ref.read(libraryFilterProvider.notifier).showImage(),
             ),
             // 查看 AI 对话: standalone entry below the bookshelf views and
             // above the categories (FEATURES 6.5.4).
             const Divider(height: 24),
             _FixedItem(
-              icon: Icons.forum_outlined,
+              icon: LucideIcons.messagesSquare,
               label: 'AI 对话',
               selected: false,
               onTap: () => context.go('/ai-chat'),
@@ -73,7 +71,8 @@ class CategoryRail extends ConsumerWidget {
             const Divider(height: 24),
             _SectionLabel('分类'),
             ...catsAsync.when(
-              data: (cats) => _buildCustomCategories(context, ref, cats, filter),
+              data: (cats) =>
+                  _buildCustomCategories(context, ref, cats, filter),
               loading: () => [const _LoadingHint()],
               error: (_, _) => [const _LoadingHint()],
             ),
@@ -81,7 +80,7 @@ class CategoryRail extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: OutlinedButton.icon(
-                icon: const Icon(Icons.add, size: 18),
+                icon: const Icon(LucideIcons.plus, size: 20),
                 label: const Text('新建分类'),
                 onPressed: () => _createCategory(context, ref),
               ),
@@ -105,35 +104,39 @@ class CategoryRail extends ConsumerWidget {
           child: Text(
             '暂无分类',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.outline,
-                ),
+              color: Theme.of(context).colorScheme.outline,
+            ),
           ),
         ),
       ];
     }
     return cats
-        .map((c) => _CustomCategoryTile(
-              category: c,
-              selected: filter.view == LibraryView.category &&
-                  filter.categoryId == c.id,
-              onTap: () =>
-                  ref.read(libraryFilterProvider.notifier).setCategory(c.id),
-              onRename: () => _renameCategory(context, ref, c),
-              onDelete: () => _confirmDelete(context, ref, c),
-            ))
+        .map(
+          (c) => _CustomCategoryTile(
+            category: c,
+            selected:
+                filter.view == LibraryView.category &&
+                filter.categoryId == c.id,
+            onTap: () =>
+                ref.read(libraryFilterProvider.notifier).setCategory(c.id),
+            onRename: () => _renameCategory(context, ref, c),
+            onDelete: () => _confirmDelete(context, ref, c),
+          ),
+        )
         .toList();
   }
 
   Future<void> _createCategory(BuildContext context, WidgetRef ref) async {
     final name = await showCategoryEditDialog(context, title: '新建分类');
     if (name == null || name.trim().isEmpty) return;
-    final created =
-        await ref.read(categoriesProvider.notifier).create(name.trim());
+    final created = await ref
+        .read(categoriesProvider.notifier)
+        .create(name.trim());
     if (!context.mounted) return;
     if (created == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('分类名称已存在')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('分类名称已存在')));
     }
   }
 
@@ -179,8 +182,8 @@ class _SectionLabel extends StatelessWidget {
       child: Text(
         text,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Theme.of(context).colorScheme.outline,
-            ),
+          color: Theme.of(context).colorScheme.outline,
+        ),
       ),
     );
   }
@@ -203,13 +206,17 @@ class _FixedItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return ListTile(
-      leading: Icon(icon,
-          color: selected ? scheme.primary : scheme.onSurfaceVariant),
-      title: Text(label,
-          style: TextStyle(
-            color: selected ? scheme.primary : scheme.onSurface,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-          )),
+      leading: Icon(
+        icon,
+        color: selected ? scheme.primary : scheme.onSurfaceVariant,
+      ),
+      title: Text(
+        label,
+        style: TextStyle(
+          color: selected ? scheme.primary : scheme.onSurface,
+          fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+        ),
+      ),
       selected: selected,
       onTap: onTap,
     );
@@ -247,8 +254,10 @@ class _CustomCategoryTile extends ConsumerWidget {
         return Container(
           color: hovering ? scheme.primaryContainer : null,
           child: ListTile(
-            leading: Icon(Icons.label_outline,
-                color: selected ? scheme.primary : scheme.onSurfaceVariant),
+            leading: Icon(
+              LucideIcons.tag,
+              color: selected ? scheme.primary : scheme.onSurfaceVariant,
+            ),
             title: Text(
               category.name,
               style: TextStyle(
@@ -275,7 +284,7 @@ class _CustomCategoryTile extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.edit_outlined),
+              leading: const Icon(LucideIcons.pen),
               title: const Text('重命名'),
               onTap: () {
                 Navigator.pop(ctx);
@@ -283,11 +292,14 @@ class _CustomCategoryTile extends ConsumerWidget {
               },
             ),
             ListTile(
-              leading: Icon(Icons.delete_outline,
-                  color: Theme.of(context).colorScheme.error),
-              title: Text('删除',
-                  style:
-                      TextStyle(color: Theme.of(context).colorScheme.error)),
+              leading: Icon(
+                LucideIcons.trash2,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              title: Text(
+                '删除',
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
               onTap: () {
                 Navigator.pop(ctx);
                 onDelete();
@@ -307,7 +319,13 @@ class _LoadingHint extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Padding(
       padding: EdgeInsets.all(16),
-      child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))),
+      child: Center(
+        child: SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      ),
     );
   }
 }

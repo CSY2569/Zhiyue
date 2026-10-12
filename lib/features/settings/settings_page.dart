@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:rbwa/core/theme/reading_theme.dart';
@@ -30,20 +31,25 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _visionBaseUrl = TextEditingController();
   final _visionApiKey = TextEditingController();
   final _visionModel = TextEditingController();
+
   /// Target language for translation (one of the chips; default 中文).
   String _targetLang = '中文';
+
   /// Extra target languages the user added.
   List<String> _customLangs = [];
   final _searchBaseUrl = TextEditingController();
   final _searchApiKey = TextEditingController();
   bool _webSearch = false;
   bool _searchBuiltin = false;
+
   /// Built-in search wire protocol: 'responses' (OpenAI-style Responses
   /// web_search tool) or 'anthropic' (Anthropic Messages web_search tool).
   String _searchBuiltinProtocol = 'responses';
+
   /// Whether the general model accepts images (多模态); false -> a separate
   /// vision config is shown.
   bool _supportsVision = false;
+
   /// Reserved embedding-search config (设置 → AI 设置 → 嵌入搜索).
   bool _embeddingEnabled = false;
   final _embeddingBaseUrl = TextEditingController();
@@ -52,6 +58,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _vectorDbUrl = TextEditingController();
   final _vectorDbApiKey = TextEditingController();
   final _vectorDbCollection = TextEditingController();
+
   /// Text protocol: 'chat_completions' (default) or 'responses'.
   String _apiProtocol = 'chat_completions';
   String _ocrMode = 'high_precision';
@@ -64,6 +71,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _customPromptName = TextEditingController();
   final _templateEdit = TextEditingController();
   List<CustomPrompt> _savedTemplates = [];
+
   /// User edits of the built-in templates (template id -> text); persisted
   /// as template_overrides. The async-loaded defaults live in the other map.
   final Map<String, String> _templateEdits = {};
@@ -128,7 +136,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _ocrMode = config.ocrMode == 'fast' ? 'fast' : 'high_precision';
     _includeBookHistory = config.includeBookHistory;
     _enableReasoning = config.enableReasoning;
-    _reasoningEffort = const {'low', 'medium', 'high'}.contains(config.reasoningEffort)
+    _reasoningEffort =
+        const {'low', 'medium', 'high'}.contains(config.reasoningEffort)
         ? config.reasoningEffort
         : 'medium';
     _temperature = config.temperature.clamp(0.0, 2.0);
@@ -182,7 +191,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       visionApiKey: _visionApiKey.text.trim().isEmpty
           ? null
           : _visionApiKey.text.trim(),
-      translateTargetLang: _targetLang.trim().isEmpty ? '中文' : _targetLang.trim(),
+      translateTargetLang: _targetLang.trim().isEmpty
+          ? '中文'
+          : _targetLang.trim(),
       translateCustomLangs: _customLangs,
       modelSupportsVision: _supportsVision,
       searchBaseUrl: _searchBaseUrl.text.trim().isEmpty
@@ -223,9 +234,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final ok = await ref.read(aiConfigProvider.notifier).save(config);
     if (!mounted) return;
     setState(() => _saving = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(ok ? 'AI 配置已保存' : '保存失败，请重试')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(ok ? 'AI 配置已保存' : '保存失败，请重试')));
   }
 
   @override
@@ -240,7 +251,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       appBar: AppBar(
         title: const Text('设置'),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(LucideIcons.arrowLeft),
           onPressed: () => context.go('/library'),
         ),
       ),
@@ -255,7 +266,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               // ---------------------------------------------------------
               SettingsSection(
                 title: '外观',
-                icon: Icons.palette_outlined,
+                icon: LucideIcons.palette,
                 children: [
                   SettingsControlRow(
                     title: '主题',
@@ -265,22 +276,22 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         ButtonSegment(
                           value: ReadingTheme.auto,
                           label: Text('跟随亮度'),
-                          icon: Icon(Icons.brightness_auto_outlined, size: 16),
+                          icon: Icon(LucideIcons.sunMoon, size: 16),
                         ),
                         ButtonSegment(
                           value: ReadingTheme.paper,
                           label: Text('纸白'),
-                          icon: Icon(Icons.description_outlined, size: 16),
+                          icon: Icon(LucideIcons.fileText, size: 16),
                         ),
                         ButtonSegment(
                           value: ReadingTheme.parchment,
                           label: Text('羊皮纸'),
-                          icon: Icon(Icons.auto_stories_outlined, size: 16),
+                          icon: Icon(LucideIcons.bookOpen, size: 16),
                         ),
                         ButtonSegment(
                           value: ReadingTheme.night,
                           label: Text('暗夜'),
-                          icon: Icon(Icons.nightlight_outlined, size: 16),
+                          icon: Icon(LucideIcons.moon, size: 16),
                         ),
                       ],
                       selected: {readingTheme},
@@ -298,7 +309,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               // ---------------------------------------------------------
               SettingsSection(
                 title: '阅读器',
-                icon: Icons.menu_book_outlined,
+                icon: LucideIcons.bookOpenText,
                 children: [
                   SettingsSwitchRow(
                     title: '目录默认全展开',
@@ -313,13 +324,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     child: SegmentedButton<String>(
                       segments: const [
                         ButtonSegment(
-                            value: 'high_precision',
-                            label: Text('高精度'),
-                            icon: Icon(Icons.high_quality_outlined, size: 16)),
+                          value: 'high_precision',
+                          label: Text('高精度'),
+                          icon: Icon(LucideIcons.badgeCheck, size: 16),
+                        ),
                         ButtonSegment(
-                            value: 'fast',
-                            label: Text('快速'),
-                            icon: Icon(Icons.bolt_outlined, size: 16)),
+                          value: 'fast',
+                          label: Text('快速'),
+                          icon: Icon(LucideIcons.zap, size: 16),
+                        ),
                       ],
                       selected: {_ocrMode},
                       showSelectedIcon: false,
@@ -338,7 +351,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               // 服务与模型
               SettingsSection(
                 title: '服务与模型',
-                icon: Icons.smart_toy_outlined,
+                icon: LucideIcons.bot,
                 children: [
                   SettingsControlRow(
                     title: 'API 协议',
@@ -348,13 +361,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     child: SegmentedButton<String>(
                       segments: const [
                         ButtonSegment(
-                            value: 'chat_completions',
-                            label: Text('Chat'),
-                            icon: Icon(Icons.forum_outlined, size: 16)),
+                          value: 'chat_completions',
+                          label: Text('Chat'),
+                          icon: Icon(LucideIcons.messagesSquare, size: 16),
+                        ),
                         ButtonSegment(
-                            value: 'responses',
-                            label: Text('Responses'),
-                            icon: Icon(Icons.auto_awesome_outlined, size: 16)),
+                          value: 'responses',
+                          label: Text('Responses'),
+                          icon: Icon(LucideIcons.sparkles, size: 16),
+                        ),
                       ],
                       selected: {_apiProtocol},
                       showSelectedIcon: false,
@@ -425,7 +440,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               // 翻译
               SettingsSection(
                 title: '翻译',
-                icon: Icons.translate,
+                icon: LucideIcons.languages,
                 description: '划词翻译与对照阅读共用此目标语言',
                 children: [_targetLangPicker(theme)],
               ),
@@ -433,7 +448,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               // 搜索
               SettingsSection(
                 title: '搜索',
-                icon: Icons.travel_explore_outlined,
+                icon: LucideIcons.globe,
                 children: [
                   SettingsSwitchRow(
                     title: '联网搜索',
@@ -451,12 +466,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         ButtonSegment(
                           value: true,
                           label: Text('内置搜索'),
-                          icon: Icon(Icons.language, size: 16),
+                          icon: Icon(LucideIcons.languages, size: 16),
                         ),
                         ButtonSegment(
                           value: false,
                           label: Text('第三方搜索'),
-                          icon: Icon(Icons.extension_outlined, size: 16),
+                          icon: Icon(LucideIcons.puzzle, size: 16),
                         ),
                       ],
                       selected: {_searchBuiltin},
@@ -484,15 +499,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         ],
                         selected: {_searchBuiltinProtocol},
                         showSelectedIcon: false,
-                        onSelectionChanged: (s) => setState(
-                            () => _searchBuiltinProtocol = s.first),
+                        onSelectionChanged: (s) =>
+                            setState(() => _searchBuiltinProtocol = s.first),
                       ),
                     ),
                   if (!_searchBuiltin) ...[
                     SettingsTextField(
                       controller: _searchBaseUrl,
                       label: '搜索端点 URL',
-                      hint: '博查兼容的完整端点地址（不是 API 基地址）；留空 = https://api.bochaai.com/v1/web-search',
+                      hint:
+                          '博查兼容的完整端点地址（不是 API 基地址）；留空 = https://api.bochaai.com/v1/web-search',
                     ),
                     SettingsTextField(
                       controller: _searchApiKey,
@@ -507,7 +523,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               // 嵌入搜索
               SettingsSection(
                 title: '嵌入搜索',
-                icon: Icons.hub_outlined,
+                icon: LucideIcons.waypoints,
                 description: '语义检索，功能开发中；此处先保存配置',
                 children: [
                   SettingsSwitchRow(
@@ -556,12 +572,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               // AI 回复
               SettingsSection(
                 title: 'AI 回复',
-                icon: Icons.chat_bubble_outline,
+                icon: LucideIcons.messageCircle,
                 children: [
                   SettingsSwitchRow(
                     title: '携带书籍对话上下文',
-                    description:
-                        '每次回复携带本书与 AI 的全部对话历史（追问从开始到本次）。关闭后每轮独立回答',
+                    description: '每次回复携带本书与 AI 的全部对话历史（追问从开始到本次）。关闭后每轮独立回答',
                     value: _includeBookHistory,
                     onChanged: (v) => setState(() => _includeBookHistory = v),
                   ),
@@ -621,7 +636,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                               for (final t in _savedTemplates)
                                 ChoiceChip(
                                   label: Text(t.name),
-                                  selected: _promptTemplate == 'custom' &&
+                                  selected:
+                                      _promptTemplate == 'custom' &&
                                       _customPrompt.text.trim() == t.text,
                                   visualDensity: VisualDensity.compact,
                                   onSelected: (_) => _useSavedTemplate(t),
@@ -653,7 +669,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       alignment: Alignment.centerLeft,
                       child: TextButton.icon(
                         onPressed: _restoreTemplate,
-                        icon: const Icon(Icons.restore, size: 16),
+                        icon: const Icon(LucideIcons.rotateCcw, size: 16),
                         label: const Text('恢复默认'),
                         style: TextButton.styleFrom(
                           visualDensity: VisualDensity.compact,
@@ -676,7 +692,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       alignment: Alignment.centerLeft,
                       child: OutlinedButton.icon(
                         onPressed: _saveTemplate,
-                        icon: const Icon(Icons.bookmark_add_outlined, size: 16),
+                        icon: const Icon(LucideIcons.bookmarkPlus, size: 16),
                         label: const Text('保存为模板'),
                         style: OutlinedButton.styleFrom(
                           visualDensity: VisualDensity.compact,
@@ -687,25 +703,34 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       const SizedBox(height: 8),
                       Text(
                         '已保存模板（点击选用，可删除）',
-                        style: theme.textTheme.labelMedium
-                            ?.copyWith(color: theme.colorScheme.primary),
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: theme.colorScheme.primary,
+                        ),
                       ),
                       for (final t in _savedTemplates)
                         ListTile(
                           dense: true,
                           contentPadding: EdgeInsets.zero,
-                          leading:
-                              const Icon(Icons.description_outlined, size: 18),
-                          title: Text(t.name,
-                              maxLines: 1, overflow: TextOverflow.ellipsis),
-                          subtitle: Text(t.text,
-                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                          leading: const Icon(LucideIcons.fileText, size: 20),
+                          title: Text(
+                            t.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            t.text,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           trailing: IconButton(
-                            icon: const Icon(Icons.delete_outline, size: 18),
+                            icon: const Icon(LucideIcons.trash2, size: 20),
                             tooltip: '删除模板',
                             visualDensity: VisualDensity.compact,
-                            onPressed: () => setState(() => _savedTemplates
-                                .removeWhere((x) => x.name == t.name)),
+                            onPressed: () => setState(
+                              () => _savedTemplates.removeWhere(
+                                (x) => x.name == t.name,
+                              ),
+                            ),
                           ),
                           onTap: () {
                             _customPrompt.text = t.text;
@@ -724,7 +749,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   children: [
                     FilledButton.icon(
                       onPressed: canSave ? _save : null,
-                      icon: const Icon(Icons.save_outlined, size: 18),
+                      icon: const Icon(LucideIcons.save, size: 20),
                       label: Text(_saving ? '保存中…' : '保存 AI 配置'),
                       style: FilledButton.styleFrom(
                         minimumSize: const Size.fromHeight(44),
@@ -774,7 +799,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               onSelected: (_) => setState(() => _targetLang = lang),
             ),
           ActionChip(
-            avatar: const Icon(Icons.add, size: 16),
+            avatar: const Icon(LucideIcons.plus, size: 16),
             label: const Text('添加语言'),
             onPressed: _addCustomLang,
           ),
@@ -832,8 +857,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   void _selectTemplate(String id) {
     setState(() {
       _promptTemplate = id;
-      _templateEdit.text =
-          _templateEdits[id] ?? _templateDefaults[id] ?? '';
+      _templateEdit.text = _templateEdits[id] ?? _templateDefaults[id] ?? '';
     });
     _loadTemplateText(id);
   }
@@ -920,4 +944,3 @@ class _AddLangDialogState extends State<_AddLangDialog> {
     );
   }
 }
-

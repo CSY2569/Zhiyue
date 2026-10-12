@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 
 import 'package:rbwa/features/bilingual/providers/engine_provider.dart';
 import 'package:rbwa/src/rust/models/translate.dart';
@@ -29,35 +30,42 @@ class EngineSettingsCard extends ConsumerWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.translate, size: 18, color: theme.colorScheme.primary),
+                Icon(
+                  LucideIcons.languages,
+                  size: 20,
+                  color: theme.colorScheme.primary,
+                ),
                 const SizedBox(width: 8),
                 Text('翻译引擎', style: theme.textTheme.titleSmall),
                 const Spacer(),
-                if (status != null) _StatusChip(kind: kind, bundled: status.bundled),
+                if (status != null)
+                  _StatusChip(kind: kind, bundled: status.bundled),
               ],
             ),
             const SizedBox(height: 4),
             Text(
               '对照阅读由 RetainPDF 翻译引擎驱动（内置组件，MIT 开源；'
               '翻译与排版在独立进程中运行）。译文固定为简体中文。',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.outline),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
             ),
             const SizedBox(height: 8),
             switch (kind) {
               EngineStatusKind.installed => Text(
-                  '${status!.bundled ? '已内置（随安装包分发）' : '已就绪'}'
-                  '${status.version.isNotEmpty ? ' · ${status.version}' : ''}'
-                  '${status.sizeBytes > 0 ? ' · 占用 ${_formatBytes(status.sizeBytes)}' : ''}',
-                  style: theme.textTheme.bodySmall,
-                ),
+                '${status!.bundled ? '已内置（随安装包分发）' : '已就绪'}'
+                '${status.version.isNotEmpty ? ' · ${status.version}' : ''}'
+                '${status.sizeBytes > 0 ? ' · 占用 ${_formatBytes(status.sizeBytes)}' : ''}',
+                style: theme.textTheme.bodySmall,
+              ),
               _ => Text(
-                  '未找到翻译引擎。正式安装包内置该引擎；'
-                  '开发构建请先运行 scripts/build_retain_engine.sh，'
-                  '并设置 RBWA_RETAIN_ENGINE_DIR 指向组装目录。',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.error),
+                '未找到翻译引擎。正式安装包内置该引擎；'
+                '开发构建请先运行 scripts/build_retain_engine.sh，'
+                '并设置 RBWA_RETAIN_ENGINE_DIR 指向组装目录。',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
                 ),
+              ),
             },
           ],
         ),
@@ -86,8 +94,14 @@ class _StatusChip extends StatelessWidget {
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Text(label,
-          style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600)),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 }

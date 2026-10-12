@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:rbwa/features/bilingual/providers/book_translation_provider.dart';
@@ -34,8 +35,7 @@ class TranslatedColumn extends ConsumerWidget {
     final Widget body;
     if (bookId == null) {
       body = const Center(
-        child: Text('打开一本书后即可对照阅读',
-            style: TextStyle(color: Colors.black38)),
+        child: Text('打开一本书后即可对照阅读', style: TextStyle(color: Colors.black38)),
       );
     } else if (!engineReady) {
       body = const _EngineNotice();
@@ -90,8 +90,11 @@ class _EngineNotice extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.translate_outlined,
-                  size: 44, color: theme.colorScheme.outline),
+              Icon(
+                LucideIcons.languages,
+                size: 44,
+                color: theme.colorScheme.outline,
+              ),
               const SizedBox(height: 12),
               Text('未找到翻译引擎', style: theme.textTheme.titleMedium),
               const SizedBox(height: 8),
@@ -99,13 +102,14 @@ class _EngineNotice extends StatelessWidget {
                 '对照阅读由内置的 RetainPDF 引擎驱动；'
                 '正式安装包已内置该引擎，开发构建需先组装引擎目录后才能翻译。',
                 textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.outline),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
               ),
               const SizedBox(height: 16),
               FilledButton.tonalIcon(
                 onPressed: () => GoRouter.of(context).push('/settings'),
-                icon: const Icon(Icons.settings_outlined, size: 18),
+                icon: const Icon(LucideIcons.settings, size: 20),
                 label: const Text('前往设置'),
               ),
             ],
@@ -152,8 +156,9 @@ class _TranslateReady extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: theme.colorScheme.outline),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.outline,
+                    ),
                   ),
                 ],
                 const SizedBox(height: 12),
@@ -172,7 +177,11 @@ class _TranslateReady extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.translate, size: 40, color: theme.colorScheme.primary),
+              Icon(
+                LucideIcons.languages,
+                size: 40,
+                color: theme.colorScheme.primary,
+              ),
               const SizedBox(height: 12),
               Text('翻译本书', style: theme.textTheme.titleMedium),
               const SizedBox(height: 8),
@@ -180,20 +189,24 @@ class _TranslateReady extends StatelessWidget {
                 '引擎将整本翻译并保留原版式（图表、公式、页码原样保留）。'
                 '完成后本栏按页显示译文，导出同版式的双语 PDF。',
                 textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: theme.colorScheme.outline),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
               ),
               if (state.error != null) ...[
                 const SizedBox(height: 10),
-                Text(state.error!,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: theme.colorScheme.error)),
+                Text(
+                  state.error!,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
               ],
               const SizedBox(height: 16),
               FilledButton.icon(
                 onPressed: onTranslate,
-                icon: const Icon(Icons.play_arrow, size: 18),
+                icon: const Icon(LucideIcons.play, size: 20),
                 label: const Text('开始翻译'),
               ),
             ],
@@ -258,10 +271,7 @@ class _SyncedPageListState extends State<_SyncedPageList> {
   void _jumpTo(int page) {
     if (!_controller.hasClients) return;
     final target = (page - 1).clamp(0, 1 << 30) * widget.itemExtent;
-    _controller.jumpTo(target.clamp(
-      0.0,
-      _controller.position.maxScrollExtent,
-    ));
+    _controller.jumpTo(target.clamp(0.0, _controller.position.maxScrollExtent));
   }
 
   @override
@@ -292,14 +302,17 @@ class _SyncedPageListState extends State<_SyncedPageList> {
 /// The original pane holds its own set with the same page number.
 final translatedPageAnnotationsProvider =
     Provider.family<List<TextAnnotation>, ({int bookId, int page})>((ref, key) {
-  final list = ref.watch(annotationProvider).valueOrNull;
-  if (list == null) return const <TextAnnotation>[];
-  return list
-      .where((a) =>
-          a.page == key.page &&
-          AnnotationPane.fromSource(a.source) == AnnotationPane.translated)
-      .toList(growable: false);
-});
+      final list = ref.watch(annotationProvider).valueOrNull;
+      if (list == null) return const <TextAnnotation>[];
+      return list
+          .where(
+            (a) =>
+                a.page == key.page &&
+                AnnotationPane.fromSource(a.source) ==
+                    AnnotationPane.translated,
+          )
+          .toList(growable: false);
+    });
 
 class _TranslatedPageCard extends ConsumerWidget {
   const _TranslatedPageCard({
@@ -326,66 +339,84 @@ class _TranslatedPageCard extends ConsumerWidget {
     // ~1785px wide regardless of the pane's real width.
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final pageAnns = ref.watch(
-        translatedPageAnnotationsProvider((bookId: bookId, page: page - 1)));
+      translatedPageAnnotationsProvider((bookId: bookId, page: page - 1)),
+    );
 
-    return LayoutBuilder(builder: (context, constraints) {
-      final targetWidthPx =
-          (constraints.maxWidth * dpr).ceil().clamp(256, 4096);
-      final async = ref.watch(translatedPageImageProvider(
-          (bookId: bookId, page: page, targetWidthPx: targetWidthPx)));
-      final data = async.valueOrNull;
-      return Padding(
-      padding: EdgeInsets.only(bottom: kPageGap - 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final targetWidthPx = (constraints.maxWidth * dpr).ceil().clamp(
+          256,
+          4096,
+        );
+        final async = ref.watch(
+          translatedPageImageProvider((
+            bookId: bookId,
+            page: page,
+            targetWidthPx: targetWidthPx,
+          )),
+        );
+        final data = async.valueOrNull;
+        return Padding(
+          padding: EdgeInsets.only(bottom: kPageGap - 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const SizedBox(width: 4),
-              Text('p.$page',
-                  style: theme.textTheme.labelSmall
-                      ?.copyWith(color: theme.colorScheme.outline)),
-              const Spacer(),
-              Text(langLabel,
-                  style: theme.textTheme.labelSmall
-                      ?.copyWith(color: theme.colorScheme.outline)),
-              PopupMenuButton<String>(
-                tooltip: '译本操作',
-                iconSize: 16,
-                onSelected: (v) =>
-                    v == 'again' ? onRetranslate() : onClear(),
-                itemBuilder: (ctx) => const [
-                  PopupMenuItem(value: 'again', child: Text('重新翻译')),
-                  PopupMenuItem(value: 'clear', child: Text('删除译本')),
+              Row(
+                children: [
+                  const SizedBox(width: 4),
+                  Text(
+                    'p.$page',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.outline,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    langLabel,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.outline,
+                    ),
+                  ),
+                  PopupMenuButton<String>(
+                    tooltip: '译本操作',
+                    iconSize: 16,
+                    onSelected: (v) =>
+                        v == 'again' ? onRetranslate() : onClear(),
+                    itemBuilder: (ctx) => const [
+                      PopupMenuItem(value: 'again', child: Text('重新翻译')),
+                      PopupMenuItem(value: 'clear', child: Text('删除译本')),
+                    ],
+                  ),
                 ],
+              ),
+              const SizedBox(height: 2),
+              Expanded(
+                child: Container(
+                  alignment: Alignment.topCenter,
+                  clipBehavior: Clip.hardEdge,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerLow,
+                    boxShadow: [
+                      BoxShadow(
+                        color: theme.colorScheme.shadow.withValues(
+                          alpha: theme.brightness == Brightness.dark
+                              ? 0.45
+                              : 0.08,
+                        ),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: _pageContent(theme, data, pageAnns),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 2),
-          Expanded(
-            child: Container(
-              alignment: Alignment.topCenter,
-              clipBehavior: Clip.hardEdge,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerLow,
-                boxShadow: [
-                  BoxShadow(
-                      color: theme.colorScheme.shadow.withValues(
-                          alpha: theme.brightness == Brightness.dark
-                              ? 0.45
-                              : 0.08),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2)),
-                ],
-              ),
-              child: _pageContent(theme, data, pageAnns),
-            ),
-          ),
-        ],
-      ),
-      );
-    });
+        );
+      },
+    );
   }
 
   Widget _pageContent(
@@ -428,9 +459,7 @@ class _TranslatedPageCard extends ConsumerWidget {
                   // Marks made on this pane (highlight / underline /
                   // strikethrough / note outlines), below the selection
                   // preview so a live selection stays visible.
-                  Positioned.fill(
-                    child: HighlightLayer(annotations: pageAnns),
-                  ),
+                  Positioned.fill(child: HighlightLayer(annotations: pageAnns)),
                   Positioned.fill(
                     child: SelectionLayer(
                       bookId: bookId,
@@ -449,8 +478,9 @@ class _TranslatedPageCard extends ConsumerWidget {
     return Center(
       child: Text(
         data.error ?? '该页暂无译文',
-        style: theme.textTheme.bodySmall
-            ?.copyWith(color: theme.colorScheme.outline),
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.outline,
+        ),
       ),
     );
   }
