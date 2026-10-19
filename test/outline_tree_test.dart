@@ -6,35 +6,30 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rbwa/data/repositories/reader_repository.dart';
 import 'package:rbwa/data/repositories/settings_repository.dart';
 import 'package:rbwa/features/reader/widgets/sidebars/outline_tree.dart';
-import 'package:rbwa/src/rust/api.dart' as rust;
 import 'package:rbwa/src/rust/pdf/types.dart';
 
+import 'helpers/fake_reader_repo.dart';
 import 'helpers/fake_settings.dart';
 import 'helpers/widget_harness.dart';
 
 /// Two-level outline: Chapter 1 with two sections, used to observe whether
 /// the child rows are rendered by default.
-class _FakeRepo extends ReaderRepository {
-  @override
-  Future<rust.OutlineResult> getOutline(int bookId) async => rust.OutlineResult(
-        entries: const [
-          OutlineEntry(
-            title: 'Chapter 1',
-            page: 0,
-            children: [
-              OutlineEntry(title: 'Section 1.1', page: 0, children: []),
-              OutlineEntry(title: 'Section 1.2', page: 0, children: []),
-            ],
-          ),
-        ],
-        error: null,
-      );
-}
+const _outline = [
+  OutlineEntry(
+    title: 'Chapter 1',
+    page: 0,
+    children: [
+      OutlineEntry(title: 'Section 1.1', page: 0, children: []),
+      OutlineEntry(title: 'Section 1.2', page: 0, children: []),
+    ],
+  ),
+];
 
 Widget _tree({required bool expandAll}) => ProviderScope(
       overrides: [
         defaultViewer(),
-        readerRepositoryProvider.overrideWithValue(_FakeRepo()),
+        readerRepositoryProvider.overrideWithValue(
+            FakeReaderRepository(outlineEntries: _outline)),
         settingsRepositoryProvider.overrideWithValue(
             FakeSettings({'outline_expand_all': expandAll ? 'true' : 'false'})),
       ],

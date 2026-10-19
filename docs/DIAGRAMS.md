@@ -13,8 +13,8 @@
 | FRB StreamSink | Rust → Dart | `translate_book` 进度事件、`stream_chat` 流式 chunk、`install_engine` 事件 |
 | 子进程 argv + stdout/stderr | Rust → RetainPDF pipeline | 两步 spec 文件路径；stdout JSONL 进度/产物事件；stderr `structured failure json:` |
 | 环境变量 | Rust → pipeline | `RETAIN_TRANSLATION_API_KEY`（密钥不落盘）、`TYPST_BIN`、`TYPST_PACKAGE_PATH`、`OUTPUT_ROOT` |
-| HTTP（流式） | Rust ai → LLM API | AI 动作（翻译/解释/搜索/对话/视觉）、内置搜索（Responses / Anthropic 两协议） |
-| HTTP | Rust ai → 搜索端点 | 第三方（博查兼容）联网搜索 |
+| HTTP（流式） | Rust ai → LLM API | AI 动作（翻译/解释/搜索/对话/视觉）、内置搜索（Responses / Anthropic 两协议，用户可选） |
+| HTTP | Rust ai → 搜索端点 | DeepSeek Tools API 联网搜索 |
 | HTTP | pipeline → LLM API | 翻译批次、公式/角色分类（key 由 env 注入，智阅 Rust 侧不代发） |
 | SQLite（schema v9） | Rust 内部 | 书目、阅读进度、标注（含 `source` 窗格列）、AI 会话、OCR 缓存、FTS 索引 |
 
@@ -59,7 +59,7 @@ flowchart TB
     pipe["RetainPDF pipeline 子进程<br/>随包 CPython 3.11：normalize-ocr → book"]
     typst["Typst 0.15.1 + @preview 包<br/>排版与公式渲染"]
     llm["LLM API<br/>OpenAI 兼容 / Anthropic Messages"]
-    bocha["博查兼容搜索端点"]
+    bocha["DeepSeek Tools API<br/>/v1/tools/search + /v1/tools/fetch"]
   end
 
   subgraph FS["本地文件系统（app 数据目录）"]
@@ -267,8 +267,8 @@ sequenceDiagram
     participant AIP as aiProvider（AiNotifier）
     participant AIR as AiRepository
     participant API as rust api.rs
-    participant PROM as ai::prompts
-    participant WEB as 第三方搜索端点（博查兼容）
+    participant PROM as ai::prompts / search_safety
+    participant WEB as 第三方搜索（博查兼容 / DeepSeek Tools）
     participant LLM as LLM API
     participant DB as SQLite ai_threads / ai_messages
 
@@ -278,14 +278,18 @@ sequenceDiagram
     AIR->>DB: 落库
     AIP->>AIR: streamChat(action, history, …)
     AIR->>API: FRB stream_chat（StreamSink<String>）
-    API->>PROM: 角色模板 + 动作 system prompt（查询包 <text> 防注入）
+    API->>PROM: 角色模板 + 动作 system prompt（仅规则）+ 随机 nonce
     alt 搜索 且 联网开 且 内置搜索
-        API->>LLM: 按设置协议：{base}/responses + web_search 工具，或 {base}/anthropic/v1/messages + web_search_20250305
+        API->>LLM: 用户选择的协议：{base}/responses + web_search 工具，或 {base}/anthropic/v1/messages + web_search_20250305
         LLM-->>API: 带引用的流式作答
-    else 搜索 且 第三方搜索
-        API->>WEB: POST 搜索端点（搜索专用 Key）
+    else 搜索 且 DeepSeek 搜索
+        API->>WEB: POST /v1/tools/search
+        opt 开启正文抓取
+            API->>WEB: POST /v1/tools/fetch（仅前 3 条，单页失败跳过）
+        end
         WEB-->>API: 检索结果
-        API->>LLM: 结果注入提示词后 stream_chat
+        API->>PROM: 清洗不可信文本 + nonce 包裹为 <search_results>
+        API->>LLM: 结果放入独立用户消息（system 只含规则）后 stream_chat
         LLM-->>API: 流式作答（仅引用结果链接）
     else 其他动作 / 搜索失败降级
         API->>LLM: stream_chat（失败时注明原因、基于知识作答）

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/core/settings/settings_store.dart';
 import 'package:rbwa/core/theme/reading_theme.dart';
 import 'package:rbwa/data/repositories/settings_repository.dart';
 
@@ -19,23 +20,21 @@ class ReadingThemeController extends Notifier<ReadingTheme> {
   }
 
   Future<void> _hydrate() async {
-    try {
-      final raw = await ref.read(settingsRepositoryProvider).getSetting(_key);
-      if (raw != null) {
-        state = parseReadingTheme(raw) ?? ReadingTheme.auto;
-      }
-    } catch (_) {
-      // Core not ready yet (e.g. during tests); keep auto.
-    }
+    final value = await loadSetting(
+      ref.read(settingsRepositoryProvider),
+      _key,
+      parseReadingTheme,
+    );
+    if (value != null) state = value;
   }
 
   Future<void> set(ReadingTheme theme) async {
     state = theme;
-    try {
-      await ref.read(settingsRepositoryProvider).setSetting(_key, theme.name);
-    } catch (_) {
-      // Persistence failure is non-fatal; the in-memory value still applies.
-    }
+    await persistSetting(
+      ref.read(settingsRepositoryProvider),
+      _key,
+      theme.name,
+    );
   }
 }
 

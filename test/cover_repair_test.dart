@@ -26,7 +26,7 @@ void main() {
     expect(imported.error, isNull, reason: '${imported.error}');
     final cover = imported.book!.coverPath;
     expect(cover, isNotNull);
-    expect(cover, startsWith('/tmp/rbwa-test/'),
+    expect(cover, startsWith('$testDataDir/'),
         reason: 'cover must live in the isolated dir, not the real one');
     expect(File(cover!).existsSync(), isTrue);
     await rust.deleteBook(id: imported.book!.id);

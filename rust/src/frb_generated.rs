@@ -2721,6 +2721,8 @@ impl SseDecode for crate::models::ai::AiConfig {
         let mut var_searchBaseUrl = <Option<String>>::sse_decode(deserializer);
         let mut var_searchApiKey = <Option<String>>::sse_decode(deserializer);
         let mut var_searchBuiltinProtocol = <String>::sse_decode(deserializer);
+        let mut var_searchThirdPartyProtocol = <String>::sse_decode(deserializer);
+        let mut var_searchFetchPages = <i32>::sse_decode(deserializer);
         let mut var_translateTargetLang = <String>::sse_decode(deserializer);
         let mut var_translateCustomLangs = <Vec<String>>::sse_decode(deserializer);
         let mut var_modelSupportsVision = <bool>::sse_decode(deserializer);
@@ -2755,6 +2757,8 @@ impl SseDecode for crate::models::ai::AiConfig {
             search_base_url: var_searchBaseUrl,
             search_api_key: var_searchApiKey,
             search_builtin_protocol: var_searchBuiltinProtocol,
+            search_third_party_protocol: var_searchThirdPartyProtocol,
+            search_fetch_pages: var_searchFetchPages,
             translate_target_lang: var_translateTargetLang,
             translate_custom_langs: var_translateCustomLangs,
             model_supports_vision: var_modelSupportsVision,
@@ -4061,6 +4065,10 @@ impl flutter_rust_bridge::IntoDart for crate::models::ai::AiConfig {
             self.search_base_url.into_into_dart().into_dart(),
             self.search_api_key.into_into_dart().into_dart(),
             self.search_builtin_protocol.into_into_dart().into_dart(),
+            self.search_third_party_protocol
+                .into_into_dart()
+                .into_dart(),
+            self.search_fetch_pages.into_into_dart().into_dart(),
             self.translate_target_lang.into_into_dart().into_dart(),
             self.translate_custom_langs.into_into_dart().into_dart(),
             self.model_supports_vision.into_into_dart().into_dart(),
@@ -5148,6 +5156,8 @@ impl SseEncode for crate::models::ai::AiConfig {
         <Option<String>>::sse_encode(self.search_base_url, serializer);
         <Option<String>>::sse_encode(self.search_api_key, serializer);
         <String>::sse_encode(self.search_builtin_protocol, serializer);
+        <String>::sse_encode(self.search_third_party_protocol, serializer);
+        <i32>::sse_encode(self.search_fetch_pages, serializer);
         <String>::sse_encode(self.translate_target_lang, serializer);
         <Vec<String>>::sse_encode(self.translate_custom_langs, serializer);
         <bool>::sse_encode(self.model_supports_vision, serializer);

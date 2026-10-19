@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:rbwa/core/widgets/empty_state.dart';
+import 'package:rbwa/core/widgets/loading_state.dart';
 import 'package:rbwa/features/bilingual/providers/book_translation_provider.dart';
 import 'package:rbwa/features/bilingual/providers/engine_provider.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
@@ -34,8 +36,9 @@ class TranslatedColumn extends ConsumerWidget {
 
     final Widget body;
     if (bookId == null) {
-      body = const Center(
-        child: Text('打开一本书后即可对照阅读', style: TextStyle(color: Colors.black38)),
+      body = const EmptyState(
+        icon: LucideIcons.bookOpen,
+        message: '打开一本书后即可对照阅读',
       );
     } else if (!engineReady) {
       body = const _EngineNotice();
@@ -43,7 +46,7 @@ class TranslatedColumn extends ConsumerWidget {
       final state = ref.watch(bookTranslationProvider(bookId));
       final t = state.valueOrNull;
       if (t == null || !t.loaded) {
-        body = const Center(child: CircularProgressIndicator());
+        body = const LoadingState();
       } else if (!t.hasArtifact) {
         body = _TranslateReady(
           bookId: bookId,
@@ -81,40 +84,16 @@ class _EngineNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                LucideIcons.languages,
-                size: 44,
-                color: theme.colorScheme.outline,
-              ),
-              const SizedBox(height: 12),
-              Text('未找到翻译引擎', style: theme.textTheme.titleMedium),
-              const SizedBox(height: 8),
-              Text(
-                '对照阅读由内置的 RetainPDF 引擎驱动；'
-                '正式安装包已内置该引擎，开发构建需先组装引擎目录后才能翻译。',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.outline,
-                ),
-              ),
-              const SizedBox(height: 16),
-              FilledButton.tonalIcon(
-                onPressed: () => GoRouter.of(context).push('/settings'),
-                icon: const Icon(LucideIcons.settings, size: 20),
-                label: const Text('前往设置'),
-              ),
-            ],
-          ),
-        ),
+    return EmptyState(
+      icon: LucideIcons.languages,
+      iconSize: 44,
+      title: '未找到翻译引擎',
+      message: '对照阅读由内置的 RetainPDF 引擎驱动；'
+          '正式安装包已内置该引擎，开发构建需先组装引擎目录后才能翻译。',
+      action: FilledButton.tonalIcon(
+        onPressed: () => GoRouter.of(context).push('/settings'),
+        icon: const Icon(LucideIcons.settings, size: 20),
+        label: const Text('前往设置'),
       ),
     );
   }

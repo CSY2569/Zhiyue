@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
+import 'package:rbwa/core/utils/clipboard.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
 import 'package:rbwa/features/annotation/providers/annotation_provider.dart';
 import 'package:rbwa/features/annotation/models/selection.dart'
@@ -146,9 +146,7 @@ class FloatingToolbar extends ConsumerWidget {
   }
 
   Future<void> _copy(BuildContext context, WidgetRef ref, String text) async {
-    final messenger = ScaffoldMessenger.of(context);
-    await Clipboard.setData(ClipboardData(text: text));
-    messenger.showSnackBar(const SnackBar(content: Text('已复制选区文本')));
+    await copyTextWithSnack(context, text, okLabel: '已复制选区文本');
   }
 
   /// Create a mark from the selection (FEATURES 4.3) and dismiss the toolbar.

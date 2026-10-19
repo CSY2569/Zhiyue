@@ -1,8 +1,8 @@
-import 'dart:collection';
 import 'dart:ui' as ui;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/core/lru_cache.dart';
 import 'package:rbwa/data/repositories/translation_repository.dart';
 import 'package:rbwa/features/bilingual/providers/book_translation_provider.dart'
     show TranslatedPageImage, translationRevisionProvider;
@@ -27,7 +27,10 @@ class TranslatedBitmapCache {
   TranslatedBitmapCache(this._repo);
 
   final TranslationRepository _repo;
-  final LinkedHashMap<_CacheKey, ui.Image> _cache = LinkedHashMap();
+  // The translated pane owns its decoded images: evicted entries are
+  // disposed instead of waiting for the finalizer.
+  final LruCache<_CacheKey, ui.Image> _cache =
+      LruCache(maxEntries: _maxEntries, onEvict: (_, image) => image.dispose());
   final Map<_CacheKey, Future<ui.Image?>> _pending = {};
 
   /// The translated pane shows ~1-3 pages at a time; 12 tiers-deep covers
@@ -49,9 +52,8 @@ class TranslatedBitmapCache {
   }) async {
     final key = (bookId: bookId, page: page, widthTier: widthTier(targetWidthPx));
 
-    final cached = _cache.remove(key);
+    final cached = _cache.get(key);
     if (cached != null) {
-      _cache[key] = cached; // refresh recency
       return TranslatedPageImage(image: cached, hasTranslation: true);
     }
 
@@ -87,33 +89,19 @@ class TranslatedBitmapCache {
       if (bmp.error != null || bmp.rgba.isEmpty) return null;
       final image = await decodeRgbaImage(bmp.width, bmp.height, bmp.rgba);
       if (image == null) return null;
-      _evictIfNeeded();
-      _cache[key] = image;
+      _cache.put(key, image);
       return image;
     } catch (_) {
       return null;
     }
   }
 
-  void _evictIfNeeded() {
-    while (_cache.length >= _maxEntries) {
-      _cache.remove(_cache.keys.first)?.dispose();
-    }
-  }
-
   /// Drop every cached page of [bookId] (translation replaced or deleted).
   void clearBook(int bookId) {
-    _cache.removeWhere((key, image) {
-      if (key.bookId != bookId) return false;
-      image.dispose();
-      return true;
-    });
+    _cache.removeWhere((key, _) => key.bookId == bookId);
   }
 
   void clearAll() {
-    for (final image in _cache.values) {
-      image.dispose();
-    }
     _cache.clear();
   }
 }

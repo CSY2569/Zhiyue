@@ -4,8 +4,10 @@
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
 import 'api.dart';
+
 import 'dart:async';
 import 'dart:convert';
+
 import 'frb_generated.dart';
 import 'frb_generated.io.dart'
     if (dart.library.js_interop) 'frb_generated.web.dart';
@@ -15,7 +17,9 @@ import 'models/book.dart';
 import 'models/progress.dart';
 import 'models/translate.dart';
 import 'ocr.dart';
+
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+
 import 'pdf/types.dart';
 
 /// Main entrypoint of the Rust API
@@ -2664,9 +2668,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Map<String, String> dco_decode_Map_String_String_None(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return Map.fromEntries(
-      dco_decode_list_record_string_string(
-        raw,
-      ).map((e) => MapEntry(e.$1, e.$2)),
+      dco_decode_list_record_string_string(raw)
+          .map((e) => MapEntry(e.$1, e.$2)),
     );
   }
 
@@ -2706,8 +2709,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   AiConfig dco_decode_ai_config(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 31)
-      throw Exception('unexpected arr length: expect 31 but see ${arr.length}');
+    if (arr.length != 33)
+      throw Exception('unexpected arr length: expect 33 but see ${arr.length}');
     return AiConfig(
       baseUrl: dco_decode_String(arr[0]),
       apiKey: dco_decode_String(arr[1]),
@@ -2719,27 +2722,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       searchBaseUrl: dco_decode_opt_String(arr[7]),
       searchApiKey: dco_decode_opt_String(arr[8]),
       searchBuiltinProtocol: dco_decode_String(arr[9]),
-      translateTargetLang: dco_decode_String(arr[10]),
-      translateCustomLangs: dco_decode_list_String(arr[11]),
-      modelSupportsVision: dco_decode_bool(arr[12]),
-      webSearchEnabled: dco_decode_bool(arr[13]),
-      ocrMode: dco_decode_String(arr[14]),
-      includeBookHistory: dco_decode_bool(arr[15]),
-      enableReasoning: dco_decode_bool(arr[16]),
-      reasoningEffort: dco_decode_String(arr[17]),
-      temperature: dco_decode_f_64(arr[18]),
-      apiProtocol: dco_decode_String(arr[19]),
-      promptTemplate: dco_decode_String(arr[20]),
-      customPrompt: dco_decode_String(arr[21]),
-      customPrompts: dco_decode_list_custom_prompt(arr[22]),
-      templateOverrides: dco_decode_Map_String_String_None(arr[23]),
-      embeddingEnabled: dco_decode_bool(arr[24]),
-      embeddingBaseUrl: dco_decode_opt_String(arr[25]),
-      embeddingApiKey: dco_decode_opt_String(arr[26]),
-      embeddingModel: dco_decode_String(arr[27]),
-      vectorDbUrl: dco_decode_opt_String(arr[28]),
-      vectorDbApiKey: dco_decode_opt_String(arr[29]),
-      vectorDbCollection: dco_decode_String(arr[30]),
+      searchThirdPartyProtocol: dco_decode_String(arr[10]),
+      searchFetchPages: dco_decode_i_32(arr[11]),
+      translateTargetLang: dco_decode_String(arr[12]),
+      translateCustomLangs: dco_decode_list_String(arr[13]),
+      modelSupportsVision: dco_decode_bool(arr[14]),
+      webSearchEnabled: dco_decode_bool(arr[15]),
+      ocrMode: dco_decode_String(arr[16]),
+      includeBookHistory: dco_decode_bool(arr[17]),
+      enableReasoning: dco_decode_bool(arr[18]),
+      reasoningEffort: dco_decode_String(arr[19]),
+      temperature: dco_decode_f_64(arr[20]),
+      apiProtocol: dco_decode_String(arr[21]),
+      promptTemplate: dco_decode_String(arr[22]),
+      customPrompt: dco_decode_String(arr[23]),
+      customPrompts: dco_decode_list_custom_prompt(arr[24]),
+      templateOverrides: dco_decode_Map_String_String_None(arr[25]),
+      embeddingEnabled: dco_decode_bool(arr[26]),
+      embeddingBaseUrl: dco_decode_opt_String(arr[27]),
+      embeddingApiKey: dco_decode_opt_String(arr[28]),
+      embeddingModel: dco_decode_String(arr[29]),
+      vectorDbUrl: dco_decode_opt_String(arr[30]),
+      vectorDbApiKey: dco_decode_opt_String(arr[31]),
+      vectorDbCollection: dco_decode_String(arr[32]),
     );
   }
 
@@ -3679,6 +3684,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_searchBaseUrl = sse_decode_opt_String(deserializer);
     var var_searchApiKey = sse_decode_opt_String(deserializer);
     var var_searchBuiltinProtocol = sse_decode_String(deserializer);
+    var var_searchThirdPartyProtocol = sse_decode_String(deserializer);
+    var var_searchFetchPages = sse_decode_i_32(deserializer);
     var var_translateTargetLang = sse_decode_String(deserializer);
     var var_translateCustomLangs = sse_decode_list_String(deserializer);
     var var_modelSupportsVision = sse_decode_bool(deserializer);
@@ -3711,6 +3718,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       searchBaseUrl: var_searchBaseUrl,
       searchApiKey: var_searchApiKey,
       searchBuiltinProtocol: var_searchBuiltinProtocol,
+      searchThirdPartyProtocol: var_searchThirdPartyProtocol,
+      searchFetchPages: var_searchFetchPages,
       translateTargetLang: var_translateTargetLang,
       translateCustomLangs: var_translateCustomLangs,
       modelSupportsVision: var_modelSupportsVision,
@@ -4921,6 +4930,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.searchBaseUrl, serializer);
     sse_encode_opt_String(self.searchApiKey, serializer);
     sse_encode_String(self.searchBuiltinProtocol, serializer);
+    sse_encode_String(self.searchThirdPartyProtocol, serializer);
+    sse_encode_i_32(self.searchFetchPages, serializer);
     sse_encode_String(self.translateTargetLang, serializer);
     sse_encode_list_String(self.translateCustomLangs, serializer);
     sse_encode_bool(self.modelSupportsVision, serializer);

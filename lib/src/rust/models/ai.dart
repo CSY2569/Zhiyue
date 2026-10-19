@@ -4,6 +4,7 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 /// AI action that originated a thread (FEATURES 6.5.3).
@@ -39,10 +40,16 @@ class AiConfig {
   /// OpenAI-style `{"type": "web_search"}` server tool to
   /// `{base}/responses`; "anthropic" sends the Anthropic-style
   /// `web_search_20250305` server tool to `{base}/anthropic/v1/messages`.
-  /// DeepSeek executes hosted search only on the latter -- its Responses
-  /// endpoint silently ignores web_search tools (2026-09 docs, tools
-  /// compatibility table).
   final String searchBuiltinProtocol;
+
+  /// Third-party search wire protocol (6.1.4): "bocha" (default,
+  /// Bocha-compatible endpoint) or "deepseek" (DeepSeek Tools API:
+  /// `{base}/v1/tools/search`, optionally followed by `/v1/tools/fetch`).
+  final String searchThirdPartyProtocol;
+
+  /// DeepSeek third-party search only: fetch the body text of the leading
+  /// N results and inject an excerpt (0 = disabled, clamped to 0-5).
+  final int searchFetchPages;
 
   /// Translation target language, default "中文" (6.1.3).
   final String translateTargetLang;
@@ -123,6 +130,8 @@ class AiConfig {
     this.searchBaseUrl,
     this.searchApiKey,
     required this.searchBuiltinProtocol,
+    required this.searchThirdPartyProtocol,
+    required this.searchFetchPages,
     required this.translateTargetLang,
     required this.translateCustomLangs,
     required this.modelSupportsVision,
@@ -158,6 +167,8 @@ class AiConfig {
       searchBaseUrl.hashCode ^
       searchApiKey.hashCode ^
       searchBuiltinProtocol.hashCode ^
+      searchThirdPartyProtocol.hashCode ^
+      searchFetchPages.hashCode ^
       translateTargetLang.hashCode ^
       translateCustomLangs.hashCode ^
       modelSupportsVision.hashCode ^
@@ -195,6 +206,8 @@ class AiConfig {
           searchBaseUrl == other.searchBaseUrl &&
           searchApiKey == other.searchApiKey &&
           searchBuiltinProtocol == other.searchBuiltinProtocol &&
+          searchThirdPartyProtocol == other.searchThirdPartyProtocol &&
+          searchFetchPages == other.searchFetchPages &&
           translateTargetLang == other.translateTargetLang &&
           translateCustomLangs == other.translateCustomLangs &&
           modelSupportsVision == other.modelSupportsVision &&

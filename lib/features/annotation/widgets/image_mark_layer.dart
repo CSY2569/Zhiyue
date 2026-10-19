@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/core/widgets/text_input_dialog.dart';
 import 'package:rbwa/features/annotation/models/image_mark.dart';
 import 'package:rbwa/features/annotation/providers/image_mark_provider.dart';
 import 'package:rbwa/features/annotation/widgets/highlight_layer.dart'
@@ -550,30 +551,14 @@ class _ImageMarkLayerState extends ConsumerState<ImageMarkLayer> {
   }
 
   Future<void> _promptSticky(Offset pos, {ImageMark? editing}) async {
-    final controller = TextEditingController(text: editing?.stickyText ?? '');
-    final text = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(editing == null ? '添加便签' : '编辑便签'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLines: 4,
-          decoration: const InputDecoration(hintText: '便签内容'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('保存'),
-          ),
-        ],
-      ),
+    final text = await showTextInputDialog(
+      context,
+      title: editing == null ? '添加便签' : '编辑便签',
+      initial: editing?.stickyText ?? '',
+      hint: '便签内容',
+      confirmLabel: '保存',
+      maxLines: 4,
     );
-    controller.dispose();
     if (text == null || !mounted) return;
     final toolState = ref.read(markToolProvider);
     final style = _styleOf(toolState).toJson();

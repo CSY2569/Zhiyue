@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
+import 'package:rbwa/core/widgets/text_input_dialog.dart';
 import 'package:rbwa/core/widgets/toolbar_icon_button.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
 import 'package:rbwa/features/annotation/providers/image_mark_provider.dart'
@@ -165,39 +166,15 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
 
   Future<void> _showPageJumpDialog(BuildContext context, WidgetRef ref) async {
     final state = ref.read(viewerProvider);
-    final controller = TextEditingController(text: '${state.currentPage}');
-    final page = await showDialog<int>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('跳转页码'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          autofocus: true,
-          decoration: InputDecoration(
-            labelText: '页码 (1-${state.pageCount})',
-            border: const OutlineInputBorder(),
-          ),
-          onSubmitted: (v) {
-            final n = int.tryParse(v);
-            Navigator.pop(ctx, n);
-          },
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, null),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final n = int.tryParse(controller.text);
-              Navigator.pop(ctx, n);
-            },
-            child: const Text('跳转'),
-          ),
-        ],
-      ),
+    final value = await showTextInputDialog(
+      context,
+      title: '跳转页码',
+      initial: '${state.currentPage}',
+      label: '页码 (1-${state.pageCount})',
+      confirmLabel: '跳转',
+      keyboardType: TextInputType.number,
     );
+    final page = int.tryParse(value ?? '');
     if (page != null) {
       ref.read(viewerProvider.notifier).setPage(page);
     }

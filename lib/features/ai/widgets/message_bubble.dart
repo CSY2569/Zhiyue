@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
-import 'package:rbwa/features/ai/widgets/ai_utils.dart';
+import 'package:rbwa/core/utils/clipboard.dart';
 import 'package:rbwa/features/ai/widgets/latex.dart';
 import 'package:rbwa/src/rust/models/ai.dart';
 
@@ -190,6 +190,11 @@ class AiMessageBubble extends StatelessWidget {
                       // bubble.
                       inlineSyntaxes: latexInlineSyntaxes,
                       builders: latexBuilders,
+                      // Never load remote images from model output: a
+                      // prompt-injected reply could otherwise be used as a
+                      // tracking pixel / limited data-exfiltration channel.
+                      sizedImageBuilder: (config) =>
+                          _BlockedImage(alt: config.alt),
                       styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
                         p: theme.textTheme.bodySmall,
                         codeblockDecoration: BoxDecoration(
@@ -201,6 +206,49 @@ class AiMessageBubble extends StatelessWidget {
                   ],
                 ),
         ),
+      ),
+    );
+  }
+}
+
+/// Placeholder for images in model output. Remote images are never loaded
+/// (a prompt-injected reply must not be able to trigger outbound requests);
+/// data URLs are equally blocked to keep rendering deterministic.
+class _BlockedImage extends StatelessWidget {
+  const _BlockedImage({this.alt});
+
+  final String? alt;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.6),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            LucideIcons.imageOff,
+            size: 16,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              (alt == null || alt!.trim().isEmpty)
+                  ? '图片已屏蔽'
+                  : '图片已屏蔽：${alt!.trim()}',
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -60,6 +60,20 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('remote and data-URL images in model output are blocked',
+      (tester) async {
+    await pumpBubble(
+      tester,
+      '看图：![追踪像素](https://attacker.example/pixel.png)\n\n'
+      '以及 ![内联](data:image/png;base64,AAAA)。',
+    );
+    // No network image widget is ever built (prompt-injection exfiltration
+    // guard), and no HttpException is thrown by an attempted load.
+    expect(find.byType(Image), findsNothing);
+    expect(find.textContaining('图片已屏蔽'), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('unsupported TeX falls back to the raw source, no crash',
       (tester) async {
     await pumpBubble(tester, r'奇怪的命令 $\notacommand{x}$ 出现了。');

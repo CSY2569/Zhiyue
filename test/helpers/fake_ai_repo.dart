@@ -5,6 +5,8 @@ import 'package:rbwa/features/ai/providers/ai_state.dart' show AiChatMessage;
 import 'package:rbwa/src/rust/api.dart' show AiThreadCreateResult;
 import 'package:rbwa/src/rust/models/ai.dart';
 
+import 'ai_config_fixture.dart';
+
 /// Fake AI repository for widget tests: no Rust, fixed config, streaming
 /// answers from a list, and an in-memory thread store mirroring the
 /// persisted API (6.5.4). Shared by the AI UI and screenshot tests.
@@ -36,37 +38,9 @@ class FakeAiRepo extends AiRepository {
   final savedImages = <int, List<Uint8List>>{};
 
   @override
-  Future<AiConfig> getAiConfig() async => configOverride ?? AiConfig(
-        baseUrl: 'http://mock/v1',
-        apiKey: 'mock-key',
-        textModel: 'mock-text',
-        visionModel: 'mock-vision',
-        visionBaseUrl: null,
-        visionApiKey: null,
-        translateTargetLang: '中文',
-        translateCustomLangs: const [],
-        modelSupportsVision: false,
-        webSearchEnabled: true,
-        searchUseBuiltin: false,
-        searchBuiltinProtocol: 'responses',
-        ocrMode: ocrMode,
-        includeBookHistory: true,
-        enableReasoning: false,
-        reasoningEffort: 'medium',
-        temperature: 0.7,
-        apiProtocol: 'chat_completions',
-        promptTemplate: 'general',
-        customPrompt: '',
-        customPrompts: const [],
-        templateOverrides: const {},
-        embeddingEnabled: false,
-        embeddingBaseUrl: null,
-        embeddingApiKey: null,
-        embeddingModel: '',
-        vectorDbUrl: null,
-        vectorDbApiKey: null,
-        vectorDbCollection: '',
-      );
+  Future<AiConfig> getAiConfig() async =>
+      configOverride ??
+      testAiConfig(webSearchEnabled: true, ocrMode: ocrMode);
 
   @override
   Future<int> setAiConfig(AiConfig config) async {

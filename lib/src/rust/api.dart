@@ -10,10 +10,13 @@ import 'models/book.dart';
 import 'models/progress.dart';
 import 'models/translate.dart';
 import 'ocr.dart';
+
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+
 import 'pdf/types.dart';
 
 // These functions are ignored because they are not marked as `pub`: `ai_client`, `builtin_search_stream`, `current_bitmap`, `current_boxes`, `current_page_has_text`, `current_thumbnail`, `drain_stream`, `ensure_api_key`, `err`, `import_book_inner`, `index_ocr_result`, `init_result`, `ok`, `open_error`, `page_render_result`, `rebuild_cover_file`, `resolve_ai_image_path`, `save_ai_image`, `save_cover_thumbnail`, `save_rgba_as_png`, `search_system_prompt`, `system_message`, `system_prompt_for`, `try_init_at`, `try_init`, `wrap_input`, `wrap_untrusted_input`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ActionPrompt`
 
 /// Crate version, surfaced in the About / settings UI.
 Future<String> appVersion() => RustLib.instance.api.crateApiAppVersion();

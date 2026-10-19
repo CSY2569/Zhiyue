@@ -132,6 +132,15 @@ pub struct AiConfig {
     /// `web_search_20250305` server tool to `{base}/anthropic/v1/messages`.
     #[serde(default = "default_search_builtin_protocol")]
     pub search_builtin_protocol: String,
+    /// Third-party search wire protocol (6.1.4): "bocha" (default,
+    /// Bocha-compatible endpoint) or "deepseek" (DeepSeek Tools API:
+    /// `{base}/v1/tools/search`, optionally followed by `/v1/tools/fetch`).
+    #[serde(default = "default_search_third_party_protocol")]
+    pub search_third_party_protocol: String,
+    /// DeepSeek third-party search only: fetch the body text of the leading
+    /// N results and inject an excerpt (0 = disabled, clamped to 0-5).
+    #[serde(default)]
+    pub search_fetch_pages: i32,
     /// Translation target language, default "中文" (6.1.3).
     pub translate_target_lang: String,
     /// Extra target languages the user added (设置 → AI 设置 → 翻译): shown as
@@ -237,6 +246,10 @@ fn default_search_builtin_protocol() -> String {
     "responses".to_string()
 }
 
+fn default_search_third_party_protocol() -> String {
+    "bocha".to_string()
+}
+
 fn default_prompt_template() -> String {
     "general".to_string()
 }
@@ -257,6 +270,8 @@ impl Default for AiConfig {
             search_base_url: None,
             search_api_key: None,
             search_builtin_protocol: default_search_builtin_protocol(),
+            search_third_party_protocol: default_search_third_party_protocol(),
+            search_fetch_pages: 0,
             translate_target_lang: "中文".to_string(),
             translate_custom_langs: Vec::new(),
             model_supports_vision: false,
@@ -311,6 +326,8 @@ mod tests {
         assert!(cfg.search_base_url.is_none());
         assert!(cfg.search_api_key.is_none());
         assert_eq!(cfg.search_builtin_protocol, "responses");
+        assert_eq!(cfg.search_third_party_protocol, "bocha");
+        assert_eq!(cfg.search_fetch_pages, 0);
 
         // Round-trip through the current serializer keeps working.
         let back: AiConfig =
@@ -333,6 +350,8 @@ mod tests {
             search_base_url: Some("https://s.example/search".into()),
             search_api_key: Some("sk-s".into()),
             search_builtin_protocol: "anthropic".into(),
+            search_third_party_protocol: "deepseek".into(),
+            search_fetch_pages: 3,
             translate_target_lang: "中文".into(),
             translate_custom_langs: vec!["日文".into(), "法文".into()],
             model_supports_vision: true,
@@ -373,6 +392,8 @@ mod tests {
         assert_eq!(back.search_base_url, cfg.search_base_url);
         assert_eq!(back.search_api_key, cfg.search_api_key);
         assert_eq!(back.search_builtin_protocol, "anthropic");
+        assert_eq!(back.search_third_party_protocol, "deepseek");
+        assert_eq!(back.search_fetch_pages, 3);
         assert_eq!(back.translate_target_lang, "中文");
         assert!(back.web_search_enabled);
         assert_eq!(back.ocr_mode, "fast");

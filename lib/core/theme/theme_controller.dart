@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/core/settings/settings_store.dart';
 import 'package:rbwa/data/repositories/settings_repository.dart';
 
 /// Theme mode preference (FEATURES 8.2 / 8.3).
@@ -18,23 +19,21 @@ class ThemeController extends Notifier<ThemeMode> {
   }
 
   Future<void> _hydrate() async {
-    try {
-      final raw = await ref.read(settingsRepositoryProvider).getSetting(_key);
-      if (raw != null) {
-        state = _parse(raw) ?? ThemeMode.system;
-      }
-    } catch (_) {
-      // Core not ready yet (e.g. during tests); keep system default.
-    }
+    final value = await loadSetting(
+      ref.read(settingsRepositoryProvider),
+      _key,
+      _parse,
+    );
+    if (value != null) state = value;
   }
 
   Future<void> set(ThemeMode mode) async {
     state = mode;
-    try {
-      await ref.read(settingsRepositoryProvider).setSetting(_key, mode.name);
-    } catch (_) {
-      // Persistence failure is non-fatal.
-    }
+    await persistSetting(
+      ref.read(settingsRepositoryProvider),
+      _key,
+      mode.name,
+    );
   }
 
   ThemeMode? _parse(String raw) {

@@ -51,11 +51,7 @@ pub fn list(conn: &Connection) -> AppResult<Vec<Book>> {
          ORDER BY last_opened_at IS NULL, last_opened_at DESC, imported_at DESC"
     ))?;
     let rows = stmt.query_map([], row_to_book)?;
-    let mut books = Vec::new();
-    for row in rows {
-        books.push(row?);
-    }
-    Ok(books)
+    rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
 }
 
 /// Fetch a single book by id. Returns `None` if not found.

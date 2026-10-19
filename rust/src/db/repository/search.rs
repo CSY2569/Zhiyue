@@ -9,6 +9,7 @@
 
 use rusqlite::Connection;
 
+use crate::db::repository::settings;
 use crate::error::AppResult;
 use crate::search::tokenize;
 
@@ -70,16 +71,15 @@ pub fn search(conn: &Connection, query: &str, limit: i64) -> AppResult<Vec<Searc
             r.get::<_, Option<String>>(2)?,
         ))
     })?;
-    let mut hits = Vec::new();
-    for row in rows {
+    rows.map(|row| {
         let (book_id, page, original) = row?;
-        hits.push(SearchHit {
+        Ok(SearchHit {
             book_id,
             page,
             snippet: snippet(&original.unwrap_or_default(), query),
-        });
-    }
-    Ok(hits)
+        })
+    })
+    .collect::<AppResult<Vec<_>>>()
 }
 
 /// The FTS5 MATCH expression: each token double-quoted so operator
@@ -145,36 +145,19 @@ fn find_subseq(haystack: &[char], needle: &[char]) -> Option<usize> {
 /// Mark the book's index as fully built (settings KV, survives restarts;
 /// the value is the page count -- informational only).
 pub fn mark_ready(conn: &Connection, book_id: i64, pages: i64) -> AppResult<()> {
-    conn.execute(
-        "INSERT INTO settings (key, value) VALUES (?1, ?2) \
-         ON CONFLICT (key) DO UPDATE SET value = excluded.value, \
-             updated_at = datetime('now')",
-        rusqlite::params![format!("{READY_KEY}{book_id}"), pages.to_string()],
-    )?;
-    Ok(())
+    settings::set_raw(conn, &format!("{READY_KEY}{book_id}"), &pages.to_string())
 }
 
 /// Mark the book's index build as failed (unreadable document, e.g. a
 /// corrupt PDF): a terminal state so ensure_book_index stops retrying on
 /// every library visit. Cleared by re-importing the book.
 pub fn mark_failed(conn: &Connection, book_id: i64) -> AppResult<()> {
-    conn.execute(
-        "INSERT INTO settings (key, value) VALUES (?1, ?2) \
-         ON CONFLICT (key) DO UPDATE SET value = excluded.value, \
-             updated_at = datetime('now')",
-        rusqlite::params![format!("{FAILED_KEY}{book_id}"), "{}"],
-    )?;
-    Ok(())
+    settings::set_raw(conn, &format!("{FAILED_KEY}{book_id}"), "{}")
 }
 
 /// Whether a previous index build failed for this book (unreadable file).
 pub fn is_failed(conn: &Connection, book_id: i64) -> bool {
-    conn.query_row(
-        "SELECT 1 FROM settings WHERE key = ?1",
-        rusqlite::params![format!("{FAILED_KEY}{book_id}")],
-        |_| Ok(()),
-    )
-    .is_ok()
+    settings::exists(conn, &format!("{FAILED_KEY}{book_id}"))
 }
 
 /// Drop every search marker of the book (deletion / re-import reset).
@@ -191,12 +174,7 @@ pub fn clear_markers(conn: &Connection, book_id: i64) -> AppResult<()> {
 
 /// Whether the book's index was fully built (vs. partially indexed).
 pub fn is_ready(conn: &Connection, book_id: i64) -> bool {
-    conn.query_row(
-        "SELECT 1 FROM settings WHERE key = ?1",
-        rusqlite::params![format!("{READY_KEY}{book_id}")],
-        |_| Ok(()),
-    )
-    .is_ok()
+    settings::exists(conn, &format!("{READY_KEY}{book_id}"))
 }
 
 /// Whether the book has any indexed page (OCR-only books become searchable

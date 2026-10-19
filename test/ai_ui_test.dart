@@ -337,44 +337,29 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('settings: search config hides when built-in search is chosen',
-      (tester) async {
+  testWidgets('settings: both search methods are selectable', (tester) async {
     final repo = FakeAiRepo();
     await tester.pumpWidget(_scope(const SettingsPage(), repo));
     await tester.pumpAndSettle();
 
-    // FakeAiRepo defaults to third-party search -> the API fields show.
     await tester.scrollUntilVisible(
       find.text('搜索方式'),
       200,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pump();
-    expect(find.text('搜索 API Key'), findsOneWidget);
 
-    // Built-in search reuses the general Responses config: fields hide, and
-    // the wire-protocol picker appears.
-    await tester.tap(find.text('内置搜索'));
-    await tester.pumpAndSettle();
-    expect(find.text('搜索 API Key'), findsNothing);
+    // The saved config (built-in) hides the DeepSeek fields but keeps both
+    // built-in protocols selectable.
+    expect(find.text('内置搜索'), findsOneWidget);
+    expect(find.text('DeepSeek 搜索'), findsOneWidget);
     expect(find.text('内置搜索协议'), findsOneWidget);
+    expect(find.text('搜索 API Key'), findsNothing);
 
-    // Switching the protocol is accepted...
+    // Switching the built-in protocol is accepted and persists.
     await tester.tap(find.text('Anthropic'));
-    await tester.pump();
-    // ...and third-party search hides the picker again.
-    await tester.tap(find.text('第三方搜索'));
     await tester.pumpAndSettle();
-    expect(find.text('内置搜索协议'), findsNothing);
-    expect(find.text('搜索 API Key'), findsOneWidget);
 
-    // The selected protocol persists with the config.
-    await tester.tap(find.text('内置搜索'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Anthropic'));
-    await tester.pump();
-    // The save button sits at the very bottom of the page, below the search
-    // section -- scroll it into the lazy ListView's build range first.
     await tester.scrollUntilVisible(
       find.text('保存 AI 配置'),
       200,
@@ -387,6 +372,54 @@ void main() {
     expect(repo.saved!.searchBuiltinProtocol, 'anthropic');
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'settings: deepseek search choice reveals its own config',
+    (tester) async {
+      final repo = FakeAiRepo();
+      await tester.pumpWidget(_scope(const SettingsPage(), repo));
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.text('搜索方式'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('DeepSeek 搜索'));
+      await tester.pumpAndSettle();
+      // DeepSeek mode replaces the protocol picker with its own fields.
+      expect(find.text('内置搜索协议'), findsNothing);
+      expect(find.text('搜索 API Key'), findsOneWidget);
+      expect(find.text('DeepSeek API 基地址'), findsOneWidget);
+      expect(find.text('抓取网页正文'), findsOneWidget);
+
+      await tester.tap(find.text('抓取网页正文'));
+      await tester.pumpAndSettle();
+
+      // Switching back restores the protocol picker.
+      await tester.tap(find.text('内置搜索'));
+      await tester.pumpAndSettle();
+      expect(find.text('内置搜索协议'), findsOneWidget);
+      expect(find.text('抓取网页正文'), findsNothing);
+
+      await tester.tap(find.text('DeepSeek 搜索'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('保存 AI 配置'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tapSaveAiConfig(tester);
+      await tester.pumpAndSettle();
+      expect(repo.saved, isNotNull);
+      expect(repo.saved!.searchUseBuiltin, isFalse);
+      expect(repo.saved!.searchThirdPartyProtocol, 'deepseek');
+      expect(repo.saved!.searchFetchPages, 3);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('settings: vision config shows only when the model is text-only',
       (tester) async {
@@ -496,6 +529,8 @@ void main() {
       webSearchEnabled: false,
       searchUseBuiltin: false,
       searchBuiltinProtocol: 'responses',
+      searchThirdPartyProtocol: 'bocha',
+      searchFetchPages: 0,
       ocrMode: 'high_precision',
       includeBookHistory: true,
       enableReasoning: false,

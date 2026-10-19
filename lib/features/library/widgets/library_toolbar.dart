@@ -1,10 +1,9 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:rbwa/core/widgets/search_field.dart';
 import 'package:rbwa/features/library/providers/library_providers.dart';
 
 /// Top toolbar for the library page (FEATURES 2.7).
@@ -32,24 +31,6 @@ class LibraryToolbar extends ConsumerStatefulWidget
 }
 
 class _LibraryToolbarState extends ConsumerState<LibraryToolbar> {
-  final _searchController = TextEditingController();
-  Timer? _debounce;
-
-  @override
-  void dispose() {
-    _debounce?.cancel();
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  void _onSearchChanged(String value) {
-    // Debounce 300ms so we don't run the filter on every keystroke.
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 300), () {
-      ref.read(libraryFilterProvider.notifier).setSearchQuery(value);
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -58,30 +39,12 @@ class _LibraryToolbarState extends ConsumerState<LibraryToolbar> {
       titleSpacing: 8,
       title: SizedBox(
         width: 280,
-        child: TextField(
-          controller: _searchController,
-          onChanged: _onSearchChanged,
-          decoration: InputDecoration(
-            hintText: '搜索书名…',
-            prefixIcon: const Icon(LucideIcons.search, size: 20),
-            isDense: true,
-            contentPadding: const EdgeInsets.symmetric(vertical: 0),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(24),
-              borderSide: BorderSide.none,
-            ),
-            filled: true,
-            fillColor: theme.colorScheme.surfaceContainerHigh,
-            suffixIcon: _searchController.text.isNotEmpty
-                ? IconButton(
-                    icon: const Icon(LucideIcons.x, size: 20),
-                    onPressed: () {
-                      _searchController.clear();
-                      _onSearchChanged('');
-                    },
-                  )
-                : null,
-          ),
+        child: DebouncedSearchField(
+          hint: '搜索书名…',
+          pill: true,
+          fillColor: theme.colorScheme.surfaceContainerHigh,
+          onChanged: (value) =>
+              ref.read(libraryFilterProvider.notifier).setSearchQuery(value),
         ),
       ),
       actions: [

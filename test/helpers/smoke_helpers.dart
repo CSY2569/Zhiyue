@@ -84,14 +84,20 @@ String buildPdfWithOutline() {
   return sb.toString();
 }
 
-/// Path of the isolated test database (under /tmp).
-const testDbPath = '/tmp/rbwa-test/rbwa.db';
+/// Scratch data dir for this test process. Each test file runs in its own
+/// process; a per-pid directory keeps parallel files from deleting each
+/// other's database (the suite used one fixed path and occasionally failed
+/// when two smoke files ran at once).
+final String testDataDir = '/tmp/rbwa-test-$pid';
+
+/// Path of the isolated test database (under [testDataDir]).
+String get testDbPath => '$testDataDir/rbwa.db';
 
 /// Init RustLib + a fresh isolated test DB: every run starts clean, so the
 /// integration smoke tests never touch the user's real data.
 Future<void> initIsolatedCore() async {
   await RustLib.init();
-  final dir = Directory('/tmp/rbwa-test');
+  final dir = Directory(testDataDir);
   if (dir.existsSync()) dir.deleteSync(recursive: true);
   dir.createSync(recursive: true);
   final init = await rust.initCoreWithDbPath(dbPath: testDbPath);

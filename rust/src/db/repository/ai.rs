@@ -49,11 +49,7 @@ pub fn list_threads(conn: &Connection) -> AppResult<Vec<AiThread>> {
         "SELECT {THREAD_COLS} FROM ai_threads ORDER BY updated_at DESC, id DESC"
     ))?;
     let rows = stmt.query_map([], row_to_thread)?;
-    let mut threads = Vec::new();
-    for row in rows {
-        threads.push(row?);
-    }
-    Ok(threads)
+    rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
 }
 
 /// List a thread's messages in conversation order.
@@ -63,11 +59,7 @@ pub fn list_messages(conn: &Connection, thread_id: i64) -> AppResult<Vec<AiMessa
          WHERE thread_id = ?1 ORDER BY created_at, id"
     ))?;
     let rows = stmt.query_map(params![thread_id], row_to_message)?;
-    let mut messages = Vec::new();
-    for row in rows {
-        messages.push(row?);
-    }
-    Ok(messages)
+    rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
 }
 
 /// Insert a new conversation window; returns the new row id. `book_id` is

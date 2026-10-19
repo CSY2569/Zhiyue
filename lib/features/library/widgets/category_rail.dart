@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:rbwa/core/widgets/loading_state.dart';
 import 'package:rbwa/features/library/models/library_filter.dart';
 import 'package:rbwa/core/widgets/confirm_dialog.dart';
 import 'package:rbwa/features/library/providers/library_providers.dart';
@@ -319,13 +320,7 @@ class _LoadingHint extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Padding(
       padding: EdgeInsets.all(16),
-      child: Center(
-        child: SizedBox(
-          width: 18,
-          height: 18,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
-      ),
+      child: Center(child: InlineSpinner(size: 16)),
     );
   }
 }

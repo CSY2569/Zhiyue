@@ -2,6 +2,7 @@ import 'dart:ui' show Offset, Size;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/core/settings/settings_store.dart';
 import 'package:rbwa/data/repositories/settings_repository.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart'
     show SidebarType;
@@ -104,27 +105,23 @@ class PanelLayoutNotifier extends Notifier<PanelLayout> {
   }
 
   Future<void> _hydrate() async {
-    try {
-      final repo = ref.read(settingsRepositoryProvider);
-      final outline = await repo.getSetting(_kOutline);
-      final thumbs = await repo.getSetting(_kThumbnails);
-      final notes = await repo.getSetting(_kAnnotations);
-      final ai = await repo.getSetting(_kAiPanel);
-      final card = await repo.getSetting(_kCardSize);
-      state = state.copyWith(
-        outlineWidth: _parseWidth(outline, PanelLayout.minSidebarWidth,
-            PanelLayout.maxSidebarWidth),
-        thumbnailsWidth: _parseWidth(thumbs, PanelLayout.minSidebarWidth,
-            PanelLayout.maxSidebarWidth),
-        annotationsWidth: _parseWidth(notes, PanelLayout.minSidebarWidth,
-            PanelLayout.maxSidebarWidth),
-        aiPanelWidth: _parseWidth(ai, PanelLayout.minAiPanelWidth,
-            PanelLayout.maxAiPanelWidth),
-        cardSize: _parseSize(card),
-      );
-    } catch (_) {
-      // Core not ready yet (e.g. during tests); keep the defaults.
-    }
+    final repo = ref.read(settingsRepositoryProvider);
+    final outline = await loadSetting(repo, _kOutline, (raw) => raw);
+    final thumbs = await loadSetting(repo, _kThumbnails, (raw) => raw);
+    final notes = await loadSetting(repo, _kAnnotations, (raw) => raw);
+    final ai = await loadSetting(repo, _kAiPanel, (raw) => raw);
+    final card = await loadSetting(repo, _kCardSize, (raw) => raw);
+    state = state.copyWith(
+      outlineWidth: _parseWidth(outline, PanelLayout.minSidebarWidth,
+          PanelLayout.maxSidebarWidth),
+      thumbnailsWidth: _parseWidth(thumbs, PanelLayout.minSidebarWidth,
+          PanelLayout.maxSidebarWidth),
+      annotationsWidth: _parseWidth(notes, PanelLayout.minSidebarWidth,
+          PanelLayout.maxSidebarWidth),
+      aiPanelWidth: _parseWidth(ai, PanelLayout.minAiPanelWidth,
+          PanelLayout.maxAiPanelWidth),
+      cardSize: _parseSize(card),
+    );
   }
 
   double? _parseWidth(String? raw, double min, double max) {
@@ -183,18 +180,14 @@ class PanelLayoutNotifier extends Notifier<PanelLayout> {
 
   /// Persist the current sizes (called when a drag ends).
   Future<void> commit() async {
-    try {
-      final repo = ref.read(settingsRepositoryProvider);
-      final s = state;
-      await repo.setSetting(_kOutline, s.outlineWidth.toString());
-      await repo.setSetting(_kThumbnails, s.thumbnailsWidth.toString());
-      await repo.setSetting(_kAnnotations, s.annotationsWidth.toString());
-      await repo.setSetting(_kAiPanel, s.aiPanelWidth.toString());
-      await repo.setSetting(
-          _kCardSize, '${s.cardSize.width}x${s.cardSize.height}');
-    } catch (_) {
-      // Persistence failure is non-fatal; the in-memory size still applies.
-    }
+    final repo = ref.read(settingsRepositoryProvider);
+    final s = state;
+    await persistSetting(repo, _kOutline, s.outlineWidth.toString());
+    await persistSetting(repo, _kThumbnails, s.thumbnailsWidth.toString());
+    await persistSetting(repo, _kAnnotations, s.annotationsWidth.toString());
+    await persistSetting(repo, _kAiPanel, s.aiPanelWidth.toString());
+    await persistSetting(
+        repo, _kCardSize, '${s.cardSize.width}x${s.cardSize.height}');
   }
 }
 

@@ -4,6 +4,7 @@ import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:rbwa/core/theme/reading_theme.dart';
+import 'package:rbwa/core/widgets/text_input_dialog.dart';
 import 'package:rbwa/core/theme/reading_theme_controller.dart';
 import 'package:rbwa/data/repositories/ai_repository.dart';
 import 'package:rbwa/features/ai/providers/ai_config_provider.dart';
@@ -40,11 +41,22 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _searchBaseUrl = TextEditingController();
   final _searchApiKey = TextEditingController();
   bool _webSearch = false;
-  bool _searchBuiltin = false;
 
-  /// Built-in search wire protocol: 'responses' (OpenAI-style Responses
-  /// web_search tool) or 'anthropic' (Anthropic Messages web_search tool).
-  String _searchBuiltinProtocol = 'responses';
+  /// Search backend, exposed as a single two-way choice (设置 → 搜索):
+  /// - 'builtin': server-side search over the Anthropic Messages protocol,
+  ///   reusing the general Base URL / Key / model.
+  /// - 'deepseek': the DeepSeek Tools API (Search, optional Fetch).
+  String _searchMode = 'builtin';
+
+  /// Whether DeepSeek search fetches the leading pages' body text.
+  bool _searchFetchPages = false;
+
+  /// Built-in search wire protocol, chosen by the user:
+  /// - 'anthropic': Anthropic Messages `web_search` server tool (DeepSeek
+  ///   executes hosted search only on this protocol).
+  /// - 'responses': OpenAI-style Responses `web_search` tool (providers that
+  ///   implement it, e.g. OpenAI; DeepSeek silently ignores the tool).
+  String _searchBuiltinProtocol = 'anthropic';
 
   /// Whether the general model accepts images (多模态); false -> a separate
   /// vision config is shown.
@@ -125,10 +137,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _vectorDbUrl.text = config.vectorDbUrl ?? '';
     _vectorDbApiKey.text = config.vectorDbApiKey ?? '';
     _vectorDbCollection.text = config.vectorDbCollection;
-    _searchBuiltin = config.searchUseBuiltin;
-    _searchBuiltinProtocol = config.searchBuiltinProtocol == 'anthropic'
-        ? 'anthropic'
-        : 'responses';
+    _searchMode =
+        (!config.searchUseBuiltin &&
+                config.searchThirdPartyProtocol == 'deepseek')
+            ? 'deepseek'
+            : 'builtin';
+    _searchBuiltinProtocol =
+        config.searchBuiltinProtocol == 'responses' ? 'responses' : 'anthropic';
+    _searchFetchPages = config.searchFetchPages > 0;
     _apiProtocol = config.apiProtocol == 'responses'
         ? 'responses'
         : 'chat_completions';
@@ -202,8 +218,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       searchApiKey: _searchApiKey.text.trim().isEmpty
           ? null
           : _searchApiKey.text.trim(),
-      searchUseBuiltin: _searchBuiltin,
+      searchUseBuiltin: _searchMode == 'builtin',
       searchBuiltinProtocol: _searchBuiltinProtocol,
+      searchThirdPartyProtocol:
+          _searchMode == 'deepseek' ? 'deepseek' : 'bocha',
+      searchFetchPages:
+          _searchMode == 'deepseek' && _searchFetchPages ? 3 : 0,
       webSearchEnabled: _webSearch,
       apiProtocol: _apiProtocol,
       ocrMode: _ocrMode,
@@ -234,9 +254,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final ok = await ref.read(aiConfigProvider.notifier).save(config);
     if (!mounted) return;
     setState(() => _saving = false);
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(ok ? 'AI 配置已保存' : '保存失败，请重试')));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(ok ? 'AI 配置已保存' : '保存失败，请重试')));
   }
 
   @override
@@ -442,7 +461,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 title: '翻译',
                 icon: LucideIcons.languages,
                 description: '划词翻译与对照阅读共用此目标语言',
-                children: [_targetLangPicker(theme)],
+                children: [_targetLangPicker()],
               ),
 
               // 搜索
@@ -458,34 +477,34 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   ),
                   SettingsControlRow(
                     title: '搜索方式',
-                    description: _searchBuiltin
-                        ? '内置搜索：由服务端联网（需模型支持）。协议见下方「内置搜索协议」，使用上方通用的 Base URL / Key / 模型，搜索专用配置不参与'
-                        : '第三方搜索：调用下方端点的博查兼容搜索服务，把结果注入提示词（不使用通用配置）',
-                    child: SegmentedButton<bool>(
+                    description: _searchMode == 'builtin'
+                        ? '内置搜索：由 DeepSeek 服务端联网检索并直接作答，使用上方通用 Base URL / Key / 模型'
+                        : 'DeepSeek 搜索：调用 DeepSeek 搜索接口获取真实网页，再把结果作为不可信资料交给模型；Key 留空时复用上方通用 API Key',
+                    child: SegmentedButton<String>(
                       segments: const [
                         ButtonSegment(
-                          value: true,
+                          value: 'builtin',
                           label: Text('内置搜索'),
                           icon: Icon(LucideIcons.languages, size: 16),
                         ),
                         ButtonSegment(
-                          value: false,
-                          label: Text('第三方搜索'),
+                          value: 'deepseek',
+                          label: Text('DeepSeek 搜索'),
                           icon: Icon(LucideIcons.puzzle, size: 16),
                         ),
                       ],
-                      selected: {_searchBuiltin},
+                      selected: {_searchMode},
                       showSelectedIcon: false,
                       onSelectionChanged: (s) =>
-                          setState(() => _searchBuiltin = s.first),
+                          setState(() => _searchMode = s.first),
                     ),
                   ),
-                  // Built-in search has two wire protocols: the OpenAI
-                  // Responses web_search tool, or the Anthropic Messages
-                  // web_search server tool.
-                  if (_searchBuiltin)
+                  if (_searchMode == 'builtin')
                     SettingsControlRow(
                       title: '内置搜索协议',
+                      description: _searchBuiltinProtocol == 'anthropic'
+                          ? 'Anthropic Messages 协议：DeepSeek 的内置搜索走此协议'
+                          : 'Responses 协议：适用于支持 web_search 工具的服务（如 OpenAI）；DeepSeek 会静默忽略该工具，请改用 Anthropic',
                       child: SegmentedButton<String>(
                         segments: const [
                           ButtonSegment(
@@ -499,22 +518,28 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         ],
                         selected: {_searchBuiltinProtocol},
                         showSelectedIcon: false,
-                        onSelectionChanged: (s) =>
-                            setState(() => _searchBuiltinProtocol = s.first),
+                        onSelectionChanged: (s) => setState(
+                          () => _searchBuiltinProtocol = s.first,
+                        ),
                       ),
                     ),
-                  if (!_searchBuiltin) ...[
+                  if (_searchMode == 'deepseek') ...[
                     SettingsTextField(
                       controller: _searchBaseUrl,
-                      label: '搜索端点 URL',
-                      hint:
-                          '博查兼容的完整端点地址（不是 API 基地址）；留空 = https://api.bochaai.com/v1/web-search',
+                      label: 'DeepSeek API 基地址',
+                      hint: '如 https://api.deepseek.com；留空 = 官方地址',
                     ),
                     SettingsTextField(
                       controller: _searchApiKey,
                       label: '搜索 API Key',
-                      hint: '留空 = 降级为基于已有知识回答',
+                      hint: '留空 = 复用上方通用 API Key',
                       obscure: true,
+                    ),
+                    SettingsSwitchRow(
+                      title: '抓取网页正文',
+                      description: '搜索后抓取前 3 条结果的正文，回答更深入但更慢；单页失败自动退回摘要',
+                      value: _searchFetchPages,
+                      onChanged: (v) => setState(() => _searchFetchPages = v),
                     ),
                   ],
                 ],
@@ -582,8 +607,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   ),
                   SettingsSwitchRow(
                     title: '思考模式',
-                    description:
-                        '按官方 API 发送 reasoning_effort，需使用支持思考的模型（如 o 系列 / GPT-5 / DeepSeek-R1）',
+                    description: '按官方 API 发送 reasoning_effort，需使用支持思考的模型（如 o 系列 / GPT-5 / DeepSeek-R1）',
                     value: _enableReasoning,
                     onChanged: (v) => setState(() => _enableReasoning = v),
                   ),
@@ -781,7 +805,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   /// Translation target language: built-in 中文 / 英文 / 中英互译 chips plus
   /// any languages the user added, and a "+ 添加语言" entry (设置 → AI 设置 →
   /// 翻译). Custom languages appear as chips alongside the built-ins.
-  Widget _targetLangPicker(ThemeData theme) {
+  Widget _targetLangPicker() {
     const builtins = ['中文', '英文', '中英互译'];
     final options = [...builtins, ..._customLangs];
     return SettingsControlRow(
@@ -810,9 +834,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   /// Prompt for a new target language and select it (设置 → AI 设置 → 翻译).
   Future<void> _addCustomLang() async {
-    final name = await showDialog<String>(
-      context: context,
-      builder: (_) => const _AddLangDialog(),
+    final name = await showTextInputDialog(
+      context,
+      title: '添加翻译语言',
+      label: '语言名称',
+      hint: '如 日文 / Français',
+      confirmLabel: '添加',
     );
     if (name == null || name.isEmpty) return;
     setState(() {
@@ -897,50 +924,4 @@ const _templateOptions = [
   (id: 'ai', label: 'AI 技术'),
 ];
 
-/// Dialog for adding a custom translation language. Owns its controller so
-/// it is disposed only after the dialog is fully torn down (disposing the
-/// controller right after `showDialog` returns trips "used after disposed"
-/// during the exit animation).
-class _AddLangDialog extends StatefulWidget {
-  const _AddLangDialog();
-
-  @override
-  State<_AddLangDialog> createState() => _AddLangDialogState();
-}
-
-class _AddLangDialogState extends State<_AddLangDialog> {
-  final _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('添加翻译语言'),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        decoration: const InputDecoration(
-          labelText: '语言名称',
-          hintText: '如 日文 / Français',
-          border: OutlineInputBorder(),
-        ),
-        onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
-          child: const Text('添加'),
-        ),
-      ],
-    );
-  }
-}
+/// Dialog for adding a custom translation language.

@@ -97,15 +97,16 @@ fn output_cache_total() -> u64 {
 /// skipping pinned / in-flight ones (same policy as the artifact LRU).
 pub fn enforce_output_cache_cap() -> AppResult<()> {
     const CAP_BYTES: u64 = 2 * 1024 * 1024 * 1024;
-    let mut used = output_cache_total();
-    if used <= CAP_BYTES {
-        return Ok(());
-    }
-    let pinned: std::collections::HashSet<i64> = pinned_books().into_iter().collect();
-    let translating: std::collections::HashSet<i64> = translating_books().into_iter().collect();
     let root = db::app_data_dir()?.join("retain_output");
+    let used = output_cache_total();
+    evict_lru(&root, used, CAP_BYTES, &eviction_skip_set(), |_| {})?;
+    Ok(())
+}
+
+/// Book directories under [root] whose name is a book id, oldest first.
+fn book_dirs_by_mtime(root: &std::path::Path) -> Vec<(i64, std::time::SystemTime)> {
     let mut candidates: Vec<(i64, std::time::SystemTime)> = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&root) {
+    if let Ok(entries) = std::fs::read_dir(root) {
         for entry in entries.flatten() {
             let Ok(id) = entry.file_name().to_string_lossy().parse::<i64>() else {
                 continue;
@@ -118,21 +119,47 @@ pub fn enforce_output_cache_cap() -> AppResult<()> {
         }
     }
     candidates.sort_by_key(|(_, mtime)| *mtime);
-    for (book_id, _) in candidates {
-        if used <= CAP_BYTES {
+    candidates
+}
+
+/// Delete whole-book directories under [root] oldest-first until [used]
+/// drops to [cap]. Book ids in [skip] are never touched. [on_evict] runs
+/// after each removal (the artifact LRU uses it to drop the book's engine
+/// scratch too).
+fn evict_lru(
+    root: &std::path::Path,
+    mut used: u64,
+    cap: u64,
+    skip: &std::collections::HashSet<i64>,
+    mut on_evict: impl FnMut(i64),
+) -> AppResult<u64> {
+    if used <= cap {
+        return Ok(used);
+    }
+    for (book_id, _) in book_dirs_by_mtime(root) {
+        if used <= cap {
             break;
         }
-        if pinned.contains(&book_id) || translating.contains(&book_id) {
+        if skip.contains(&book_id) {
             continue;
         }
-        let dir = output_cache_dir(book_id);
+        let dir = root.join(book_id.to_string());
         let before = crate::db::repository::translate::dir_size(&dir);
         if dir.exists() {
             std::fs::remove_dir_all(&dir)?;
         }
+        on_evict(book_id);
         used = used.saturating_sub(before);
     }
-    Ok(())
+    Ok(used)
+}
+
+/// Books excluded from eviction: pinned + currently translating.
+fn eviction_skip_set() -> std::collections::HashSet<i64> {
+    pinned_books()
+        .into_iter()
+        .chain(translating_books())
+        .collect()
 }
 
 /// `{data_dir}/translated/{book_id}` -- translated PDFs (plan §6/§7).
@@ -160,26 +187,13 @@ pub fn load_translation_config() -> TranslationConfig {
 /// The process-wide DB handle is a non-reentrant `Mutex`; a function that
 /// holds the guard must never call `db::db()` again (it self-deadlocks).
 pub fn load_translation_config_with(conn: &rusqlite::Connection) -> TranslationConfig {
-    conn.query_row(
-        "SELECT value FROM settings WHERE key = 'translation_config'",
-        [],
-        |row| row.get::<_, String>(0),
-    )
-    .ok()
-    .and_then(|json| serde_json::from_str(&json).ok())
-    .unwrap_or_default()
+    crate::db::repository::settings::get_json(conn, "translation_config").unwrap_or_default()
 }
 
 /// Upserts the translation config.
 pub fn save_translation_config(config: &TranslationConfig) -> AppResult<()> {
-    let json = serde_json::to_string(config)?;
     let conn = db::db();
-    conn.execute(
-        "INSERT INTO settings (key, value, updated_at) VALUES ('translation_config', ?1, datetime('now')) \
-         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')",
-        rusqlite::params![json],
-    )?;
-    Ok(())
+    crate::db::repository::settings::set_json(&conn, "translation_config", config)
 }
 
 /// The AI configuration the engine job reuses (BYOK OpenAI-compatible
@@ -187,16 +201,7 @@ pub fn save_translation_config(config: &TranslationConfig) -> AppResult<()> {
 #[cfg(feature = "ai")]
 pub fn load_ai_config_for_job() -> AppResult<crate::models::ai::AiConfig> {
     let conn = db::db();
-    let raw: Option<String> = conn
-        .query_row(
-            "SELECT value FROM settings WHERE key = 'ai_config'",
-            [],
-            |row| row.get(0),
-        )
-        .ok();
-    Ok(raw
-        .and_then(|json| serde_json::from_str(&json).ok())
-        .unwrap_or_default())
+    Ok(crate::db::repository::settings::get_json(&conn, "ai_config").unwrap_or_default())
 }
 
 /// Deletes a book's translated artifacts (the translated PDFs).
@@ -215,15 +220,7 @@ pub const PINNED_BOOKS_KEY: &str = "translation_pinned_books";
 /// Pinned book ids from the settings KV.
 pub fn pinned_books() -> Vec<i64> {
     let conn = db::db();
-    let raw: Option<String> = conn
-        .query_row(
-            "SELECT value FROM settings WHERE key = ?1",
-            rusqlite::params![PINNED_BOOKS_KEY],
-            |row| row.get(0),
-        )
-        .ok();
-    raw.and_then(|s| serde_json::from_str::<Vec<i64>>(&s).ok())
-        .unwrap_or_default()
+    crate::db::repository::settings::get_json(&conn, PINNED_BOOKS_KEY).unwrap_or_default()
 }
 
 /// Enforces the translation cache budget (plan §7): when `translated/`
@@ -236,54 +233,18 @@ pub fn enforce_cache_limit() -> AppResult<u64> {
     if limit_bytes == 0 {
         return Ok(0);
     }
-    let mut used = db::repository::translate::translated_dir_size();
-    if used <= limit_bytes {
-        return Ok(used);
-    }
-
-    let pinned: std::collections::HashSet<i64> = pinned_books().into_iter().collect();
-    let translating: std::collections::HashSet<i64> =
-        translating_books().into_iter().collect();
+    let used = db::repository::translate::translated_dir_size();
     // Eviction candidates by artifact mtime (oldest first). The per-page
     // cache rows that used to drive this ordering were dropped in schema v8;
     // the artifacts' own mtime is the natural replacement.
-    let mut candidates: Vec<(i64, std::time::SystemTime)> = Vec::new();
-    if let Ok(root) = db::app_data_dir() {
-        let translated = root.join("translated");
-        if let Ok(entries) = std::fs::read_dir(&translated) {
-            for entry in entries.flatten() {
-                let Ok(id) = entry.file_name().to_string_lossy().parse::<i64>() else {
-                    continue;
-                };
-                if let Ok(md) = entry.metadata() {
-                    if let Ok(mtime) = md.modified() {
-                        candidates.push((id, mtime));
-                    }
-                }
-            }
-        }
-    }
-    candidates.sort_by_key(|(_, mtime)| *mtime);
-    for (book_id, _) in candidates {
-        if used <= limit_bytes {
-            break;
-        }
-        if pinned.contains(&book_id) || translating.contains(&book_id) {
-            continue;
-        }
-        let dir = translated_dir(book_id);
-        let before = crate::db::repository::translate::dir_size(&dir);
-        if dir.exists() {
-            std::fs::remove_dir_all(&dir)?;
-        }
+    let root = db::app_data_dir()?.join("translated");
+    evict_lru(&root, used, limit_bytes, &eviction_skip_set(), |book_id| {
         // The engine's per-book caches are part of the same budget.
         let cache = output_cache_dir(book_id);
         if cache.exists() {
             let _ = std::fs::remove_dir_all(&cache);
         }
-        used = used.saturating_sub(before);
-    }
-    Ok(used)
+    })
 }
 
 #[cfg(test)]
@@ -310,5 +271,40 @@ mod tests {
         assert!(translating_books().contains(&id));
         unmark_translating(id);
         assert!(!is_translating(id));
+    }
+
+    /// LRU sweep: oldest first, skip-list honored, stops at the budget, and
+    /// the eviction callback sees each removed book exactly once.
+    #[test]
+    fn evict_lru_orders_skips_and_budgets() {
+        let root = std::env::temp_dir().join(format!(
+            "rbwa-lru-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        // Three books, each holding 10 bytes; distinct mtimes via sleeps.
+        for id in [1_i64, 2, 3] {
+            let dir = root.join(id.to_string());
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join("f"), vec![0u8; 10]).unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let skip: std::collections::HashSet<i64> = [1].into_iter().collect();
+        let mut evicted = Vec::new();
+        let used = evict_lru(&root, 30, 10, &skip, |id| evicted.push(id)).unwrap();
+
+        // Book 1 is pinned; 2 is older than 3, so eviction is [2, 3].
+        assert_eq!(evicted, vec![2, 3], "oldest-first, skip-list honored");
+        assert_eq!(used, 10);
+        assert!(root.join("1").exists());
+        assert!(!root.join("2").exists());
+        assert!(!root.join("3").exists());
+        // Under budget: no work.
+        assert_eq!(evict_lru(&root, 10, 10, &skip, |_| {}).unwrap(), 10);
+        std::fs::remove_dir_all(&root).ok();
     }
 }

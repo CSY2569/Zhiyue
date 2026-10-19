@@ -1,9 +1,9 @@
 import 'dart:async';
-import 'dart:collection';
 import 'dart:ui' as ui;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/core/lru_cache.dart';
 import 'package:rbwa/data/repositories/reader_repository.dart';
 import 'package:rbwa/features/reader/providers/image_decoder.dart';
 
@@ -21,7 +21,7 @@ class BitmapCache {
   BitmapCache(this._repo);
 
   final ReaderRepository _repo;
-  final LinkedHashMap<_CacheKey, ui.Image> _cache = LinkedHashMap();
+  final LruCache<_CacheKey, ui.Image> _cache = LruCache(maxEntries: _maxEntries);
   // In-flight renders keyed by the same cache key. Two callers requesting the
   // same page/tier before the first finishes share one Rust render (the
   // ListView re-layout from the scroll-alignment fix can otherwise fan out
@@ -52,12 +52,9 @@ class BitmapCache {
     final renderZoom = quantizeZoom(zoom);
     final key = (bookId: bookId, page: page, renderZoom: renderZoom);
 
-    // Cache hit: move to end (most-recently-used).
-    final cached = _cache.remove(key);
-    if (cached != null) {
-      _cache[key] = cached;
-      return cached;
-    }
+    // Cache hit: refreshes recency.
+    final cached = _cache.get(key);
+    if (cached != null) return cached;
 
     // Miss: deduplicate concurrent renders of the same key. A second caller
     // awaiting the same future sees the same result (and the cache populated
@@ -91,17 +88,10 @@ class BitmapCache {
           await decodeRgbaImage(result.width, result.height, result.rgba);
       if (image == null) return null;
 
-      _evictIfNeeded();
-      _cache[key] = image;
+      _cache.put(key, image);
       return image;
     } catch (_) {
       return null;
-    }
-  }
-
-  void _evictIfNeeded() {
-    while (_cache.length >= _maxEntries) {
-      _cache.remove(_cache.keys.first);
     }
   }
 }

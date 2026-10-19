@@ -20,10 +20,18 @@ use crate::models::ai::{AiConfig, AiMessage};
 /// System prompts for the AI actions (FEATURES 6.2).
 pub mod prompts;
 
+/// Prompt-injection defense for untrusted text: sanitization and
+/// per-request nonce boundaries (search results, selected book text).
+pub mod search_safety;
+
 #[cfg(feature = "ai")]
 mod openai;
 #[cfg(feature = "ai")]
+mod web_search;
+#[cfg(feature = "ai")]
 pub use openai::{web_search, OpenAiClient};
+#[cfg(feature = "ai")]
+pub use web_search::deepseek_search;
 #[cfg(feature = "ai")]
 pub(crate) use openai::{web_search_builtin, web_search_builtin_anthropic, RequestExtras};
 

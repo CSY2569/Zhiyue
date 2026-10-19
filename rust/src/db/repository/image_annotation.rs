@@ -44,11 +44,7 @@ pub fn list(conn: &Connection, book_id: i64) -> AppResult<Vec<ImageAnnotation>> 
          WHERE book_id = ?1 ORDER BY page, created_at, id"
     ))?;
     let rows = stmt.query_map(params![book_id], row_to_annotation)?;
-    let mut anns = Vec::new();
-    for row in rows {
-        anns.push(row?);
-    }
-    Ok(anns)
+    rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
 }
 
 /// Insert a new image-layer mark; returns the new row id.

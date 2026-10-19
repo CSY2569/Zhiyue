@@ -1,39 +1,16 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:rbwa/data/repositories/reader_repository.dart';
+import 'helpers/fake_reader_repo.dart';
 import 'helpers/widget_harness.dart';
 import 'package:rbwa/features/reader/widgets/sidebars/thumbnail_rail.dart';
-import 'package:rbwa/src/rust/api.dart' as rust;
-
-/// Counts renderThumbnail calls so the cache behavior is observable.
-class _FakeRepo extends ReaderRepository {
-  int renderCount = 0;
-
-  @override
-  Future<rust.PageRenderResult> renderThumbnail(
-    int bookId,
-    int page,
-    int maxSize,
-  ) async {
-    renderCount++;
-    const w = 100, h = 141;
-    return rust.PageRenderResult(
-      width: w,
-      height: h,
-      rgba: Uint8List(w * h * 4),
-      error: null,
-    );
-  }
-}
 
 Widget _rail() => ProviderScope(
       overrides: [
         defaultViewer(),
-        readerRepositoryProvider.overrideWithValue(_FakeRepo()),
+        readerRepositoryProvider.overrideWithValue(FakeReaderRepository()),
       ],
       child: const MaterialApp(
         home: Scaffold(
@@ -62,8 +39,8 @@ void main() {
 
       final repo = (ProviderScope.containerOf(
         tester.element(find.byType(ThumbnailRail)),
-      ).read(readerRepositoryProvider)) as _FakeRepo;
-      expect(repo.renderCount, 3, reason: 'all 3 pages rendered once');
+      ).read(readerRepositoryProvider)) as FakeReaderRepository;
+      expect(repo.thumbnailCalls, 3, reason: 'all 3 pages rendered once');
       expect(find.byType(RawImage), findsNWidgets(3));
       expect(tester.takeException(), isNull);
 
@@ -76,7 +53,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 200));
       await tester.pump();
 
-      expect(repo.renderCount, 3, reason: 'cache hit: no re-render');
+      expect(repo.thumbnailCalls, 3, reason: 'cache hit: no re-render');
       expect(find.byType(RawImage), findsNWidgets(3));
       expect(tester.takeException(), isNull);
     });

@@ -13,4 +13,5 @@ pub mod image_annotation;
 pub mod ocr;
 pub mod progress;
 pub mod search;
+pub mod settings;
 pub mod translate;

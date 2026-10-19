@@ -57,11 +57,7 @@ pub fn list_glossary(conn: &Connection) -> AppResult<Vec<GlossaryEntry>> {
             target_lang: row.get(4)?,
         })
     })?;
-    let mut out = Vec::new();
-    for row in rows {
-        out.push(row?);
-    }
-    Ok(out)
+    rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
 }
 
 pub fn add_glossary_entry(

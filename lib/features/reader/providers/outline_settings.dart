@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/core/settings/settings_store.dart';
 import 'package:rbwa/data/repositories/settings_repository.dart';
 
 /// Whether the reader's outline (table of contents) sidebar starts with every
@@ -20,23 +21,21 @@ class OutlineExpandAll extends Notifier<bool> {
   }
 
   Future<void> _hydrate() async {
-    try {
-      final raw = await ref.read(settingsRepositoryProvider).getSetting(_key);
-      if (raw != null) state = raw == 'true';
-    } catch (_) {
-      // Core not ready yet (e.g. during tests); keep the default.
-    }
+    final value = await loadSetting(
+      ref.read(settingsRepositoryProvider),
+      _key,
+      (raw) => raw == 'true',
+    );
+    if (value != null) state = value;
   }
 
   Future<void> set(bool value) async {
     state = value;
-    try {
-      await ref
-          .read(settingsRepositoryProvider)
-          .setSetting(_key, value ? 'true' : 'false');
-    } catch (_) {
-      // Persistence failure is non-fatal; the in-memory value still applies.
-    }
+    await persistSetting(
+      ref.read(settingsRepositoryProvider),
+      _key,
+      value ? 'true' : 'false',
+    );
   }
 }
 

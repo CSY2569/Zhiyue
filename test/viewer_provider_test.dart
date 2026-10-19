@@ -6,30 +6,15 @@ import 'package:rbwa/data/repositories/reader_repository.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
 import 'package:rbwa/src/rust/api.dart' as rust;
 import 'package:rbwa/src/rust/models/book.dart';
-import 'package:rbwa/src/rust/models/progress.dart';
 
-/// Fake library: returns the canned book for [getBook].
-class _FakeLibraryRepo extends LibraryRepository {
-  _FakeLibraryRepo(this.book);
-  final Book book;
-
-  @override
-  Future<Book?> getBook(int id) async => book;
-}
+import 'helpers/fake_library_repo.dart';
+import 'helpers/fake_reader_repo.dart';
 
 /// Fake reader repository: records openBook calls, returns a 1-page doc.
-class _FakeReaderRepo extends ReaderRepository {
-  final opened = <String>[];
-
-  @override
-  Future<rust.OpenBookResult> openBook(String storedPath) async {
-    opened.add(storedPath);
-    return rust.OpenBookResult(pageCount: 1, hasOutline: false, error: null);
-  }
-
-  @override
-  Future<ReadingProgress?> getProgress(int bookId) async => null;
-}
+FakeReaderRepository _reader() => FakeReaderRepository(
+      openBookResult:
+          const rust.OpenBookResult(pageCount: 1, hasOutline: false, error: null),
+    );
 
 Book _book(BookType type) => Book(
       id: 1,
@@ -49,11 +34,11 @@ void main() {
   test('opening an image book calls Rust open_book (regression: it used to '
       'skip it, leaving the previous PDF open and rendering its page 1)',
       () async {
-    final reader = _FakeReaderRepo();
+    final reader = _reader();
     final container = ProviderContainer(overrides: [
       readerRepositoryProvider.overrideWithValue(reader),
       libraryRepositoryProvider
-          .overrideWithValue(_FakeLibraryRepo(_book(BookType.image))),
+          .overrideWithValue(FakeLibraryRepository(book: _book(BookType.image))),
     ]);
     addTearDown(container.dispose);
 
@@ -70,11 +55,11 @@ void main() {
   });
 
   test('opening a PDF book calls Rust open_book too', () async {
-    final reader = _FakeReaderRepo();
+    final reader = _reader();
     final container = ProviderContainer(overrides: [
       readerRepositoryProvider.overrideWithValue(reader),
       libraryRepositoryProvider
-          .overrideWithValue(_FakeLibraryRepo(_book(BookType.pdf))),
+          .overrideWithValue(FakeLibraryRepository(book: _book(BookType.pdf))),
     ]);
     addTearDown(container.dispose);
 

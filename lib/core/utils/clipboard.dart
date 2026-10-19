@@ -15,10 +15,3 @@ Future<void> copyTextWithSnack(
     messenger.showSnackBar(const SnackBar(content: Text('复制失败')));
   }
 }
-
-/// Whether [event] is Enter without Shift: sends the message. Shift+Enter
-/// falls through to the field's default newline behavior (FEATURES 8.9).
-bool isEnterWithoutShift(KeyEvent event) =>
-    event is KeyDownEvent &&
-    event.logicalKey == LogicalKeyboardKey.enter &&
-    !HardwareKeyboard.instance.isShiftPressed;

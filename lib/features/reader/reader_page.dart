@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:rbwa/core/widgets/empty_state.dart';
+import 'package:rbwa/core/widgets/loading_state.dart';
 import 'package:rbwa/core/widgets/panel_resize_handle.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
 import 'package:rbwa/features/ai/widgets/ai_panel_side.dart';
@@ -226,24 +228,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final book = state.book;
 
     if (state.loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(body: LoadingState());
     }
 
     if (state.error != null) {
       return Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(LucideIcons.circleAlert, size: 48),
-              const SizedBox(height: 12),
-              Text(state.error!, style: Theme.of(context).textTheme.bodyLarge),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: () => context.go('/library'),
-                child: const Text('返回书库'),
-              ),
-            ],
+        body: EmptyState(
+          icon: LucideIcons.circleAlert,
+          iconSize: 48,
+          message: state.error!,
+          action: FilledButton(
+            onPressed: () => context.go('/library'),
+            child: const Text('返回书库'),
           ),
         ),
       );

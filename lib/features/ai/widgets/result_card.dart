@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
+import 'package:rbwa/core/utils/clipboard.dart';
 import 'package:rbwa/core/widgets/toolbar_icon_button.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
-import 'package:rbwa/features/ai/widgets/ai_utils.dart';
+import 'package:rbwa/features/ai/widgets/ai_composer_field.dart';
 import 'package:rbwa/features/ai/widgets/message_bubble.dart'
     show AiMessageBubble, aiActionLabel;
 import 'package:rbwa/features/reader/providers/panel_layout.dart';
@@ -235,7 +236,7 @@ class ResultCard extends ConsumerWidget {
 
 /// Conversation input on the card: multi-turn follow-up (FEATURES 6.5.2).
 /// Enter sends / Shift+Enter adds a newline (8.9); disabled while streaming.
-class _CardInput extends ConsumerStatefulWidget {
+class _CardInput extends ConsumerWidget {
   const _CardInput({required this.streaming, this.bookId, this.bookTitle});
 
   final bool streaming;
@@ -243,59 +244,19 @@ class _CardInput extends ConsumerStatefulWidget {
   final String? bookTitle;
 
   @override
-  ConsumerState<_CardInput> createState() => _CardInputState();
-}
-
-class _CardInputState extends ConsumerState<_CardInput> {
-  final _input = TextEditingController();
-
-  @override
-  void dispose() {
-    _input.dispose();
-    super.dispose();
-  }
-
-  void _send() {
-    final text = _input.text.trim();
-    if (text.isEmpty || widget.streaming) return;
-    _input.clear();
-    // Routes to the active thread, or starts a new chat thread (6.5.1).
-    ref
-        .read(aiProvider.notifier)
-        .sendInput(text, bookId: widget.bookId, bookTitle: widget.bookTitle);
-  }
-
-  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
-    if (isEnterWithoutShift(event)) {
-      _send();
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 0, 8, 0),
-      child: Focus(
-        onKeyEvent: _onKey,
-        child: TextField(
-          controller: _input,
-          minLines: 1,
-          maxLines: 3,
-          enabled: !widget.streaming,
-          decoration: InputDecoration(
-            hintText: '输入追问…（Enter 发送）',
-            isDense: true,
-            border: const OutlineInputBorder(),
-            suffixIcon: IconButton(
-              icon: const Icon(LucideIcons.send, size: 20),
-              tooltip: '发送',
-              visualDensity: VisualDensity.compact,
-              onPressed: widget.streaming ? null : _send,
+      child: AiComposerField(
+        hint: '输入追问…（Enter 发送）',
+        enabled: !streaming,
+        maxLines: 3,
+        showSendButton: true,
+        onSend: (text) => ref.read(aiProvider.notifier).sendInput(
+              text,
+              bookId: bookId,
+              bookTitle: bookTitle,
             ),
-          ),
-        ),
       ),
     );
   }

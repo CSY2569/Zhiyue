@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:rbwa/core/theme/theme_controller.dart';
 import 'package:rbwa/core/widgets/confirm_dialog.dart';
 import 'package:rbwa/core/widgets/empty_state.dart';
+import 'package:rbwa/core/widgets/loading_state.dart';
 import 'package:rbwa/features/library/providers/library_providers.dart';
 import 'package:rbwa/features/library/widgets/book_grid.dart';
 import 'package:rbwa/features/library/widgets/category_assign_dialog.dart';
@@ -121,8 +122,12 @@ class _Body extends ConsumerWidget {
     });
 
     return booksAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('加载书库失败：$e')),
+      loading: () => const LoadingState(),
+      error: (e, _) => EmptyState(
+        icon: LucideIcons.circleAlert,
+        title: '加载书库失败',
+        message: '$e',
+      ),
       data: (books) {
         if (books.isEmpty) {
           return const _EmptyLibraryGuide();

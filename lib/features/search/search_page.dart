@@ -1,11 +1,11 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:rbwa/core/widgets/empty_state.dart';
+import 'package:rbwa/core/widgets/loading_state.dart';
+import 'package:rbwa/core/widgets/search_field.dart';
 import 'package:rbwa/data/repositories/search_repository.dart';
 import 'package:rbwa/features/library/providers/library_providers.dart';
 import 'package:rbwa/features/search/providers/search_providers.dart';
@@ -23,31 +23,18 @@ class SearchPage extends ConsumerStatefulWidget {
 }
 
 class _SearchPageState extends ConsumerState<SearchPage> {
-  final _controller = TextEditingController();
-  final _focus = FocusNode();
-  Timer? _debounce;
-
   /// null = no search performed yet; otherwise the last result.
   List<SearchHit>? _hits;
   String? _error;
   bool _loading = false;
 
-  @override
-  void dispose() {
-    _debounce?.cancel();
-    _controller.dispose();
-    _focus.dispose();
-    super.dispose();
-  }
-
-  void _onChanged(String value) {
-    _debounce?.cancel();
-    // Same 300ms debounce as the title search (FEATURES 2.7).
-    _debounce = Timer(const Duration(milliseconds: 300), () => _run(value));
-  }
+  /// The debounced query that produced [_hits] (used by the empty state and
+  /// the result rows so they never read a controller mid-animation).
+  String _query = '';
 
   Future<void> _run(String raw) async {
     final query = raw.trim();
+    _query = query;
     if (query.isEmpty) {
       setState(() {
         _hits = null;
@@ -97,28 +84,10 @@ class _SearchPageState extends ConsumerState<SearchPage> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: TextField(
-                controller: _controller,
-                focusNode: _focus,
+              child: DebouncedSearchField(
+                hint: '搜索全文…（文字版 PDF 与已扫描页面）',
                 autofocus: true,
-                onChanged: _onChanged,
-                decoration: InputDecoration(
-                  hintText: '搜索全文…（文字版 PDF 与已扫描页面）',
-                  prefixIcon: const Icon(LucideIcons.search, size: 20),
-                  isDense: true,
-                  border: const OutlineInputBorder(),
-                  suffixIcon: _controller.text.isEmpty
-                      ? null
-                      : IconButton(
-                          icon: const Icon(LucideIcons.x, size: 20),
-                          tooltip: '清空',
-                          visualDensity: VisualDensity.compact,
-                          onPressed: () {
-                            _controller.clear();
-                            _onChanged('');
-                          },
-                        ),
-                ),
+                onChanged: _run,
               ),
             ),
             Expanded(child: _buildBody()),
@@ -130,7 +99,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
   Widget _buildBody() {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const LoadingState();
     }
     if (_error != null) {
       return EmptyState(
@@ -152,13 +121,13 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         icon: LucideIcons.searchX,
         title: '没有找到结果',
         message:
-            '没有内容包含「${_controller.text.trim()}」\n'
+            '没有内容包含「$_query」\n'
             '未扫描的扫描版页面与图片书不参与搜索',
       );
     }
     return _ResultsList(
       hits: hits,
-      query: _controller.text.trim(),
+      query: _query,
       onOpen: _openHit,
     );
   }

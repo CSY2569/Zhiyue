@@ -25,11 +25,7 @@ pub fn list(conn: &Connection) -> AppResult<Vec<Category>> {
     let mut stmt =
         conn.prepare(&format!("SELECT {SELECT_COLS} FROM categories ORDER BY sort_order, created_at"))?;
     let rows = stmt.query_map([], row_to_category)?;
-    let mut cats = Vec::new();
-    for row in rows {
-        cats.push(row?);
-    }
-    Ok(cats)
+    rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
 }
 
 /// Create a new category. The `sort_order` is set to one past the current max

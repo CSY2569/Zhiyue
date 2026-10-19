@@ -27,13 +27,23 @@ use crate::error::{AppError, AppResult};
 use crate::models::ai::{AiConfig, AiMessage, AiRole};
 
 /// Default endpoint when the config's base URL is empty (OpenAI official).
-const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
+pub(crate) const DEFAULT_OPENAI_BASE_URL: &str = "https://api.openai.com/v1";
+
+/// Root default for APIs that live outside `/v1` (Responses).
+const DEFAULT_OPENAI_ROOT: &str = "https://api.openai.com";
+
+/// DeepSeek official base: hosted search (Anthropic protocol) and the Tools
+/// API both live here.
+pub(crate) const DEFAULT_DEEPSEEK_BASE_URL: &str = "https://api.deepseek.com";
 
 /// Bocha web search endpoint (FEATURES 6.2.3, real search integration).
 const BOCHA_ENDPOINT: &str = "https://api.bochaai.com/v1/web-search";
 
-/// How long a web search call may take before the chat falls back.
-const WEB_SEARCH_TIMEOUT: Duration = Duration::from_secs(20);
+/// Shared error message for an empty result set (Bocha / DeepSeek).
+pub(crate) const NO_SEARCH_RESULTS: &str = "web search returned no results";
+
+/// How long a web search / fetch call may take before the chat falls back.
+pub(crate) const SEARCH_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// OpenAI-compatible client backed by reqwest (M4).
 pub struct OpenAiClient;
@@ -58,13 +68,66 @@ impl OpenAiClient {
     /// Effective endpoint (non-empty config base URL wins, trimmed of a
     /// trailing slash so the `/chat/completions` suffix joins cleanly).
     fn endpoint(base_url: &str) -> String {
-        format!("{}/chat/completions", trimmed_or(base_url, DEFAULT_BASE_URL))
+        join_api_path(base_url, DEFAULT_OPENAI_BASE_URL, "/chat/completions", false)
     }
+}
+
+/// Join a base URL with an API path. Empty input falls back to [default_base];
+/// a trailing slash is trimmed; with [strip_v1] a chat-style `/v1` suffix is
+/// removed first (some providers include it, some APIs live outside it).
+pub(crate) fn join_api_path(
+    base_url: &str,
+    default_base: &'static str,
+    path: &str,
+    strip_v1: bool,
+) -> String {
+    let base = trimmed_or(base_url, default_base);
+    let base = if strip_v1 {
+        base.strip_suffix("/v1").unwrap_or(base)
+    } else {
+        base
+    };
+    format!("{base}{path}")
+}
+
+/// Auth header style for provider calls.
+pub(crate) enum Auth<'a> {
+    /// `Authorization: Bearer` (OpenAI / DeepSeek chat & tools).
+    Bearer(&'a str),
+    /// `x-api-key` + `anthropic-version` (Anthropic Messages protocol).
+    Anthropic(&'a str),
+}
+
+/// POST a JSON body, apply auth and an optional timeout, and turn a non-2xx
+/// response into the provider's error body. Every provider call goes through
+/// here so the status check cannot be forgotten.
+pub(crate) async fn post_json(
+    http: &reqwest::Client,
+    url: &str,
+    auth: Auth<'_>,
+    body: &Value,
+    timeout: Option<Duration>,
+) -> AppResult<reqwest::Response> {
+    let mut request = http.post(url).json(body);
+    request = match auth {
+        Auth::Bearer(key) => request.bearer_auth(key),
+        Auth::Anthropic(key) => request
+            .header("x-api-key", key)
+            .header("anthropic-version", "2023-06-01"),
+    };
+    if let Some(timeout) = timeout {
+        request = request.timeout(timeout);
+    }
+    let resp = request.send().await?;
+    if !resp.status().is_success() {
+        return Err(http_error(resp).await);
+    }
+    Ok(resp)
 }
 
 /// Trim whitespace; empty input falls back to [default]; a trailing slash
 /// is stripped so path suffixes join cleanly.
-fn trimmed_or<'a>(base: &'a str, default: &'static str) -> &'a str {
+pub(crate) fn trimmed_or<'a>(base: &'a str, default: &'static str) -> &'a str {
     let base = base.trim();
     if base.is_empty() {
         default
@@ -75,7 +138,7 @@ fn trimmed_or<'a>(base: &'a str, default: &'static str) -> &'a str {
 
 /// Surface a non-2xx provider response: status + the error body, bounded
 /// (provider bodies can be long -- 600 chars keep the message readable).
-async fn http_error(resp: reqwest::Response) -> AppError {
+pub(crate) async fn http_error(resp: reqwest::Response) -> AppError {
     let status = resp.status();
     let body = resp.text().await.unwrap_or_default();
     let trimmed: String = body.chars().take(600).collect();
@@ -169,15 +232,14 @@ async fn stream_request(
     messages: Value,
     extras: &RequestExtras,
 ) -> AppResult<ChunkStream> {
-    let resp = http
-        .post(&url)
-        .bearer_auth(api_key)
-        .json(&build_request(model, messages, extras))
-        .send()
-        .await?;
-    if !resp.status().is_success() {
-        return Err(http_error(resp).await);
-    }
+    let resp = post_json(
+        http,
+        &url,
+        Auth::Bearer(api_key),
+        &build_request(model, messages, extras),
+        None,
+    )
+    .await?;
     Ok(Box::pin(parse_sse(resp.bytes_stream())))
 }
 
@@ -289,9 +351,7 @@ fn search_endpoint(base_url: &str) -> String {
 /// URL is used as-is minus a trailing slash / `/v1` suffix (a chat-completions
 /// convention some providers use), then `/responses` is appended.
 fn responses_endpoint(base_url: &str) -> String {
-    let base = trimmed_or(base_url, "https://api.openai.com");
-    let base = base.strip_suffix("/v1").unwrap_or(base);
-    format!("{base}/responses")
+    join_api_path(base_url, DEFAULT_OPENAI_ROOT, "/responses", true)
 }
 
 /// Responses API body: the first system message becomes `instructions` (the
@@ -351,15 +411,7 @@ async fn responses_stream_request(
     api_key: &str,
     body: Value,
 ) -> AppResult<ChunkStream> {
-    let resp = http
-        .post(&url)
-        .bearer_auth(api_key)
-        .json(&body)
-        .send()
-        .await?;
-    if !resp.status().is_success() {
-        return Err(http_error(resp).await);
-    }
+    let resp = post_json(http, &url, Auth::Bearer(api_key), &body, None).await?;
     Ok(Box::pin(parse_responses_sse(resp.bytes_stream())))
 }
 
@@ -428,9 +480,12 @@ const ANTHROPIC_MAX_TOKENS: i64 = 8192;
 /// API lives at `{base}/anthropic/v1/messages`. The `/v1` suffix is stripped
 /// like [responses_endpoint] so chat-style base URLs join cleanly.
 fn anthropic_endpoint(base_url: &str) -> String {
-    let base = trimmed_or(base_url, "https://api.deepseek.com");
-    let base = base.strip_suffix("/v1").unwrap_or(base);
-    format!("{base}/anthropic/v1/messages")
+    join_api_path(
+        base_url,
+        DEFAULT_DEEPSEEK_BASE_URL,
+        "/anthropic/v1/messages",
+        true,
+    )
 }
 
 /// Anthropic Messages body for built-in search: system prompts merge into
@@ -518,16 +573,7 @@ pub(crate) async fn web_search_builtin_anthropic(
     let http = OpenAiClient::http_client()?;
     let url = anthropic_endpoint(base_url);
     let body = anthropic_search_body(model, history, query);
-    let resp = http
-        .post(&url)
-        .header("x-api-key", api_key)
-        .header("anthropic-version", "2023-06-01")
-        .json(&body)
-        .send()
-        .await?;
-    if !resp.status().is_success() {
-        return Err(http_error(resp).await);
-    }
+    let resp = post_json(http, &url, Auth::Anthropic(api_key), &body, None).await?;
     Ok(Box::pin(sse_stream(resp.bytes_stream(), parse_anthropic_event)))
 }
 
@@ -561,28 +607,26 @@ async fn web_search_at(
     api_key: &str,
     query: &str,
 ) -> AppResult<String> {
-    let resp = http
-        .post(&endpoint)
-        .bearer_auth(api_key)
-        .json(&json!({
+    let resp = post_json(
+        http,
+        &endpoint,
+        Auth::Bearer(api_key),
+        &json!({
             "query": query,
             "freshness": "noLimit",
             "summary": true,
             "count": 8,
-        }))
-        .timeout(WEB_SEARCH_TIMEOUT)
-        .send()
-        .await?;
-    if !resp.status().is_success() {
-        return Err(http_error(resp).await);
-    }
+        }),
+        Some(SEARCH_TIMEOUT),
+    )
+    .await?;
     let value: Value = resp.json().await?;
     let pages = value["data"]["webPages"]["value"]
         .as_array()
         .cloned()
         .unwrap_or_default();
     if pages.is_empty() {
-        return Err(AppError::Ai("web search returned no results".into()));
+        return Err(AppError::Ai(NO_SEARCH_RESULTS.into()));
     }
     let mut out = String::new();
     for (i, page) in pages.iter().enumerate() {

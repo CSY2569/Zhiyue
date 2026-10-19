@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
+import 'package:rbwa/core/widgets/empty_state.dart';
+import 'package:rbwa/core/widgets/loading_state.dart';
 import 'package:rbwa/data/repositories/reader_repository.dart';
 import 'package:rbwa/features/reader/providers/outline_settings.dart';
 import 'package:rbwa/features/reader/providers/panel_layout.dart';
@@ -70,34 +72,20 @@ class _OutlineTreeState extends ConsumerState<OutlineTree> {
 
   Widget _buildBody(ThemeData theme) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const LoadingState();
     }
     if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text('加载目录失败: $_error', style: theme.textTheme.bodySmall),
-        ),
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text('加载目录失败: $_error', style: theme.textTheme.bodySmall),
       );
     }
     final entries = _entries ?? [];
     if (entries.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                LucideIcons.network,
-                size: 40,
-                color: theme.colorScheme.outline,
-              ),
-              const SizedBox(height: 8),
-              Text('无目录大纲', style: theme.textTheme.bodySmall),
-            ],
-          ),
-        ),
+      return const EmptyState(
+        icon: LucideIcons.network,
+        title: '无目录大纲',
+        iconSize: 40,
       );
     }
     // 设置 → 阅读器: whether every level starts expanded. Toggling it re-keys

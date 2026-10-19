@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/core/widgets/loading_state.dart';
 import 'package:rbwa/features/reader/providers/panel_layout.dart';
 import 'package:rbwa/features/reader/providers/thumbnail_cache.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
@@ -124,16 +125,7 @@ class _ThumbnailTileState extends ConsumerState<_ThumbnailTile> {
             SizedBox(
               height: 120,
               child: image == null
-                  ? Center(
-                      child: SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: theme.colorScheme.outline,
-                        ),
-                      ),
-                    )
+                  ? const Center(child: InlineSpinner(size: 16))
                   : RawImage(image: image, fit: BoxFit.contain),
             ),
             const SizedBox(height: 4),

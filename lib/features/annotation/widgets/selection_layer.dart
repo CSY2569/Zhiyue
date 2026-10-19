@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/core/widgets/text_input_dialog.dart';
 import 'package:rbwa/data/repositories/reader_repository.dart';
 import 'package:rbwa/features/ai/providers/ai_config_provider.dart';
 import 'package:rbwa/features/annotation/models/selection.dart';
@@ -309,28 +310,13 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
   /// Edit dialog for one OCR line (7.1.7): correct the text, persist via the
   /// Rust core (re-indexes for search), refresh the text layer + scan count.
   Future<void> _editOcrLine(int index, OcrLine line) async {
-    final controller = TextEditingController(text: line.text);
-    final newText = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('修正识别文本'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLines: 3,
-          decoration: const InputDecoration(hintText: '输入修正后的文字'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(controller.text),
-            child: const Text('保存'),
-          ),
-        ],
-      ),
+    final newText = await showTextInputDialog(
+      context,
+      title: '修正识别文本',
+      initial: line.text,
+      hint: '输入修正后的文字',
+      confirmLabel: '保存',
+      maxLines: 3,
     );
     if (newText == null || newText.trim().isEmpty || newText == line.text) {
       return;

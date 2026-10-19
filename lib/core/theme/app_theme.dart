@@ -14,21 +14,12 @@ class AppTheme {
 
   static const _seed = Color(0xFF2E6F6A);
 
-  static ThemeData light() {
-    final scheme = ColorScheme.fromSeed(
-      seedColor: _seed,
-      brightness: Brightness.light,
-    );
-    return _base(scheme).copyWith(extensions: const [ReadingPalette.paper]);
-  }
+  /// Stock light / dark themes. The reading palettes already encode the
+  /// app's paper / night colors, so these delegate to [forReadingTheme]
+  /// instead of building a second scheme by hand.
+  static ThemeData light() => forReadingTheme(ReadingTheme.paper);
 
-  static ThemeData dark() {
-    final scheme = ColorScheme.fromSeed(
-      seedColor: _seed,
-      brightness: Brightness.dark,
-    );
-    return _base(scheme).copyWith(extensions: const [ReadingPalette.night]);
-  }
+  static ThemeData dark() => forReadingTheme(ReadingTheme.night);
 
   /// Theme for the reader route under [theme] (FEATURES 8.11): scaffold
   /// background becomes the palette canvas, cards / placeholders take the

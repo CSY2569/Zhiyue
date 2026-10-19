@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
 import 'package:rbwa/core/widgets/empty_state.dart';
+import 'package:rbwa/core/widgets/loading_state.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
-import 'package:rbwa/features/ai/widgets/ai_utils.dart';
+import 'package:rbwa/features/ai/widgets/ai_composer_field.dart';
+import 'package:rbwa/features/ai/widgets/ai_thread_tile.dart';
 import 'package:rbwa/features/ai/widgets/message_bubble.dart'
-    show AiMessageBubble, aiActionIcon;
+    show AiMessageBubble;
 import 'package:rbwa/features/reader/providers/panel_layout.dart';
 import 'package:rbwa/src/rust/models/ai.dart';
 
@@ -28,32 +30,11 @@ class AiPanelSide extends ConsumerStatefulWidget {
 }
 
 class _AiPanelSideState extends ConsumerState<AiPanelSide> {
-  final _input = TextEditingController();
-
-  @override
-  void dispose() {
-    _input.dispose();
-    super.dispose();
-  }
-
-  void _send() {
-    final text = _input.text.trim();
-    if (text.isEmpty) return;
-    _input.clear();
+  void _send(String text) {
     // Routes to the active thread, or starts a new chat thread (6.5.1).
     ref
         .read(aiProvider.notifier)
         .sendInput(text, bookId: widget.bookId, bookTitle: widget.bookTitle);
-  }
-
-  /// Enter sends (when not shift); Shift+Enter falls through to the default
-  /// newline behavior of the multiline field (FEATURES 8.9).
-  KeyEventResult _onInputKey(FocusNode node, KeyEvent event) {
-    if (isEnterWithoutShift(event)) {
-      _send();
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
   }
 
   @override
@@ -130,19 +111,10 @@ class _AiPanelSideState extends ConsumerState<AiPanelSide> {
             // Input bar
             Padding(
               padding: const EdgeInsets.all(8),
-              child: Focus(
-                onKeyEvent: _onInputKey,
-                child: TextField(
-                  controller: _input,
-                  minLines: 1,
-                  maxLines: 4,
-                  enabled: inputEnabled,
-                  decoration: InputDecoration(
-                    hintText: '向 AI 提问…（Enter 发送）',
-                    isDense: true,
-                    border: const OutlineInputBorder(),
-                  ),
-                ),
+              child: AiComposerField(
+                hint: '向 AI 提问…（Enter 发送）',
+                enabled: inputEnabled,
+                onSend: _send,
               ),
             ),
           ],
@@ -170,13 +142,8 @@ class _AiPanelSideState extends ConsumerState<AiPanelSide> {
           icon: LucideIcons.sparkles,
           title: 'AI 助手',
           message: '选择文字翻译 / 解释 / 搜索，\n或直接在下方向 AI 提问',
-          action: OutlinedButton.icon(
+          action: AiHistoryButton(
             onPressed: () => ref.read(aiProvider.notifier).showWindowList(),
-            icon: const Icon(LucideIcons.history, size: 16),
-            label: const Text('查看历史对话'),
-            style: OutlinedButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-            ),
           ),
         );
       }
@@ -208,34 +175,15 @@ class _ThreadList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 4),
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-          child: Text(
-            '对话窗口',
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: theme.colorScheme.primary,
-            ),
-          ),
-        ),
+        const AiThreadListHeader(),
         for (final t in threads)
-          ListTile(
-            dense: true,
-            leading: Icon(aiActionIcon(t.action), size: 20),
-            title: Text(t.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-            subtitle: Text(
-              '${t.messages.length} 条消息',
-              style: theme.textTheme.bodySmall,
-            ),
+          AiThreadTile(
+            thread: t,
             trailing: t.id == streamingThreadId
-                ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                ? const InlineSpinner(size: 16)
                 : null,
             onTap: () => onOpen(t.id),
           ),

@@ -20,7 +20,7 @@ class TranslatedCharBoxCache extends Notifier<Map<int, List<CharBox>>> {
   Map<int, List<CharBox>> build() {
     // The revision identity (book id + artifact revision) is the cache's
     // lifetime: any change rebuilds the notifier with an empty map.
-    ref.watch(translationRevisionStateProvider);
+    ref.watch(translationRevisionProvider);
     return {};
   }
 
@@ -50,9 +50,3 @@ class TranslatedCharBoxCache extends Notifier<Map<int, List<CharBox>>> {
 final translatedCharBoxCacheProvider =
     NotifierProvider<TranslatedCharBoxCache, Map<int, List<CharBox>>>(
         TranslatedCharBoxCache.new);
-
-/// A small provider whose value changes whenever the artifact revision does,
-/// so [TranslatedCharBoxCache.build] can watch it as its invalidation key.
-final translationRevisionStateProvider = Provider<int>((ref) {
-  return ref.watch(translationRevisionProvider);
-});

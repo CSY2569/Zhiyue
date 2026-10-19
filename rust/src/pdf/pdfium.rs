@@ -156,6 +156,48 @@ where
     f(doc)
 }
 
+/// Convert a rendered pdfium bitmap into the FFI-friendly struct.
+fn page_bitmap(bitmap: PdfBitmap<'_>) -> PageBitmap {
+    PageBitmap {
+        width: bitmap.width() as u32,
+        height: bitmap.height() as u32,
+        rgba: bitmap.as_rgba_bytes(),
+    }
+}
+
+/// Per-character normalized boxes for one page. Shared by the open-document
+/// and arbitrary-file paths so the coordinate transform (top-left origin,
+/// [0,1], y flipped from PDF's bottom-left origin) has one implementation.
+fn char_boxes(pg: &PdfPage<'_>, page_w: f32, page_h: f32) -> AppResult<Vec<CharBox>> {
+    let text = pg.text()?;
+    let mut out = Vec::new();
+    for char in text.chars().iter() {
+        let ch = char.unicode_string().unwrap_or_default();
+        if ch.is_empty() {
+            continue;
+        }
+        // tight_bounds -> PdfRect -> to_quad_points gives us left/bottom/
+        // width/height accessors (PdfRect's own corners are private).
+        if let Ok(rect) = char.tight_bounds() {
+            let quad = rect.to_quad_points();
+            let w = (quad.width().value / page_w).max(0.0);
+            let h = (quad.height().value / page_h).max(0.0);
+            out.push(CharBox {
+                char: ch,
+                x: (quad.left().value / page_w).max(0.0),
+                // PDF's origin is bottom-left; Flutter's is top-left, so
+                // flip y here. Selection/highlight layers then use the
+                // boxes as-is (M3, FEATURES 4.1.2 / 4.3.4).
+                y: (1.0 - (quad.bottom().value + quad.height().value) / page_h)
+                    .clamp(0.0, 1.0),
+                w,
+                h,
+            });
+        }
+    }
+    Ok(out)
+}
+
 /// Renders `page` (0-indexed) at the given zoom factor (1.0 = 100%) to RGBA.
 /// `dpi_scale` multiplies the pixel dimensions for high-DPI output.
 pub fn render_page(page: i64, zoom: f32, dpi_scale: f32) -> AppResult<PageBitmap> {
@@ -176,11 +218,7 @@ pub fn render_page(page: i64, zoom: f32, dpi_scale: f32) -> AppResult<PageBitmap
 
         let bitmap = pg.render_with_config(&config)?;
 
-        Ok(PageBitmap {
-            width: bitmap.width() as u32,
-            height: bitmap.height() as u32,
-            rgba: bitmap.as_rgba_bytes(),
-        })
+        Ok(page_bitmap(bitmap))
     })
 }
 
@@ -194,11 +232,7 @@ pub fn thumbnail(page: i64, max_size: u32) -> AppResult<PageBitmap> {
 
         let bitmap = pg.render_with_config(&config)?;
 
-        Ok(PageBitmap {
-            width: bitmap.width() as u32,
-            height: bitmap.height() as u32,
-            rgba: bitmap.as_rgba_bytes(),
-        })
+        Ok(page_bitmap(bitmap))
     })
 }
 
@@ -211,33 +245,7 @@ pub fn extract_text(page: i64) -> AppResult<Vec<CharBox>> {
 
         let page_w = pg.width().value.max(1.0);
         let page_h = pg.height().value.max(1.0);
-        let text = pg.text()?;
-        let mut out = Vec::new();
-        for char in text.chars().iter() {
-            let ch = char.unicode_string().unwrap_or_default();
-            if ch.is_empty() {
-                continue;
-            }
-            // tight_bounds -> PdfRect -> to_quad_points gives us left/bottom/
-            // width/height accessors (PdfRect's own corners are private).
-            if let Ok(rect) = char.tight_bounds() {
-                let quad = rect.to_quad_points();
-                let w = (quad.width().value / page_w).max(0.0);
-                let h = (quad.height().value / page_h).max(0.0);
-                out.push(CharBox {
-                    char: ch,
-                    x: (quad.left().value / page_w).max(0.0),
-                    // PDF's origin is bottom-left; Flutter's is top-left, so
-                    // flip y here. Selection/highlight layers then use the
-                    // boxes as-is (M3, FEATURES 4.1.2 / 4.3.4).
-                    y: (1.0 - (quad.bottom().value + quad.height().value) / page_h)
-                        .clamp(0.0, 1.0),
-                    w,
-                    h,
-                });
-            }
-        }
-        Ok(out)
+        char_boxes(&pg, page_w, page_h)
     })
 }
 
@@ -260,11 +268,7 @@ pub fn render_page_file_to_width(
         .set_target_width((page_w * scale).max(1.0) as i32)
         .set_target_height((pg.height().value * scale).max(1.0) as i32);
     let bitmap = pg.render_with_config(&config)?;
-    Ok(PageBitmap {
-        width: bitmap.width() as u32,
-        height: bitmap.height() as u32,
-        rgba: bitmap.as_rgba_bytes(),
-    })
+    Ok(page_bitmap(bitmap))
 }
 
 /// Per-char boxes of one page of an ARBITRARY PDF file (the translated
@@ -276,28 +280,7 @@ pub fn extract_text_file(path: &str, page: i64) -> AppResult<Vec<CharBox>> {
         let pg = doc.pages().get(page as PdfPageIndex)?;
         let page_w = pg.width().value.max(1.0);
         let page_h = pg.height().value.max(1.0);
-        let text = pg.text()?;
-        let mut out = Vec::new();
-        for char in text.chars().iter() {
-            let ch = char.unicode_string().unwrap_or_default();
-            if ch.is_empty() {
-                continue;
-            }
-            if let Ok(rect) = char.tight_bounds() {
-                let quad = rect.to_quad_points();
-                let w = (quad.width().value / page_w).max(0.0);
-                let h = (quad.height().value / page_h).max(0.0);
-                out.push(CharBox {
-                    char: ch,
-                    x: (quad.left().value / page_w).max(0.0),
-                    y: (1.0 - (quad.bottom().value + quad.height().value) / page_h)
-                        .clamp(0.0, 1.0),
-                    w,
-                    h,
-                });
-            }
-        }
-        Ok(out)
+        char_boxes(&pg, page_w, page_h)
     })
 }
 
@@ -376,11 +359,7 @@ pub fn render_thumbnail_file(path: &str, page: i64, max_size: u32) -> AppResult<
     let pg = doc.pages().get(page as PdfPageIndex)?;
     let config = PdfRenderConfig::new().thumbnail(max_size as i32);
     let bitmap = pg.render_with_config(&config)?;
-    Ok(PageBitmap {
-        width: bitmap.width() as u32,
-        height: bitmap.height() as u32,
-        rgba: bitmap.as_rgba_bytes(),
-    })
+    Ok(page_bitmap(bitmap))
 }
 
 /// Renders page [page] (0-indexed) of an arbitrary PDF FILE at [scale]x
@@ -397,11 +376,7 @@ pub fn render_page_file(path: &str, page: i64, scale: f32) -> AppResult<PageBitm
         .set_target_width((pg.width().value * scale).max(1.0) as i32)
         .set_target_height((pg.height().value * scale).max(1.0) as i32);
     let bitmap = pg.render_with_config(&config)?;
-    Ok(PageBitmap {
-        width: bitmap.width() as u32,
-        height: bitmap.height() as u32,
-        rgba: bitmap.as_rgba_bytes(),
-    })
+    Ok(page_bitmap(bitmap))
 }
 
 /// Plain text of every page of [path] via an INDEPENDENT document (M6: the

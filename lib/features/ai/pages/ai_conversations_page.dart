@@ -5,6 +5,7 @@ import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:rbwa/core/widgets/confirm_dialog.dart';
 import 'package:rbwa/core/widgets/empty_state.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
+import 'package:rbwa/features/ai/widgets/ai_thread_tile.dart';
 import 'package:rbwa/features/ai/widgets/message_bubble.dart';
 
 /// 「AI 对话」page (entry: the library toolbar button): every per-book
@@ -52,30 +53,11 @@ class _AiConversationsPageState extends ConsumerState<AiConversationsPage> {
                 : ListView(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                        child: Text(
-                          '对话窗口',
-                          style: Theme.of(context).textTheme.labelMedium
-                              ?.copyWith(
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                        ),
-                      ),
+                      const AiThreadListHeader(),
                       for (final t in threads)
-                        ListTile(
-                          dense: true,
+                        AiThreadTile(
+                          thread: t,
                           selected: t.id == _selectedId,
-                          leading: Icon(aiActionIcon(t.action), size: 20),
-                          title: Text(
-                            t.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Text(
-                            '${t.messages.length} 条消息',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
                           trailing: IconButton(
                             icon: const Icon(LucideIcons.trash2, size: 20),
                             tooltip: '删除对话',
