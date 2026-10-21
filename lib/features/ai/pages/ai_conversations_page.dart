@@ -76,18 +76,24 @@ class _AiConversationsPageState extends ConsumerState<AiConversationsPage> {
       );
     }
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Left: books with conversations.
-        _threadList(threads, compact: false),
-        // Right: the selected book's full conversation.
-        Expanded(
-          child: selected == null
-              ? const _NoSelection()
-              : _conversation(selected),
-        ),
-      ],
+    // The desktop page is not inside a Scaffold, so it must paint its own
+    // surface: without this the right pane (EmptyState has no background of
+    // its own) rendered transparent and the window showed through as black.
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Left: books with conversations.
+          _threadList(threads, compact: false),
+          // Right: the selected book's full conversation.
+          Expanded(
+            child: selected == null
+                ? const _NoSelection()
+                : _conversation(selected),
+          ),
+        ],
+      ),
     );
   }
 

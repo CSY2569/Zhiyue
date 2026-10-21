@@ -10,6 +10,42 @@ import 'package:rbwa/features/search/search_page.dart';
 import 'package:rbwa/features/settings/settings_page.dart';
 import 'package:rbwa/features/shell/app_title_bar.dart';
 
+/// Which top-level destination the shell is currently wrapping.
+///
+/// Derived from the navigation URI, not `GoRouterState.matchedLocation`: the
+/// shell route carries no path of its own, so its `matchedLocation` stays at
+/// the parent prefix ('/') and can never distinguish the child page. That
+/// made the title bar always read 智阅 and hid the back button, leaving
+/// desktop users with no in-app way out of the reader.
+enum ShellDestination { library, reader, aiChat, search, settings }
+
+ShellDestination shellDestinationFor(String location) {
+  if (location.startsWith('/reader')) return ShellDestination.reader;
+  if (location.startsWith('/ai-chat')) return ShellDestination.aiChat;
+  if (location.startsWith('/search')) return ShellDestination.search;
+  if (location.startsWith('/settings')) return ShellDestination.settings;
+  return ShellDestination.library;
+}
+
+/// Title-bar text and back affordance for [location].
+({String title, bool showBack}) titleBarInfoFor(
+  String location, {
+  String? bookTitle,
+}) {
+  final destination = shellDestinationFor(location);
+  final trimmedTitle = bookTitle?.trim();
+  final title = switch (destination) {
+    ShellDestination.reader => (trimmedTitle == null || trimmedTitle.isEmpty)
+        ? '阅读器'
+        : trimmedTitle,
+    ShellDestination.aiChat => 'AI 对话',
+    ShellDestination.search => '全文搜索',
+    ShellDestination.settings => '设置',
+    ShellDestination.library => '智阅',
+  };
+  return (title: title, showBack: destination != ShellDestination.library);
+}
+
 /// Application routes (FEATURES §2/3 + §8.1 navigation).
 ///
 /// A [ShellRoute] hosts the frameless title bar around all top-level
@@ -23,27 +59,20 @@ final appRouter = GoRouter(
   routes: [
     ShellRoute(
       builder: (context, state, child) {
-        final isReader = state.matchedLocation.startsWith('/reader');
-        final isAiChat = state.matchedLocation.startsWith('/ai-chat');
-        final isSearch = state.matchedLocation.startsWith('/search');
+        final location = state.uri.toString();
         return Column(
           children: [
             Consumer(
               builder: (context, ref, _) {
-                final bookTitle = isReader
-                    ? ref.watch(viewerProvider).book?.title
-                    : null;
-                final title = bookTitle ??
-                    (isReader
-                        ? '阅读器'
-                        : isAiChat
-                            ? 'AI 对话'
-                            : isSearch
-                                ? '全文搜索'
-                                : '智阅');
+                final isReader =
+                    shellDestinationFor(location) == ShellDestination.reader;
+                final bookTitle =
+                    isReader ? ref.watch(viewerProvider).book?.title : null;
+                final info =
+                    titleBarInfoFor(location, bookTitle: bookTitle);
                 return AppTitleBar(
-                  title: title,
-                  showBack: isReader || isAiChat || isSearch,
+                  title: info.title,
+                  showBack: info.showBack,
                 );
               },
             ),
