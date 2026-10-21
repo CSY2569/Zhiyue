@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/core/haptics.dart';
+
 import 'package:rbwa/data/repositories/reader_repository.dart';
 import 'package:rbwa/features/ai/providers/ai_config_provider.dart';
 import 'package:rbwa/features/annotation/providers/char_box_cache.dart';
@@ -188,10 +190,12 @@ class ScanNotifier extends Notifier<ScanState> {
       final res = await _repo.scanPage(bookId, page0, mode);
       if (state.bookId != bookId) return; // switched books while scanning
       if (res.error != null) {
+        Haptics.warning();
         _set(page0, PageScanState(phase: ScanPhase.error, error: res.error));
         return;
       }
       ref.invalidate(charBoxCacheProvider);
+      Haptics.success();
       _set(page0, PageScanState(
         phase: res.lines.isEmpty ? ScanPhase.empty : ScanPhase.success,
         // 7.1.6: count lines below the review threshold so the UI can ask
@@ -202,6 +206,7 @@ class ScanNotifier extends Notifier<ScanState> {
       ));
     } catch (e) {
       if (state.bookId != bookId) return; // switched books while scanning
+      Haptics.warning();
       _set(page0, PageScanState(phase: ScanPhase.error, error: e.toString()));
     }
   }

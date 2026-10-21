@@ -64,7 +64,11 @@ static ENGINES: [OnceLock<LoadResult>; 2] = [OnceLock::new(), OnceLock::new()];
 impl RapidOcrEngine {
     /// Slot index per mode ("high_precision" = 0, "fast" = 1).
     fn slot(mode: &str) -> usize {
-        if mode == "fast" { 1 } else { 0 }
+        if mode == "fast" {
+            1
+        } else {
+            0
+        }
     }
 
     /// The four model files for [mode]; shared cls/dict live at the models
@@ -89,7 +93,13 @@ impl RapidOcrEngine {
     /// AppImage and the Flutter bundle carry it beside the binary); dev
     /// builds fall back to `{data_dir}/models/` provisioned by
     /// `scripts/download_ocr_models.sh`.
+    ///
+    /// Android: models are installed by the Kotlin `ModelProvisioner` into
+    /// `{data_dir}/models`, because `current_exe()` is the zygote process and
+    /// assets are not directly loadable by ONNX Runtime. `{data_dir}` is
+    /// pinned by `init_core_with_data_dir`.
     fn model_root() -> Option<PathBuf> {
+        #[cfg(not(target_os = "android"))]
         if let Ok(exe) = std::env::current_exe() {
             if let Some(dir) = exe.parent() {
                 let bundled = dir.join("models");
@@ -109,12 +119,19 @@ impl RapidOcrEngine {
         let cfg = RapidOcrConfig {
             pipeline: PipelineConfig::full(),
             inference: InferenceOptions {
-                intra_threads: 4,
+                intra_threads: Self::intra_threads(),
                 ..InferenceOptions::default()
             },
             text_score: 0.5,
             min_side_len: 30,
-            max_side_len: 2000,
+            // Mobile chips pay for every extra pixel in latency and peak RSS;
+            // 1280 keeps A4 scans accurate while avoiding 2000-px detector
+            // inputs that OOM low-RAM phones.
+            max_side_len: if cfg!(target_os = "android") {
+                1280
+            } else {
+                2000
+            },
             min_height: 30,
             width_height_ratio: -1.0, // no vertical-padding gate for pages
             det: Some(DetConfig {
@@ -133,7 +150,7 @@ impl RapidOcrEngine {
             cls: Some(ClsConfig {
                 model_path: cls_path,
                 image_shape: CLS_SHAPE,
-                batch_size: 6,
+                batch_size: if cfg!(target_os = "android") { 4 } else { 6 },
                 thresh: 0.9,
                 labels: vec!["0".to_string(), "180".to_string()],
             }),
@@ -141,7 +158,7 @@ impl RapidOcrEngine {
                 model_path: rec_path,
                 dict_path,
                 image_shape: REC_SHAPE,
-                batch_size: 6,
+                batch_size: if cfg!(target_os = "android") { 4 } else { 6 },
             }),
         };
         RapidOcr::new(cfg)
@@ -149,17 +166,23 @@ impl RapidOcrEngine {
             .map_err(|e| format!("{e:#}"))
     }
 
+    /// ONNX Runtime worker threads. Phones have heterogeneous big.LITTLE
+    /// cores: using every core lets little cores straggle, so cap at 4 and
+    /// floor at 2.
+    fn intra_threads() -> usize {
+        let cores = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4);
+        cores.clamp(2, if cfg!(target_os = "android") { 4 } else { 8 })
+    }
+
     /// One scan run under the mode's engine lock.
     fn run(image: &PageImage<'_>, mode: &str) -> AppResult<OcrResult> {
         // Pure CPU conversion -- touches no engine state, so do it outside
         // the mode lock: a multi-MB RGBA→RGB conversion must not block scans
         // of the other mode.
-        let rgb = RgbImage::from_raw(
-            image.width,
-            image.height,
-            to_rgb(image.rgba),
-        )
-        .ok_or_else(|| AppError::Ocr("页面图像数据无效".into()))?;
+        let rgb = RgbImage::from_raw(image.width, image.height, to_rgb(image.rgba))
+            .ok_or_else(|| AppError::Ocr("页面图像数据无效".into()))?;
         // 7.1.10: adaptive page-quality enhancement (no-op on clean pages).
         let enhanced = enhance(rgb);
 
@@ -178,18 +201,17 @@ impl RapidOcrEngine {
 
         let w = f64::from(image.width);
         let h = f64::from(image.height);
-        let lines = lines
-            .into_iter()
-            .map(|l| normalize(l, w, h, rot))
-            .collect();
-        Ok(OcrResult { lines, mode: mode.to_string() })
+        let lines = lines.into_iter().map(|l| normalize(l, w, h, rot)).collect();
+        Ok(OcrResult {
+            lines,
+            mode: mode.to_string(),
+        })
     }
 }
 
 impl OcrEngine for RapidOcrEngine {
     fn is_available(&self) -> bool {
-        Self::model_files("high_precision").is_some()
-            || Self::model_files("fast").is_some()
+        Self::model_files("high_precision").is_some() || Self::model_files("fast").is_some()
     }
 
     fn scan(&self, image: &PageImage<'_>, mode: &str) -> AppResult<OcrResult> {
@@ -212,12 +234,7 @@ enum PageRotation {
 /// rotate90 (clockwise): source (x, y) -> dest (h-1-y, x), so the inverse
 /// is (x', y') -> (y', h-1-x'); rotate270 inverts to (x', y') ->
 /// (w-1-y', x'). Unit-tested with a round-trip.
-fn map_quad_back(
-    pts: [[f32; 2]; 4],
-    src_w: f32,
-    src_h: f32,
-    rot: PageRotation,
-) -> [[f32; 2]; 4] {
+fn map_quad_back(pts: [[f32; 2]; 4], src_w: f32, src_h: f32, rot: PageRotation) -> [[f32; 2]; 4] {
     match rot {
         PageRotation::None => pts,
         PageRotation::Clockwise90 => pts.map(|[x, y]| [y, src_h - 1.0 - x]),
@@ -342,7 +359,11 @@ fn page_quality(img: &RgbImage) -> PageQuality {
     let p99 = percentile(&luma_values, 0.99).unwrap_or(255.0);
     let ink_median = percentile(&ink_values, 0.5).unwrap_or(255.0);
     let ink_frac = ink_values.len() as f64 / n.max(1.0);
-    PageQuality { p99, ink_median, ink_frac }
+    PageQuality {
+        p99,
+        ink_median,
+        ink_frac,
+    }
 }
 
 /// Fraction of sampled pixels with a strong horizontal or vertical gradient
@@ -401,9 +422,11 @@ fn luma(px: [u8; 3]) -> f64 {
 /// Every 4th pixel in row-major order (the sampling grid shared by the
 /// enhancement statistics).
 fn sampled_pixels(img: &RgbImage) -> impl Iterator<Item = [u8; 3]> + '_ {
-    (0..img.height())
-        .step_by(4)
-        .flat_map(move |y| (0..img.width()).step_by(4).map(move |x| img.get_pixel(x, y).0))
+    (0..img.height()).step_by(4).flat_map(move |y| {
+        (0..img.width())
+            .step_by(4)
+            .map(move |x| img.get_pixel(x, y).0)
+    })
 }
 
 /// RGBA bytes (page rendering format) -> RGB bytes (rapidocr input).
@@ -420,17 +443,24 @@ fn to_rgb(rgba: &[u8]) -> Vec<u8> {
 /// Rapidocr output box (source-image pixel coordinates, top-left origin) ->
 /// the normalized line rect of the OCR contract (Flutter space). Quads from
 /// a rotated pass are mapped back to the source image first.
-fn normalize(
-    line: rapidocr_core::types::OcrLine,
-    w: f64,
-    h: f64,
-    rot: PageRotation,
-) -> OcrLine {
+fn normalize(line: rapidocr_core::types::OcrLine, w: f64, h: f64, rot: PageRotation) -> OcrLine {
     let pts = map_quad_back(line.bbox.points, w as f32, h as f32, rot);
-    let min_x = pts.iter().map(|p| f64::from(p[0])).fold(f64::INFINITY, f64::min);
-    let max_x = pts.iter().map(|p| f64::from(p[0])).fold(f64::NEG_INFINITY, f64::max);
-    let min_y = pts.iter().map(|p| f64::from(p[1])).fold(f64::INFINITY, f64::min);
-    let max_y = pts.iter().map(|p| f64::from(p[1])).fold(f64::NEG_INFINITY, f64::max);
+    let min_x = pts
+        .iter()
+        .map(|p| f64::from(p[0]))
+        .fold(f64::INFINITY, f64::min);
+    let max_x = pts
+        .iter()
+        .map(|p| f64::from(p[0]))
+        .fold(f64::NEG_INFINITY, f64::max);
+    let min_y = pts
+        .iter()
+        .map(|p| f64::from(p[1]))
+        .fold(f64::INFINITY, f64::min);
+    let max_y = pts
+        .iter()
+        .map(|p| f64::from(p[1]))
+        .fold(f64::NEG_INFINITY, f64::max);
     OcrLine {
         text: line.text,
         x: (min_x / w).clamp(0.0, 1.0),
@@ -500,14 +530,20 @@ mod tests {
         let rotated = pts.map(|[x, y]| [h - 1.0 - y, x]);
         let back = map_quad_back(rotated, w, h, PageRotation::Clockwise90);
         for (a, b) in back.iter().zip(pts.iter()) {
-            assert!((a[0] - b[0]).abs() < 1e-4 && (a[1] - b[1]).abs() < 1e-4, "{back:?}");
+            assert!(
+                (a[0] - b[0]).abs() < 1e-4 && (a[1] - b[1]).abs() < 1e-4,
+                "{back:?}"
+            );
         }
 
         // Counter-clockwise (rotate270): dest (x', y') = (y, w-1-x).
         let rotated = pts.map(|[x, y]| [y, w - 1.0 - x]);
         let back = map_quad_back(rotated, w, h, PageRotation::Counterclockwise90);
         for (a, b) in back.iter().zip(pts.iter()) {
-            assert!((a[0] - b[0]).abs() < 1e-4 && (a[1] - b[1]).abs() < 1e-4, "{back:?}");
+            assert!(
+                (a[0] - b[0]).abs() < 1e-4 && (a[1] - b[1]).abs() < 1e-4,
+                "{back:?}"
+            );
         }
 
         // None is a passthrough.
@@ -540,11 +576,22 @@ mod tests {
             low.put_pixel(x, 32, image::Rgb([150, 150, 150]));
         }
         let q = page_quality(&low);
-        assert!(q.ink_median > 80.0 && q.p99 - q.ink_median > 30.0, "gate: {q:?}");
+        assert!(
+            q.ink_median > 80.0 && q.p99 - q.ink_median > 30.0,
+            "gate: {q:?}"
+        );
         let enhanced = enhance(low);
         // Stretch maps 150 -> 0 and 245 -> 255: the ink is now dark.
-        assert_eq!(enhanced.get_pixel(0, 32).0, [0, 0, 0], "ink must be stretched to black");
-        assert_eq!(enhanced.get_pixel(0, 0).0, [255, 255, 255], "paper to white");
+        assert_eq!(
+            enhanced.get_pixel(0, 32).0,
+            [0, 0, 0],
+            "ink must be stretched to black"
+        );
+        assert_eq!(
+            enhanced.get_pixel(0, 0).0,
+            [255, 255, 255],
+            "paper to white"
+        );
 
         // Clean high-contrast page: enhance must not touch it.
         let mut clean = RgbImage::from_pixel(64, 64, image::Rgb([255, 255, 255]));
@@ -634,7 +681,9 @@ mod tests {
             width: img.width(),
             height: img.height(),
         };
-        RapidOcrEngine.scan(&page, mode).expect("scan should succeed")
+        RapidOcrEngine
+            .scan(&page, mode)
+            .expect("scan should succeed")
     }
 
     /// Assert a keyword was recognized and every rect is in-bounds.
@@ -679,7 +728,9 @@ mod tests {
             let out = engine
                 .scan(
                     &PageImage {
-                        rgba: &image::DynamicImage::ImageRgb8(img.clone()).to_rgba8().into_raw(),
+                        rgba: &image::DynamicImage::ImageRgb8(img.clone())
+                            .to_rgba8()
+                            .into_raw(),
                         width: 1240,
                         height: 1754,
                     },

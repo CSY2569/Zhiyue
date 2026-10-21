@@ -23,8 +23,7 @@ fn row_to_annotation(row: &Row) -> rusqlite::Result<ImageAnnotation> {
         id: row.get(0)?,
         book_id: row.get(1)?,
         page: row.get(2)?,
-        kind: ImageAnnotationKind::from_db_str(&kind_str)
-            .unwrap_or(ImageAnnotationKind::Brush),
+        kind: ImageAnnotationKind::from_db_str(&kind_str).unwrap_or(ImageAnnotationKind::Brush),
         x: row.get(4)?,
         y: row.get(5)?,
         w: row.get(6)?,
@@ -44,7 +43,8 @@ pub fn list(conn: &Connection, book_id: i64) -> AppResult<Vec<ImageAnnotation>> 
          WHERE book_id = ?1 ORDER BY page, created_at, id"
     ))?;
     let rows = stmt.query_map(params![book_id], row_to_annotation)?;
-    rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+    rows.collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(Into::into)
 }
 
 /// Insert a new image-layer mark; returns the new row id.
@@ -66,7 +66,18 @@ pub fn create(
         "INSERT INTO image_annotations \
              (book_id, page, kind, x, y, w, h, rotation, payload, style) \
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-        params![book_id, page, kind.as_str(), x, y, w, h, rotation, payload, style],
+        params![
+            book_id,
+            page,
+            kind.as_str(),
+            x,
+            y,
+            w,
+            h,
+            rotation,
+            payload,
+            style
+        ],
     )?;
     Ok(conn.last_insert_rowid())
 }
@@ -99,10 +110,7 @@ pub fn update(
 
 /// Delete an image-layer mark by id.
 pub fn delete(conn: &Connection, id: i64) -> AppResult<()> {
-    let changed = conn.execute(
-        "DELETE FROM image_annotations WHERE id = ?1",
-        params![id],
-    )?;
+    let changed = conn.execute("DELETE FROM image_annotations WHERE id = ?1", params![id])?;
     if changed == 0 {
         return Err(AppError::NotFound(format!("image annotation {id}")));
     }
@@ -179,7 +187,10 @@ mod tests {
         assert_eq!(anns[0].id, id);
         assert_eq!(anns[0].kind, ImageAnnotationKind::Brush);
         assert_eq!(anns[0].x, 0.5);
-        assert_eq!(anns[0].payload, r##"{"points":[[0.1,0.1],[0.2,0.15],[0.3,0.2]]}"##);
+        assert_eq!(
+            anns[0].payload,
+            r##"{"points":[[0.1,0.1],[0.2,0.15],[0.3,0.2]]}"##
+        );
         assert_eq!(anns[1].kind, ImageAnnotationKind::Sticky);
         assert_eq!(anns[1].style, r##"{"fontSize":14}"##);
 

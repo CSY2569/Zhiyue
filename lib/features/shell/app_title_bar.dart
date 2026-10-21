@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'package:rbwa/core/navigation.dart';
+import 'package:rbwa/core/platform/platform.dart';
 import 'package:rbwa/router/app_router.dart';
 
 /// Custom frameless title bar (FEATURES 8.1).
@@ -30,6 +32,36 @@ class AppTitleBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Android draws its own system status bar; a 40px fake title bar with
+    // minimize/maximize/close would be wrong there. Keep only a back
+    // affordance when the route has a parent.
+    if (PlatformCapabilities.current().isMobile) {
+      if (!showBack) return const SizedBox.shrink();
+      return SafeArea(
+        bottom: false,
+        child: Container(
+          height: 44,
+          color: theme.colorScheme.surface,
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(LucideIcons.arrowLeft, size: 20),
+                tooltip: '返回书库',
+                onPressed: () => navigateBack(appRouter),
+              ),
+              Expanded(
+                child: Text(
+                  title,
+                  style: theme.textTheme.titleSmall,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 12),
+            ],
+          ),
+        ),
+      );
+    }
     return Container(
       height: 40,
       color: theme.colorScheme.surface,
@@ -39,7 +71,7 @@ class AppTitleBar extends StatelessWidget {
             IconButton(
               icon: const Icon(LucideIcons.arrowLeft, size: 20),
               tooltip: '返回书库',
-              onPressed: () => appRouter.go('/library'),
+              onPressed: () => navigateBack(appRouter),
             )
           else
             const SizedBox(width: 8),

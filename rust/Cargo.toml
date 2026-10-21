@@ -23,8 +23,8 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 # FFI bridge - version MUST match pubspec.yaml flutter_rust_bridge + codegen 2.12.0
 flutter_rust_bridge = "=2.12.0"
 
-# Async runtime
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
+# Async runtime ("time" backs the text-translation retry backoff)
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 tokio-stream = "0.1"
 futures-core = "0.3"
 futures-util = "0.3"

@@ -51,7 +51,8 @@ pub fn list(conn: &Connection) -> AppResult<Vec<Book>> {
          ORDER BY last_opened_at IS NULL, last_opened_at DESC, imported_at DESC"
     ))?;
     let rows = stmt.query_map([], row_to_book)?;
-    rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+    rows.collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(Into::into)
 }
 
 /// Fetch a single book by id. Returns `None` if not found.
@@ -66,8 +67,9 @@ pub fn get(conn: &Connection, id: i64) -> AppResult<Option<Book>> {
 
 /// Look up a book by its original filesystem path -- the de-dup key (FEATURES 2.1).
 pub fn find_by_original_path(conn: &Connection, path: &str) -> AppResult<Option<Book>> {
-    let mut stmt =
-        conn.prepare(&format!("SELECT {SELECT_COLS} FROM books WHERE original_path = ?1"))?;
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {SELECT_COLS} FROM books WHERE original_path = ?1"
+    ))?;
     let mut rows = stmt.query_map(params![path], row_to_book)?;
     match rows.next() {
         Some(row) => Ok(Some(row?)),
@@ -78,8 +80,9 @@ pub fn find_by_original_path(conn: &Connection, path: &str) -> AppResult<Option<
 /// Look up a book by its stored file path (the copy under the app data dir).
 /// Used to route `open_book` between the pdfium and image pipelines (M5).
 pub fn find_by_stored_path(conn: &Connection, path: &str) -> AppResult<Option<Book>> {
-    let mut stmt =
-        conn.prepare(&format!("SELECT {SELECT_COLS} FROM books WHERE stored_path = ?1"))?;
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {SELECT_COLS} FROM books WHERE stored_path = ?1"
+    ))?;
     let mut rows = stmt.query_map(params![path], row_to_book)?;
     match rows.next() {
         Some(row) => Ok(Some(row?)),
@@ -103,8 +106,7 @@ pub fn insert(conn: &Connection, params: &NewBook) -> AppResult<Book> {
         ],
     )?;
     let id = conn.last_insert_rowid();
-    get(conn, id)?
-        .ok_or_else(|| AppError::Internal("insert succeeded but row not found".into()))
+    get(conn, id)?.ok_or_else(|| AppError::Internal("insert succeeded but row not found".into()))
 }
 
 /// Delete a book by id. Returns `true` if a row was removed.
@@ -139,11 +141,7 @@ pub fn touch_last_opened(conn: &Connection, id: i64) -> AppResult<bool> {
 /// Assign or clear a book's category (FEATURES 2.8). Pass `None` to unclassify.
 /// The FK constraint ensures invalid category ids are rejected. Returns false
 /// (no error) if the book does not exist.
-pub fn set_category(
-    conn: &Connection,
-    book_id: i64,
-    category_id: Option<i64>,
-) -> AppResult<bool> {
+pub fn set_category(conn: &Connection, book_id: i64, category_id: Option<i64>) -> AppResult<bool> {
     Ok(conn.execute(
         "UPDATE books SET category_id = ?1 WHERE id = ?2",
         params![category_id, book_id],

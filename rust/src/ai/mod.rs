@@ -31,13 +31,12 @@ mod web_search;
 #[cfg(feature = "ai")]
 pub use openai::{web_search, OpenAiClient};
 #[cfg(feature = "ai")]
-pub use web_search::deepseek_search;
-#[cfg(feature = "ai")]
 pub(crate) use openai::{web_search_builtin, web_search_builtin_anthropic, RequestExtras};
+#[cfg(feature = "ai")]
+pub use web_search::deepseek_search;
 
 /// A streamed text chunk from the model (FEATURES 6.3.1).
-pub type ChunkStream =
-    Pin<Box<dyn Stream<Item = AppResult<String>> + Send>>;
+pub type ChunkStream = Pin<Box<dyn Stream<Item = AppResult<String>> + Send>>;
 
 /// The AI client contract.
 ///

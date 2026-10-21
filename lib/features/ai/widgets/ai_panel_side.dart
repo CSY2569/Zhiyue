@@ -20,10 +20,19 @@ import 'package:rbwa/src/rust/models/ai.dart';
 /// [bookId] / [bookTitle] snapshot the open book for direct questions
 /// (null = the no-book window).
 class AiPanelSide extends ConsumerStatefulWidget {
-  const AiPanelSide({super.key, this.bookId, this.bookTitle});
+  const AiPanelSide({
+    super.key,
+    this.bookId,
+    this.bookTitle,
+    this.fullScreen = false,
+  });
 
   final int? bookId;
   final String? bookTitle;
+
+  /// Phone layout: fill the available surface instead of the resizable
+  /// desktop column width.
+  final bool fullScreen;
 
   @override
   ConsumerState<AiPanelSide> createState() => _AiPanelSideState();
@@ -46,9 +55,7 @@ class _AiPanelSideState extends ConsumerState<AiPanelSide> {
     final inputEnabled = state.streamingThreadId == null;
     final width = ref.watch(panelLayoutProvider.select((p) => p.aiPanelWidth));
 
-    return SizedBox(
-      width: width,
-      child: Material(
+    final panel = Material(
         color: theme.colorScheme.surfaceContainerLow,
         child: Column(
           children: [
@@ -119,8 +126,9 @@ class _AiPanelSideState extends ConsumerState<AiPanelSide> {
             ),
           ],
         ),
-      ),
-    );
+      );
+    if (widget.fullScreen) return panel;
+    return SizedBox(width: width, child: panel);
   }
 
   Widget _buildBody(AiState state, AiThreadState? active) {

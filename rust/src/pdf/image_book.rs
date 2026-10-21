@@ -20,8 +20,8 @@ struct ImageDoc {
 
 /// Open an image file as a book (an image book always has exactly one page).
 pub fn open_image(path: &str) -> AppResult<i64> {
-    let img = image::open(path)
-        .map_err(|e| AppError::Internal(format!("decode image {path}: {e}")))?;
+    let img =
+        image::open(path).map_err(|e| AppError::Internal(format!("decode image {path}: {e}")))?;
     *IMAGE_DOC.lock().unwrap() = Some(ImageDoc { image: img });
     Ok(1)
 }
@@ -45,9 +45,14 @@ fn with_doc<T>(f: impl FnOnce(&ImageDoc) -> AppResult<T>) -> AppResult<T> {
 /// (FEATURES 3.6.2: pages stay sharp when zooming).
 pub fn render_image(_page: i64, zoom: f32, dpi_scale: f32) -> AppResult<PageBitmap> {
     with_doc(|doc| {
-        let scale = (zoom * dpi_scale) as f64;
-        let w = ((doc.image.width() as f64) * scale).round().max(1.0) as u32;
-        let h = ((doc.image.height() as f64) * scale).round().max(1.0) as u32;
+        let src_w = f64::from(doc.image.width());
+        let src_h = f64::from(doc.image.height());
+        // Same pixel ceiling as PDF pages: a 4000px photo at zoom 4 × dpi 3
+        // would otherwise allocate ~5.7k × 5.7k × 4B per frame.
+        let scale =
+            super::pdfium::clamp_scale_for_pixels(src_w, src_h, f64::from(zoom * dpi_scale));
+        let w = (src_w * scale).round().max(1.0) as u32;
+        let h = (src_h * scale).round().max(1.0) as u32;
         let resized = doc
             .image
             .resize(w, h, image::imageops::FilterType::Lanczos3);
@@ -65,10 +70,14 @@ pub fn thumbnail_image(_page: i64, max_size: u32) -> AppResult<PageBitmap> {
     with_doc(|doc| {
         let (w, h) = doc.image.dimensions();
         let (tw, th) = if w >= h {
-            let th = ((h as f64) * (max_size as f64) / (w as f64)).round().max(1.0) as u32;
+            let th = ((h as f64) * (max_size as f64) / (w as f64))
+                .round()
+                .max(1.0) as u32;
             (max_size, th)
         } else {
-            let tw = ((w as f64) * (max_size as f64) / (h as f64)).round().max(1.0) as u32;
+            let tw = ((w as f64) * (max_size as f64) / (h as f64))
+                .round()
+                .max(1.0) as u32;
             (tw, max_size)
         };
         let resized = doc

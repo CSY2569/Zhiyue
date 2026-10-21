@@ -44,6 +44,19 @@ static DOC_PATH: Mutex<Option<String>> = Mutex::new(None);
 /// process with SIGTRAP.
 static PDFIUM_INIT: Mutex<()> = Mutex::new(());
 
+/// Android-only: the app's native library directory, supplied by the platform
+/// layer (`context.applicationInfo.nativeLibraryDir`). `current_exe()` returns
+/// the zygote's `app_process` on Android, so executable-relative probing cannot
+/// work; `dlopen` usually resolves `libpdfium.so` from the app namespace, but
+/// the explicit absolute path is the reliable fallback.
+static NATIVE_LIB_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// Sets the native library directory used to locate `libpdfium.so` on Android.
+/// Must be called before the first PDF render; later calls are ignored.
+pub fn set_native_library_dir(dir: PathBuf) -> bool {
+    NATIVE_LIB_DIR.set(dir).is_ok()
+}
+
 /// Returns the cached `Pdfium` handle, binding the native library on first call.
 fn pdfium() -> AppResult<&'static Pdfium> {
     if let Some(h) = PDFIUM.get() {
@@ -55,6 +68,7 @@ fn pdfium() -> AppResult<&'static Pdfium> {
         return Ok(h);
     }
     // Candidate locations for libpdfium.so, tried in order:
+    //   0. Android: the app's native library dir (set by the platform layer)
     //   1. the executable's directory            (dev: .so next to the binary)
     //   2. the executable's `lib/` subdirectory  (bundled app: bundle/lib/)
     //   3. the working dir's `rust/libpdfium/`   (`flutter test` from the repo
@@ -63,6 +77,10 @@ fn pdfium() -> AppResult<&'static Pdfium> {
     //   4. the working directory
     //   5. a system-installed library            (e.g. distro package)
     let mut candidates: Vec<PathBuf> = Vec::new();
+    #[cfg(target_os = "android")]
+    if let Some(dir) = NATIVE_LIB_DIR.get() {
+        candidates.push(dir.clone());
+    }
     if let Some(dir) = exe_dir() {
         candidates.push(dir.clone());
         candidates.push(dir.join("lib"));
@@ -70,10 +88,7 @@ fn pdfium() -> AppResult<&'static Pdfium> {
     // Cargo test/dev: the crate root is `rust/`, so this finds the
     // `rust/libpdfium/libpdfium.so` that fetch_pdfium.sh installs. On a
     // packaged build the baked path simply does not exist and is skipped.
-    candidates.push(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("libpdfium"),
-    );
+    candidates.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("libpdfium"));
     if let Ok(cwd) = std::env::current_dir() {
         candidates.push(cwd.join("rust").join("libpdfium"));
         candidates.push(cwd);
@@ -81,8 +96,7 @@ fn pdfium() -> AppResult<&'static Pdfium> {
 
     let mut bindings = None;
     for dir in &candidates {
-        if let Ok(b) = Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(dir))
-        {
+        if let Ok(b) = Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(dir)) {
             bindings = Some(b);
             break;
         }
@@ -90,9 +104,7 @@ fn pdfium() -> AppResult<&'static Pdfium> {
     let bindings = bindings
         .or_else(|| Pdfium::bind_to_system_library().ok())
         .ok_or_else(|| {
-            AppError::Pdf(
-                "libpdfium not found: run scripts/fetch_pdfium.sh and rebuild".into(),
-            )
+            AppError::Pdf("libpdfium not found: run scripts/fetch_pdfium.sh and rebuild".into())
         })?;
     let handle = Pdfium::new(bindings);
     let _ = PDFIUM.set(handle);
@@ -188,14 +200,37 @@ fn char_boxes(pg: &PdfPage<'_>, page_w: f32, page_h: f32) -> AppResult<Vec<CharB
                 // PDF's origin is bottom-left; Flutter's is top-left, so
                 // flip y here. Selection/highlight layers then use the
                 // boxes as-is (M3, FEATURES 4.1.2 / 4.3.4).
-                y: (1.0 - (quad.bottom().value + quad.height().value) / page_h)
-                    .clamp(0.0, 1.0),
+                y: (1.0 - (quad.bottom().value + quad.height().value) / page_h).clamp(0.0, 1.0),
                 w,
                 h,
             });
         }
     }
     Ok(out)
+}
+
+/// Upper bound on the pixels of ONE rendered page.
+///
+/// The reader can ask for zoom 4.0 × dpi 3.0, which on an A4 page would be
+/// ~7.1k × 10k px = 285MB of RGBA -- enough to OOM a phone and to make every
+/// texture upload a multi-frame stall. We keep the aspect ratio and shrink the
+/// request past the cap instead; at that density the extra pixels are not
+/// visible anyway (the viewport shows a fraction of the page).
+#[cfg(target_os = "android")]
+const MAX_PAGE_PIXELS: f64 = 12_000_000.0; // ~48MB RGBA
+#[cfg(not(target_os = "android"))]
+const MAX_PAGE_PIXELS: f64 = 40_000_000.0; // ~160MB RGBA (desktop headroom)
+
+/// Scale factor that keeps `w × h` within [MAX_PAGE_PIXELS].
+pub(crate) fn clamp_scale_for_pixels(page_w: f64, page_h: f64, scale: f64) -> f64 {
+    if page_w <= 0.0 || page_h <= 0.0 || scale <= 0.0 {
+        return scale;
+    }
+    let pixels = page_w * page_h * scale * scale;
+    if pixels <= MAX_PAGE_PIXELS {
+        return scale;
+    }
+    (MAX_PAGE_PIXELS / (page_w * page_h)).sqrt()
 }
 
 /// Renders `page` (0-indexed) at the given zoom factor (1.0 = 100%) to RGBA.
@@ -206,9 +241,13 @@ pub fn render_page(page: i64, zoom: f32, dpi_scale: f32) -> AppResult<PageBitmap
 
         let page_w = pg.width().value;
         let page_h = pg.height().value;
-        let scale = zoom * dpi_scale;
-        let target_w = (page_w * scale).max(1.0) as i32;
-        let target_h = (page_h * scale).max(1.0) as i32;
+        let scale = clamp_scale_for_pixels(
+            f64::from(page_w),
+            f64::from(page_h),
+            f64::from(zoom * dpi_scale),
+        );
+        let target_w = (f64::from(page_w) * scale).max(1.0) as i32;
+        let target_h = (f64::from(page_h) * scale).max(1.0) as i32;
 
         // `as_rgba_bytes()` normalizes the pixel format to RGBA regardless of
         // the bitmap's internal format, so we use the default (BGRA).
@@ -458,7 +497,10 @@ mod tests {
         };
         type RenderCase<'a> = Box<dyn Fn() -> AppResult<PageBitmap> + 'a>;
         let cases: Vec<(&str, RenderCase<'_>)> = vec![
-            ("fixed dpi 3.0 (old)", Box::new(|| render_page_file(&pdf, 2, 3.0))),
+            (
+                "fixed dpi 3.0 (old)",
+                Box::new(|| render_page_file(&pdf, 2, 3.0)),
+            ),
             (
                 "target 768px (new, narrow pane)",
                 Box::new(|| render_page_file_to_width(&pdf, 2, 768)),
@@ -560,9 +602,7 @@ mod tests {
             with_pdfium_lock(|p| {
                 let mut d = p.create_new_pdf()?;
                 let font = d.fonts_mut().helvetica();
-                let mut page = d
-                    .pages_mut()
-                    .create_page_at_end(PdfPagePaperSize::a4())?;
+                let mut page = d.pages_mut().create_page_at_end(PdfPagePaperSize::a4())?;
                 let objects = page.objects_mut();
                 objects.create_text_object(
                     PdfPoints::new(60.0),
@@ -595,5 +635,34 @@ mod tests {
             );
         }
         let _ = std::fs::remove_file(&path);
+    }
+}
+
+#[cfg(test)]
+mod pixel_cap_tests {
+    use super::*;
+
+    #[test]
+    fn leaves_pixel_light_renders_unchanged() {
+        // A4 at 1.5x * dpi 2 = 1.8k x 2.5k ≈ 4.5MP, well under the cap.
+        let s = clamp_scale_for_pixels(595.0, 842.0, 3.0);
+        assert!((s - 3.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn caps_an_oversized_request_and_keeps_aspect() {
+        let scale = clamp_scale_for_pixels(595.0, 842.0, 12.0); // 4x * dpi 3
+        assert!(scale < 12.0);
+        let pixels = 595.0 * 842.0 * scale * scale;
+        assert!(pixels <= MAX_PAGE_PIXELS + 1.0);
+        // Aspect ratio is untouched because both dimensions share one scale.
+        let ratio = (595.0 * scale) / (842.0 * scale);
+        assert!((ratio - 595.0 / 842.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn degenerate_input_is_passed_through() {
+        assert_eq!(clamp_scale_for_pixels(0.0, 842.0, 2.0), 2.0);
+        assert_eq!(clamp_scale_for_pixels(595.0, 842.0, 0.0), 0.0);
     }
 }

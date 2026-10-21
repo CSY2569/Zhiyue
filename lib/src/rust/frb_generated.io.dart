@@ -4,11 +4,9 @@
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
 import 'api.dart';
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi' as ffi;
-
 import 'frb_generated.dart';
 import 'models/ai.dart';
 import 'models/annotation.dart';
@@ -16,9 +14,7 @@ import 'models/book.dart';
 import 'models/progress.dart';
 import 'models/translate.dart';
 import 'ocr.dart';
-
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated_io.dart';
-
 import 'pdf/types.dart';
 
 abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
@@ -74,6 +70,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Book dco_decode_book(dynamic raw);
 
   @protected
+  BookProgress dco_decode_book_progress(dynamic raw);
+
+  @protected
   BookTranslateEvent dco_decode_book_translate_event(dynamic raw);
 
   @protected
@@ -111,6 +110,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   OcrResult dco_decode_box_autoadd_ocr_result(dynamic raw);
+
+  @protected
+  PageTextTranslation dco_decode_box_autoadd_page_text_translation(dynamic raw);
 
   @protected
   ReadingProgress dco_decode_box_autoadd_reading_progress(dynamic raw);
@@ -188,6 +190,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<Book> dco_decode_list_book(dynamic raw);
 
   @protected
+  List<BookProgress> dco_decode_list_book_progress(dynamic raw);
+
+  @protected
   List<Category> dco_decode_list_category(dynamic raw);
 
   @protected
@@ -228,6 +233,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<TextAnnotation> dco_decode_list_text_annotation(dynamic raw);
+
+  @protected
+  List<TextBlock> dco_decode_list_text_block(dynamic raw);
+
+  @protected
+  List<TranslatedTextBlock> dco_decode_list_translated_text_block(dynamic raw);
 
   @protected
   NormRect dco_decode_norm_rect(dynamic raw);
@@ -272,6 +283,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   OcrResult? dco_decode_opt_box_autoadd_ocr_result(dynamic raw);
 
   @protected
+  PageTextTranslation? dco_decode_opt_box_autoadd_page_text_translation(
+    dynamic raw,
+  );
+
+  @protected
   ReadingProgress? dco_decode_opt_box_autoadd_reading_progress(dynamic raw);
 
   @protected
@@ -285,6 +301,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PageRenderResult dco_decode_page_render_result(dynamic raw);
+
+  @protected
+  PageTextBlocks dco_decode_page_text_blocks(dynamic raw);
+
+  @protected
+  PageTextTranslation dco_decode_page_text_translation(dynamic raw);
 
   @protected
   ReadingProgress dco_decode_reading_progress(dynamic raw);
@@ -308,7 +330,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   TextAnnotationKind dco_decode_text_annotation_kind(dynamic raw);
 
   @protected
+  TextBlock dco_decode_text_block(dynamic raw);
+
+  @protected
+  TextBlockStatus dco_decode_text_block_status(dynamic raw);
+
+  @protected
   TranslatedPageBitmap dco_decode_translated_page_bitmap(dynamic raw);
+
+  @protected
+  TranslatedTextBlock dco_decode_translated_text_block(dynamic raw);
 
   @protected
   TranslationBackgroundBehavior dco_decode_translation_background_behavior(
@@ -389,6 +420,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Book sse_decode_book(SseDeserializer deserializer);
 
   @protected
+  BookProgress sse_decode_book_progress(SseDeserializer deserializer);
+
+  @protected
   BookTranslateEvent sse_decode_book_translate_event(
     SseDeserializer deserializer,
   );
@@ -434,6 +468,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   OcrResult sse_decode_box_autoadd_ocr_result(SseDeserializer deserializer);
+
+  @protected
+  PageTextTranslation sse_decode_box_autoadd_page_text_translation(
+    SseDeserializer deserializer,
+  );
 
   @protected
   ReadingProgress sse_decode_box_autoadd_reading_progress(
@@ -521,6 +560,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<Book> sse_decode_list_book(SseDeserializer deserializer);
 
   @protected
+  List<BookProgress> sse_decode_list_book_progress(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<Category> sse_decode_list_category(SseDeserializer deserializer);
 
   @protected
@@ -575,6 +619,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<TextBlock> sse_decode_list_text_block(SseDeserializer deserializer);
+
+  @protected
+  List<TranslatedTextBlock> sse_decode_list_translated_text_block(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   NormRect sse_decode_norm_rect(SseDeserializer deserializer);
 
   @protected
@@ -623,6 +675,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PageTextTranslation? sse_decode_opt_box_autoadd_page_text_translation(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ReadingProgress? sse_decode_opt_box_autoadd_reading_progress(
     SseDeserializer deserializer,
   );
@@ -638,6 +695,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PageRenderResult sse_decode_page_render_result(SseDeserializer deserializer);
+
+  @protected
+  PageTextBlocks sse_decode_page_text_blocks(SseDeserializer deserializer);
+
+  @protected
+  PageTextTranslation sse_decode_page_text_translation(
+    SseDeserializer deserializer,
+  );
 
   @protected
   ReadingProgress sse_decode_reading_progress(SseDeserializer deserializer);
@@ -665,7 +730,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  TextBlock sse_decode_text_block(SseDeserializer deserializer);
+
+  @protected
+  TextBlockStatus sse_decode_text_block_status(SseDeserializer deserializer);
+
+  @protected
   TranslatedPageBitmap sse_decode_translated_page_bitmap(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TranslatedTextBlock sse_decode_translated_text_block(
     SseDeserializer deserializer,
   );
 
@@ -761,6 +837,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_book(Book self, SseSerializer serializer);
 
   @protected
+  void sse_encode_book_progress(BookProgress self, SseSerializer serializer);
+
+  @protected
   void sse_encode_book_translate_event(
     BookTranslateEvent self,
     SseSerializer serializer,
@@ -820,6 +899,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_ocr_result(
     OcrResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_page_text_translation(
+    PageTextTranslation self,
     SseSerializer serializer,
   );
 
@@ -926,6 +1011,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_book(List<Book> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_book_progress(
+    List<BookProgress> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_category(List<Category> self, SseSerializer serializer);
 
   @protected
@@ -995,6 +1086,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_text_block(
+    List<TextBlock> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_translated_text_block(
+    List<TranslatedTextBlock> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_norm_rect(NormRect self, SseSerializer serializer);
 
   @protected
@@ -1055,6 +1158,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_page_text_translation(
+    PageTextTranslation? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_reading_progress(
     ReadingProgress? self,
     SseSerializer serializer,
@@ -1075,6 +1184,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_page_render_result(
     PageRenderResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_page_text_blocks(
+    PageTextBlocks self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_page_text_translation(
+    PageTextTranslation self,
     SseSerializer serializer,
   );
 
@@ -1115,8 +1236,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_text_block(TextBlock self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_text_block_status(
+    TextBlockStatus self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_translated_page_bitmap(
     TranslatedPageBitmap self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_translated_text_block(
+    TranslatedTextBlock self,
     SseSerializer serializer,
   );
 

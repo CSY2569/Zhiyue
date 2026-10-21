@@ -488,6 +488,447 @@ DEFAULT 'original'`（'original' | 'translated'）。两栏页号相同，靠窗
 Flutter 201 测试（新增宽度分档单测）+ analyze 0；mock 端到端 6.4s 通过。
 
 ---
+
+### 3.23 Android v1：内置 OCR 随包 + 文本级对照（2026-10-20）
+
+按 [`ANDROID_V1_PLAN.md`](ANDROID_V1_PLAN.md) 的 A0–A5 实施。桌面路径不变；
+Android 走独立的平台能力层与文本翻译模块。
+
+**构建链（A0）**
+- 新增 `android/` 工程（applicationId `io.github.csy2569.zhiyue`，minSdk 26 /
+  targetSdk 35 / **仅 arm64-v8a**）。
+- `cargo-ndk` 交叉编译 `librbwa_core.so`；pdfium 用 bblanchon `chromium/8111`
+  Android arm64（`scripts/fetch_pdfium_android.sh`）。
+- **实测**：arm64 release APK **285.4MB**（含 210MiB 两套 OCR 模型），
+  `zipalign -c -P 16` 通过；`pdfium / librbwa_core` 的 LOAD 段均 0x4000 对齐。
+- **x86_64 Android 不可用**：`ort-sys` 无该目标预编译（OCR 依赖 ORT），v1
+  收敛为 arm64；模拟器需 arm64 系统镜像。
+
+**初始化与原生路径（A1）**
+- 新增 FFI `init_core_with_data_dir`（Android 无 XDG data dir，进程 CWD 为 `/`）。
+- 新增 FFI `configure_native_library_dir`：`current_exe()` 在 Android 指向
+  `app_process`，pdfium 改为按 `nativeLibraryDir` 绝对路径绑定。
+- OCR `model_root()` 在 Android 只认 `{data_dir}/models`（模型由 Kotlin 安装器
+  从 assets 解压）；推理参数移动端收敛：`max_side_len` 1280、batch 4、线程 2–4。
+
+**OCR 随包内置（A2）**
+- `scripts/stage_android_models.sh`：把快速 + 高精度两套模型（≈210MiB）连同
+  sha256 清单放进 `assets/models/`；`noCompress` 避免二次压缩。
+- `ModelProvisioner.kt`：首启流式复制（8KiB 缓冲）、逐文件 sha256、`.tmp` +
+  rename、空间检查（350MB）、断点重试、进度回调；完成后写 marker。
+- Dart `_Bootstrap` 在安装期间显示进度页，可重试 / 跳过。
+
+**触屏适配（A3）**
+- 手机断点 `<700dp`：侧栏 / AI 面板改全屏覆盖，对照改「原文 / 译文」分段切换；
+  `PopScope` 让返回键逐层关闭面板。
+- 选区：移动端改**长按起选 + 拖动扩展**，普通拖动留给滚动；桌面仍为拖选。
+- 缩放：双指捏合 + 双击（1.2 ↔ 2.0），桌面 Ctrl+滚轮不变。
+- 标题栏：移动端隐藏窗口控制按钮，仅保留返回与标题。
+
+**文本级对照（A5）**
+- `flat_ocr::build_page_blocks`：按页提取（邻页仅用于页眉页脚判定），
+  整本构建改为调用它。
+- `translate/text_translate.rs`：块级 LLM 翻译——每批 ≤12 块 / 6k 字符、
+  JSON 严格对齐（忽略伪造 index）、缺块单块重试、401/403 不重试、429/5xx
+  退避、取消检查、公式与短文本跳过、页面字符预算 40k。
+- 缓存：schema **v9→v10** 新表 `page_text_translation`（书/页/块/目标语言唯一，
+  含 source_hash 与 model，整页事务替换）；删书级联。
+- 注入防御：块文本经 `sanitize_untrusted` + 每请求随机 nonce 边界包裹，系统
+  提示声明「边界内是待翻译数据」，返回只接受 JSON 结构与已知块号。
+- FFI：`get_page_text_blocks` / `get_page_text_translation` /
+  `translate_page_text` / `cancel_page_text_translation` /
+  `clear_book_text_translation` / `count_text_translated_pages`。
+- Dart：文本对照 provider（缓存优先、当前页翻译、后 2 页串行预取）、
+  块列表 UI（译文为主、原文折叠、公式徽标、失败重试）。
+
+**验证**：Rust 136 测试全绿（新增缓存/解析/归一化/跳过规则）；Flutter 240
+测试全绿（新增 7 个文本翻译测试）；`flutter analyze` 0；Android debug/release
+APK 构建与 16KB 对齐通过。
+
+**已知边界**：文本对照只覆盖 PDF（含扫描页）；图片书仍只做 OCR + 划词；
+移动端默认快速 OCR；Play 分发需改用 install-time asset pack（当前 APK 内嵌）。
+
+### 3.24 Android 交互修正：返回手势与书籍长按（2026-10-20，1.0.1）
+
+**① 返回手势直接退出应用**
+- 根因：所有页面跳转用 `context.go(..)`，go_router 会**替换**当前路由，
+  导航栈始终只有一页；系统返回手势调用 `Navigator.maybePop()` 得到 false，
+  系统随即关闭 Activity。
+- 修复：详情页（阅读器 / 设置 / 全文搜索 / AI 对话）改 `context.push(..)`，
+  返回手势与页面返回按钮都变成「弹出一层」。新增
+  `lib/core/navigation.dart::navigateBack()`：能 pop 就 pop，深链等无栈场景
+  回退到书库，而不是让系统退出。
+- 书库双击打开加了 400ms 去重（`push` 不再像 `go` 那样自动合并重复路由）。
+
+**② 书籍长按无法弹出菜单**
+- 根因：卡片外层是 `LongPressDraggable`（200ms 触发），领先 `InkWell` 的
+  500ms 长按，手势竞技场被拖拽赢得，`onLongPress` 永不触发。右键菜单在触屏
+  上也无从触发。
+- 修复：`BookTile` 新增 `enableDrag`，移动端默认关闭拖拽包装（长按 → 底部菜单：
+  打开 / 收藏 / 分配到分类… / 删除）；桌面保留拖拽归类，右键菜单不变。
+  分类仍可从菜单里的「分配到分类…」完成。
+
+**③ 顺带修正的手机布局**
+- 书库左侧 220px 分类栏在手机上把网格挤到不可用：窄屏（<700dp）改为 Drawer，
+  工具栏左侧加汉堡按钮；平板 / 桌面保持常驻栏。
+
+**验证**：新增 `navigation_test.dart`（pop / 无栈回退）与书库长按测试；
+Flutter 243 测试全绿、analyze 0；release APK 1.0.1 构建通过、16KB 对齐通过。
+
+### 3.25 流畅度优化 + 动态刷新率（2026-10-20，1.1.0）
+
+**① 动态刷新率（30–120Hz）**
+- 新增 `DisplayRefreshBridge.kt`（`rbwa/display` 通道）：Android 11+ 用
+  `Surface.setFrameRate(fps, compatibility, ONLY_IF_SEAMLESS)` 做**逐表面提示**，
+  不触发模式切换；API 30 用两参重载；更旧版本回退
+  `WindowManager.LayoutParams.preferredRefreshRate`。请求值先按面板实际支持的
+  mode 就近取整（兼容 59.94 / 119.88）。
+- 新增 `core/platform/refresh_rate.dart`：活动（触摸 / 滚动 / 指针信号）时请求
+  面板最高档（上限 120），静置 900ms 后降到 30Hz。`MaterialApp.router` 的
+  `builder` 包一层 `RefreshRateScope`，全应用生效、无需逐页面接线。
+- **能力边界**：应用无法渲染超过面板刷新率；静止时 Flutter 不产帧，LTPO 面板
+  本身会降频，该提示主要用于避免被钉在高档位。
+
+**② 阅读页重绘边界拆分（主要卡顿源）**
+- 旧：整页一个 `RepaintBoundary`，位图上的主题滤镜（`ColorFiltered`，会强制
+  `saveLayer`）与所有矢量层混在一起 → 选区拖动的每一帧都重绘数兆像素的页面。
+- 新：位图单独一层，全部矢量覆盖层（高亮 / 低置信 / 搜索命中 / 选区 / 图片标记
+  / OCR 提示）共用一个子层。拖动选区只重绘矢量层。
+
+**③ 位图内存与渲染分辨率**
+- `LruCache` 增加**字节预算**（`maxBytes` + `sizeOf`），与条数上限共同淘汰；
+  移动端预算 96MB、桌面 192MB（此前固定 20 条，A4 高 DPI 下可达 180MB+）。
+  淘汰时**不主动 dispose**：列表可能仍在绘制该 `ui.Image`（会抛异常），
+  由引擎在最后一个引用释放后回收。
+- Rust `render_page` / `render_image` 增加**单页像素上限**（Android 12MP ≈ 48MB
+  RGBA，桌面 40MP）：4× 缩放 × 3× DPI 的 A4 原本要 285MB，现在按比例缩小，
+  长边仍远超屏幕可分辨密度。
+
+**④ 滚动预取与流式节流**
+- 单页 / 双滚动列表 `scrollCacheExtent` 设为约一页高度（默认 250px 不足一页，
+  快速滚动会露出占位图）；双页翻页开启 `allowImplicitScrolling`，相邻跨页预渲染。
+- `AiStreamSession` 的 `onUpdate` 节流到 80ms：此前每个 token 都触发一次
+  Markdown 重建，流式回答期间掉帧明显；结束时仍交付完整文本。
+
+**验证**：Rust 139 测试（新增像素上限 3 个）+ clippy 0；Flutter 251 测试
+（新增 LRU 字节预算 6 个、刷新率策略 2 个）+ analyze 0；release APK 1.1.0
+构建通过、16KB 对齐通过。
+
+### 3.26 Android 触屏 P0：手机布局与触控修复（2026-10-20，1.2.0）
+
+按 [`ANDROID_TOUCH_OPTIMIZATION_PLAN.md`](ANDROID_TOUCH_OPTIMIZATION_PLAN.md) 的 P0 实施。
+
+**① 选区工具条崩溃（P0 最高优先级）**
+- 根因：`FloatingToolbar` 按 `_estWidth = 760` 估算定位，
+  `clamp(8, screen.width - 768)` 在 360dp 屏上上界为负，Dart `clamp` 抛
+  `ArgumentError` —— 长按选词弹出工具条即崩溃。
+- 修复：浮动定位改为 `CustomSingleChildLayout` + 实测子尺寸，clamp 前判断
+  `maxLeft < 8` 直接左对齐；手机改为**底部固定 4×2 网格**（每格 48dp），
+  平板/桌面保留可拖动浮条。笔记编辑器在手机上也改为底部停靠，键盘弹出时
+  用 `viewInsets` 顶起。
+
+**② 手机阅读 chrome**
+- 新增 `phone_reader_chrome.dart`：顶部条（返回 / 书名 / 页码跳转 / 更多）+
+  底部 5 项操作栏（缩略图 / 目录 / 批注 / AI / 更多）+ 更多面板
+  （单页模式、缩放、对照、识图、标注、跳转）。
+- 桌面 `ReaderToolbar` 约 700dp 宽，360dp 屏必然溢出；现在按
+  `PlatformCapabilities` + 断点分叉，桌面布局不变。
+
+**③ 窄屏模式收敛**
+- 手机（<700dp）自动把双页/双滚进度降级为单页，更多面板里的模式选择器
+  也只提供单页，并说明原因。
+
+**④ 其余窄屏布局**
+- 书库工具栏：搜索框弹性填满，全文搜索 / 主题 / 设置收进溢出菜单。
+- 结果卡：手机改为底部停靠面板（60% 屏高，随键盘顶起），桌面保留可拖拽浮卡。
+- 「AI 对话」页：手机为「列表 → 详情」两级导航 + 返回条，桌面保持 280dp 分栏。
+- 批注工具条：手机用 `Wrap` 自动换行，不再单行溢出。
+- 收藏按钮：视觉仍是 20dp，命中区扩到 48×48。
+
+**验证**：新增 `phone_layout_test.dart`（360×780dp：书库工具栏无溢出、
+收藏按钮 ≥48dp、选区工具条停靠且不抛异常、设置行满宽）；Flutter **255**
+测试全绿、analyze 0；release APK 1.2.0 构建通过、16KB 对齐通过。
+
+### 3.27 Android 触屏 P1：选区手柄、系统集成与移动手势（2026-10-20，1.3.0）
+
+**① 词级选中 + 起止手柄**
+- `selection_geometry.dart` 新增词边界判定：CJK（含假名 / 谚文 / 全角标点）
+  按**单字成词**，拉丁按字母/数字/撇号/连字符成词；标点与空白只选中自身。
+- 长按改为选中**整个词**并触发 `mediumImpact` 震动；拖动时选区从首个词
+  延伸到指针下的词（锚点词不会被缩成单字）。
+- 选区两端各有一个手柄（14dp 圆点 + 40dp 命中区），拖动按词调整起止点，
+  可反向拖动；手柄用 `globalPosition` 换算到页面坐标（避免用自身 40dp
+  盒子的局部坐标）。
+- 双击文字选中该词；双击空白保留原来的缩放切换。
+
+**② 触觉反馈**
+- 新增 `core/haptics.dart`（tap / select / success / warning 四档，桌面空转）。
+- 接入：翻页（仅在页码真的变化时）、长按选词、OCR 成功/失败、翻译成功/失败。
+
+**③ 边缘翻页与 chrome 开关**
+- 选区层把未被消费的点击（正常点击空白）上报 `readerTapProvider`：
+  左 18% 上一页、右 18% 下一页、中部切换手机 chrome 显隐（180ms 滑动淡出）。
+- 用 provider 上报而非层层回调，页面/滚动/页项均无需改签名。
+
+**④ 沉浸模式与常亮**
+- 阅读页进入时 `immersiveSticky`（隐藏系统栏）+ `FLAG_KEEP_SCREEN_ON`，
+  离开时恢复 `edgeToEdge` 并清除常亮。
+
+**⑤ 从其他应用导入（ACTION_VIEW / ACTION_SEND）**
+- Manifest 增加 `application/pdf` 与 `image/*` 的 VIEW / SEND 过滤器。
+- `SystemBridge.captureIntent` 把 `content://` 流式复制到
+  `cacheDir/incoming/`（content URI 不可当文件路径用，授权也不跨进程存活），
+  冷启动与 `onNewIntent` 热启动都覆盖；Dart 启动时取走并调用现有导入流程，
+  SnackBar 汇报结果。
+
+**⑥ 内存压力接线**
+- `main.dart` 用显式 `ProviderContainer` 订阅 `onTrimMemory`：
+  `BitmapCache.trim(keepPage:)` 释放非当前页位图，同时清 `imageCache`；
+  临界级别再 `clearLiveImages()`。
+
+**⑦ 后台治理**
+- 应用进入后台：刷新率控制器立即降档。
+- 对照翻译的预取在每一轮前检查生命周期，后台不再发起 LLM 请求。
+
+**验证**：新增 `word_selection_test.dart`（9 个：CJK/拉丁/标点/连字符/
+OCR 行内/编码位置）与 `reader_tap_test.dart`（2 个：分区边界、seq 单调）；
+Flutter **266** 测试全绿、analyze 0；Kotlin 编译通过；release APK 1.3.0
+构建通过、16KB 对齐通过，`aapt2` 确认 VIEW/SEND 过滤器已打包。
+
+### 3.28 Android P2：渲染调度、DPI 分档与书库多选（2026-10-20，1.4.0）
+
+**① 消除每页的双重渲染（收益最大）**
+- 根因：缩放分档用 `round()`，默认 1.2× 先落到 1.0× 渲染，随后 `_maybeSharpen`
+  发现不够清晰又按 1.5× **重渲一次** —— 每页首次显示都付两次 pdfium 渲染
+  加两次 RGBA 解码。
+- 修复：分档改为 `ceil()`，首次即落在最终档位；sharpen 对常见缩放成为空操作。
+
+**② 优先级渲染队列**
+- `BitmapCache` 内建串行队列（pdfium 本来就有全局锁）：可见页 priority 0、
+  相邻页/缩略图 priority 1，同级 FIFO；若某页排队期间变为可见，
+  `_promote` 会把它提到最前。快速滚动时阅读页不再排在一串预取之后。
+
+**③ 自适应渲染 DPI**
+- 新增 `effectiveRenderDpi(deviceDpr, zoom)`：`zoom ≤ 1.4` 时把渲染 DPI
+  钳到 2.0，`> 1.4` 恢复设备 DPR（细节阅读仍清晰）。
+- 手机 DPR 2.75–3.5 时，A4 页从约 26MB 降到约 12MB，浏览态缓存能多放
+  2–3 页，翻页更少触发重渲。
+
+**④ 书库多选**
+- 新增 `librarySelectionProvider`（active / ids）+ 底部操作栏：批量收藏、
+  批量分类（底部选择表）、批量删除（一次确认）。多选期间隐藏导入 FAB、
+  卡片显示勾选徽标、拖拽禁用。
+- 入口在书籍长按菜单的「多选」（用户此前要求长按弹菜单，故不改成
+  长按直接多选）；选择集随书库刷新自动收敛。
+
+**⑤ 音量键翻页**
+- 手机端 `volumeDown` → 下一页、`volumeUp` → 上一页；输入框或笔记编辑器
+  聚焦时不拦截，避免影响正常调音量。
+
+**验证**：新增 `render_tuning_test.dart`（5 个：ceil 分档、范围钳制、DPI 三档）
+与 `library_selection_test.dart`（4 个：开始/切换/收敛/清空）；Flutter **275**
+测试全绿、analyze 0、图标守卫通过；release APK 1.4.0 构建通过、16KB 对齐通过。
+
+### 3.29 主界面布局重排：黄金比例与节奏（2026-10-21，1.5.0）
+
+主界面（书库）此前的参数各自独立：220px 侧栏、180px 卡片、12px 间距、
+3:4.4 封面、44dp 页头。改为一套共享比例的度量体系。
+
+**度量体系**（`lib/core/theme/layout_metrics.dart`）
+- **φ 用于比例**：卡片封面按黄金矩形（宽:高 = 1:1.618）；侧栏宽度取窗口的
+  φ⁴ 细分并钳在 208–264dp，窗口变宽时侧栏只微增，不会变成第二内容列。
+- **斐波那契用于间距**：8 / 13 / 21 / 34 / 55 / 89（相邻步长 ≈ φ，误差 ≤8%），
+  4 明确保留为 4dp 栅格单位而非冒充 φ 阶梯（测试守卫生效时抓到过这一点）。
+- **网格按列求解**：列数由目标卡宽 ~168dp 反解（不再用
+  `MaxCrossAxisExtent`，那会留下参差的末列）；窗口变宽→**加列**而非放大卡片。
+  单元格高度 = 卡宽/φ + 64dp 元信息条，行底不再留空。
+
+**页头重做**
+- 左侧「我的书库 + 共 N 本 / 筛选出 M 本」，右侧搜索框（320dp），搜索从
+  "页面标题"变为"页面工具"。
+- 三档自适应：≥900dp 完整（标题+搜索+三按钮）；560–900dp 标题+260dp 搜索
+  + 溢出菜单；<560dp 仅搜索+菜单。
+- 页头 64dp（40×φ），用 1px 分隔线代替阴影——与内容同纸张，深度靠线不靠高程。
+
+**卡片重做**
+- 去掉 `Card` 的阴影，改为同纸面色 + 1px 描边 + 13dp 圆角：封面成为视觉主角。
+- 页码从封面上的黑色角标移到元信息条（可读性更好，不压图）。
+- 收藏态用右上角小圆徽标；多选态勾选在左上角，两者不冲突。
+
+**空状态**：圆形底 + 128dp 焦点、34/13/21 节奏、两段文案（导入 + 长按提示）。
+
+**真机截图发现并修复的两个真问题**
+1. **侧栏压在状态栏下**：`Row(rail, Scaffold)` 在 Scaffold 之外，边到边模式下
+   没有消费者吸收系统栏 inset；补 `SafeArea(bottom: false)`。
+2. **页头标题被挤成 0 宽**：原判断用窗口宽度 776dp，但侧栏占了 208dp，页头
+   实际只有 568dp；改为传 `availableWidth` 并按实际宽度选档。
+3. 网格内边距也误用内容宽度判档，导致平板被当手机给 13dp；改用窗口宽度。
+
+**验证**：新增 `layout_metrics_test.dart`（8 个：φ 关系、斐波那契阶梯、
+手机/平板/桌面列数、退化宽度、单元格几何、侧栏范围）与平板尺寸 widget 测试
+（1600×2560 @2.0 = 800×1280dp，断言无溢出 + 侧栏/页头存在）；
+Flutter **284** 测试全绿、analyze 0；在小米平板 25091RP04C（776dp 宽）上实机
+安装截图确认：3 列、卡片 149dp、封面比例 0.62、侧栏 208dp、页头中档布局。
+release APK 1.5.0 构建通过、16KB 对齐通过。
+
+### 3.30 主界面视觉重构：参照同类产品的设计语言（2026-10-21，1.6.0）
+
+参考 `screenshot/` 中同类阅读器的 7 张截图，重做主界面。目标不是照搬，而是
+把它成立的设计决策吸收进现有架构。
+
+**① 悬浮双面板 shell**（`floating_panels.dart`）
+- 侧栏与内容区是两个独立的圆角面板（18dp 圆角 + 一道柔和投影），浮在窗口
+  背景上，中间 8dp 缝隙。原来是一个贴边的 Row + Scaffold。
+- 手机没有放两个面板的宽度：侧栏进抽屉，内容面板单独铺满。
+
+**② 侧栏三段式**（`category_rail.dart` 重写）
+- 顶部「导航 / 文件夹 / 标签」胶囊切换，下面是对应列表。
+- 导航：所有文档 / 最近使用 / 我的收藏 / PDF / 图片 + AI 对话 / 全文搜索 / 设置。
+- 文件夹：用户分类（拖放目标 + 长按重命名删除），底部「新建文件夹」。
+- 标签：明确说明未支持多标签并引导用文件夹，而不是做一个假的空列表。
+- 选中项是整圆胶囊高亮（`primaryContainer` 55%），不再用 ListTile 的矩形底。
+
+**③ 顶部胶囊筛选栏**（`library_filter_bar.dart`）
+- 44dp 高的分段控件：全部 / 最近 / PDF / 图片 / 收藏（+ 当前文件夹时多一项），
+  右侧显示结果数量。与侧栏共用 `libraryFilterProvider`，两侧永远同步。
+- 新增 `LibraryView.recent` 视图（按已有 `lastOpenedAt` 过滤）。
+
+**④ 书卡去掉所有容器**（`book_tile.dart` 重写）
+- 移除 `Card`、描边、内边距：只剩圆角封面 + 下方两行文字，靠投影从面板上浮起。
+- 标题改**衬线斜体**（`fontFamily: 'serif'` + italic），这是参考设计最鲜明的
+  特征，也让书脊感和正文阅读感区分开。
+- 收藏改为**心形**、放在封面**右上角**（原为右下角星形）；未收藏时是白色
+  描边心 + 轻阴影，收藏后填玫红色。仍保留 48dp 命中区。
+- 元信息合并为一行：`26/06/29 · 575 页`；读过则变成
+  `26/06/29 · 已读 128 / 575`，读完显示 `已读完`。日期取自最近打开时间，
+  回退到导入时间。
+- 封面用 `BoxFit.contain`（此前 `cover` 会裁掉书页边缘文字），空隙填面板色。
+
+**⑤ 移除旧组件**
+- `library_toolbar.dart` 删除（被面板内的 `_PanelHeader` 取代）；AppBar 的
+  高程和内部分隔线一并去掉——面板本身已是抬升面，再画线是双重分隔。
+
+**验证**：新增 `library_design_test.dart`（4 个：双面板结构、手机单面板、
+书卡无 Card 容器且标题衬线斜体、筛选栏五个胶囊）；改写侧栏与筛选测试以匹配
+新结构；Flutter **294** 测试全绿、analyze 0、图标尺寸守卫通过；
+release APK 1.6.0 构建通过、16KB 对齐通过。
+
+**说明**：参考设计里的「笔记 / 标签」依赖多标签数据模型，本项目 schema 只有
+单层分类，因此标签页如实说明未支持，而不是展示不可用的界面。
+
+### 3.31 书卡尺寸统一（2026-10-21，1.6.2）
+
+**现象**：同一行里两本书的封面大小不一致（用户截图：Agent 明显比 3D数学基础窄矮）。
+
+**根因（两层）**
+1. 封面用 `Expanded` 占剩余空间，文字块高度随标题行数变化：一行标题时封面比
+   两行标题时高约 18dp。
+2. 封面用 `BoxFit.contain`，比例不同的图片会留黑边，视觉宽度随之不同。
+
+**修复**
+- 封面改为 **`AspectRatio(coverRatio)`**：高度只由宽度和 √2 比例推导，标题
+  行数再也影响不到它。
+- 文字块预留**固定两行标题高度**，元信息行（日期 · 进度）因此在每张卡上
+  落在同一基线（此前 `Spacer` 让一行标题的卡片把元信息推到底部）。
+- 封面改 `BoxFit.cover` + `Alignment.topCenter`：填满槽位，顶对齐保留书名/首页
+  抬头不被裁掉。
+- `Golden.textBlockHeight` 与 `cellHeightFor` 共用同一公式，并留 2dp 余量吸收
+  字体 ascent/descent 溢出（真机上曾报 0.98px overflow）。
+
+**验证**：新增 `book_card_size_test.dart`（4 个：真实 `BookGrid` 下两本书封面
+矩形完全相等、√2 比例、1.3× 字号缩放不挤压封面、无溢出）与度量测试补充
+（cell = cover + text block、文本块随缩放在单元格同步增长）；Flutter **300**
+测试全绿、analyze 0；平板实机截图确认两卡封面 195×276（比例 0.707）、
+元信息基线对齐、无溢出标记。release APK 1.6.2 构建通过、16KB 对齐通过。
+
+### 3.32 弹层视觉统一：对话框 / 底部面板 / 菜单（2026-10-21，1.7.0）
+
+**问题**：主界面已经改成悬浮圆角面板，但弹出框仍是 Material 默认样式——
+`AlertDialog` 的 28dp 圆角、`showModalBottomSheet` 的贴边直角、`PopupMenu`
+的高程阴影，看起来像另一个产品塞进来。
+
+**① 新增弹层设计系统**（`core/widgets/app_overlay.dart`）
+- `AppDialog`：18dp 圆角 + 面板底色 + 发丝描边 + 柔和投影；**衬线标题**
+  （与书库页头一致）、可选副标题/正文/图标、右下药丸按钮组。
+- `AppDialogAction`：药丸按钮（`StadiumBorder`），支持 primary / destructive。
+- `AppSheet`：顶部 18dp 圆角 + **抓取条** + 衬线标题行 + 可关闭按钮，内容区
+  可滚动，间距走斐波那契阶梯。
+- `AppSheetItem`：复用侧栏的整圆胶囊行（选中为 `primaryContainer` 55%），
+  带图标 / 尾部说明 / danger 态。
+- `showAppSheet()`：透明宿主 + 遮罩色 0.42，让 `AppSheet` 自己画面板
+  （有色的宿主会把圆角画成双层）。
+
+**② 全局主题统一**（`AppTheme._base`）
+- `popupMenuTheme`：面板色 + 18dp 圆角 + 透明 surfaceTint，去掉 Material 默认
+  的硬阴影环。
+- `bottomSheetTheme`：宿主透明、无高程，避免与 `AppSheet` 的双层圆角。
+- `dialogTheme`：面板色 + 18dp 圆角。
+- `snackBarTheme`：**floating** 药丸条（原为通栏），不遮挡书架与阅读器 chrome。
+- `chipTheme` 全胶囊、`dividerTheme` 统一发丝线、`tooltipTheme` 同半径、
+  `sliderTheme` 主色轨道——避免各页面各自为政。
+
+**③ 逐个改造**
+- 确认框 / 文本输入框 / 分类选择对话框 → `AppDialog`；输入框改圆角填充
+  样式（与页头搜索框一致），不再是 `OutlineInputBorder`。
+- 书卡长按菜单、文件夹长按菜单、批量分类选择 → `AppSheet`；
+  文案「分配到分类…」统一为「移动到文件夹…」，与侧栏「文件夹」用语一致。
+- 阅读器「更多」面板 → `AppSheet`；缩放/视图模式各自成 sheet（原来挤在
+  一个面板里的横向控件行）。
+
+**验证**：新增 `overlay_style_test.dart`（5 个：token 共享、确认框不用
+`AlertDialog` 且标题衬线、输入框圆角填充、sheet 面板半径、主题覆盖
+popup/snackbar/bottomsheet/chip）；Flutter **305** 测试全绿、analyze 0；
+平板实机截图确认底部面板（抓取条 + 衬线标题 + 胶囊行）与「移动到文件夹」
+对话框（18dp 圆角 + 药丸按钮 + 选中胶囊）均与主界面同源。
+release APK 1.7.0 构建通过、16KB 对齐通过。
+
+**仍未做**：视口分块渲染、亮度手势。
+
+### 3.33 代码优化：重建循环、重复扫描与请求竞态（2026-10-21，无版本变更）
+
+一次面向运行时热点的梳理，不新增功能。
+
+**① 书库多选的逐帧重建循环（收益最大）**
+- `LibrarySelectionState` 没有值相等：`BookGrid` 每帧在 post-frame 里调用
+  `retain()`，每次都发布新状态对象，Riverpod 无法抑制通知 → 书库在多选
+  状态下永久重建。补 `==` / `hashCode`（`setEquals`），并让 `retain()` 在
+  选中集未变化时直接返回。
+- `Reloadable.reload()` 不再无条件切到 `loading`：刷新期间保留旧列表，
+  不再整页换成 spinner、让所有封面重新解码。
+
+**② 书库刷新不再重复全量封面修复**
+- `repairCovers()` 会列出所有书并逐个 PDF stat 封面文件；它原本挂在每次
+  书库刷新上（收藏 / 分类 / 删除 / 打开书之后都会触发）。改为只在 provider
+  首次 `build()` 执行一次（变更操作不会删封面文件）。
+
+**③ 搜索索引状态刷新**
+- 从 `_Body.build()` 的 post-frame 移到 notifier 内监听书库列表：
+  原实现每次书库重建都会对每本 PDF 发一次 FFI 查询。
+- 状态查询改为并发 `Future.wait`；刷新中再次触发会合并成一轮追加；
+  状态未变化时不发布（`mapEquals`），避免每秒轮询让所有书卡重建；
+  新增 `_disposed` 守卫，防止销毁后重启轮询定时器。
+
+**④ 请求竞态**
+- 全文搜索页加入请求序号：较早的慢查询返回时不再覆盖较新的结果。
+- `CharBoxCache` / `LowConfidenceCache` / `TranslatedCharBoxCache` 增加
+  在途去重（选区层、低置信层、搜索命中层会同时预载同一页）与换书 / 换
+  译文版本守卫：迟到的结果不再写入新书（或旧译文）的缓存。
+
+**⑤ 内存与 IO**
+- `pageTextTranslationProvider` 改为 autoDispose：翻过的页面不再把整页
+  原文 + 译文常驻内存。
+- AI 历史加载的消息查询由串行 N 次改为并发。
+- Rust：文本翻译缓存校验直接用行内 `source_text` 比较，不再为每个块重算
+  SHA-256；逐块查找改为 `HashMap`；翻译路径只读一次缓存表。分词输出改为
+  单缓冲拼接（原来 `collect + join` 分配两份页级缓冲）。
+- 书卡的日期正则提升为 static（原来每张卡每次 build 都重新编译）。
+
+**验证**：`library_selection_test.dart` 新增 2 个（值相等、retain 幂等）、
+`search_page_test.dart` 新增 1 个（乱序响应）、新增 `page_cache_test.dart`
+（并发合并、换书不串缓存）；Flutter **310** 测试全绿、analyze 0；
+Rust 139 测试通过、clippy -D warnings 0。
+
+---
 ## 4. 后续开发方向
 
 ### 4.1 近期（补齐规格 P2 缺口）

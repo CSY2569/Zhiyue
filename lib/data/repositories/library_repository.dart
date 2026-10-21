@@ -46,6 +46,19 @@ class LibraryRepository {
   /// Stamp `last_opened_at` to now (FEATURES 2.3).
   Future<int> touchLastOpened(int id) => rust.touchLastOpened(id: id);
 
+  /// Last-read page of every book with saved progress (library shelf).
+  ///
+  /// One FFI call for the whole shelf instead of one per card; books absent
+  /// from the map have never been opened.
+  Future<Map<int, int>> listReadingProgress() async {
+    try {
+      final rows = await rust.listReadingProgress();
+      return {for (final r in rows) r.bookId: r.page};
+    } catch (_) {
+      return const {};
+    }
+  }
+
   /// Assign or clear a book's category (FEATURES 2.8).
   Future<int> assignCategory(int bookId, int? categoryId) =>
       rust.assignCategory(bookId: bookId, categoryId: categoryId);

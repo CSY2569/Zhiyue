@@ -8,6 +8,7 @@ import 'package:flutter/widgets.dart'
     show OverlayEntry, OverlayState, WidgetsBinding;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/core/platform/platform.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
 
 import 'free_screenshot_overlay.dart';
@@ -209,6 +210,11 @@ class ScreenshotNotifier extends Notifier<ScreenshotState> {
   }
 
   Directory _defaultDir() {
+    // Android has no HOME/Pictures; the app cache dir is the only place the
+    // process may write without a storage permission.
+    if (PlatformCapabilities.current().isAndroid) {
+      return Directory('${Directory.systemTemp.path}/RBWA');
+    }
     // Fallback for environments without HOME (e.g. USERPROFILE on some
     // systems); Linux desktops always set HOME.
     final home = Platform.environment['HOME'] ??

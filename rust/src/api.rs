@@ -19,11 +19,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 
 use crate::db;
+use crate::db::repository::book::NewBook;
 use crate::db::repository::progress as progress_repo;
 use crate::db::repository::search as search_repo;
 use crate::db::repository::settings as settings_repo;
 use crate::db::repository::{book as book_repo, category as category_repo};
-use crate::db::repository::book::NewBook;
 use crate::error::{AppError, AppResult};
 use crate::models::book::{Book, BookType, Category};
 use crate::models::progress::{ReadingProgress, ViewMode};
@@ -119,6 +119,38 @@ pub fn init_core_with_db_path(db_path: String) -> InitResult {
     }
 }
 
+/// Initialize the core against an explicit application data directory.
+///
+/// Android has no XDG data dir (`dirs::data_dir()` is `None`) and its process
+/// CWD is `/`, so the platform layer passes
+/// `getApplicationSupportDirectory()` here before any other command. The
+/// database and every sibling path (models/, covers/, documents/, translated/)
+/// then live under that directory.
+///
+/// Desktop callers may keep using [init_core] -- this is an additive entry
+/// point with the same idempotence.
+pub fn init_core_with_data_dir(data_dir: String) -> InitResult {
+    if INITIALIZED.get().is_some() {
+        return init_result(true, db::db_path().ok().as_deref(), None);
+    }
+    let dir = std::path::PathBuf::from(&data_dir);
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        return init_result(
+            false,
+            None,
+            Some(format!("无法创建数据目录 {}: {e}", dir.display())),
+        );
+    }
+    let _ = db::connection::set_data_dir_override(dir.clone());
+    match try_init_at(&dir.join("rbwa.db")) {
+        Ok(path) => {
+            let _ = INITIALIZED.set(true);
+            init_result(true, Some(&path), None)
+        }
+        Err(e) => init_result(false, None, Some(e.to_string())),
+    }
+}
+
 /// Read a setting value by key (skeleton: direct KV read).
 /// Returns empty string if the key is absent. Real subsystem repos wrap
 /// this in M1; for the skeleton an empty string sentinel is sufficient.
@@ -137,7 +169,22 @@ pub fn get_setting(key: String) -> Option<String> {
 /// Panics if called before `init_core()` (programming error).
 pub fn set_setting(key: String, value: String) -> i32 {
     let conn = db::db();
-    settings_repo::set_raw(&conn, &key, &value).map(|_| 1).unwrap_or(0)
+    settings_repo::set_raw(&conn, &key, &value)
+        .map(|_| 1)
+        .unwrap_or(0)
+}
+
+/// Tell the PDF subsystem where `libpdfium.so` lives.
+///
+/// Android: `current_exe()` is the zygote process, so the executable-relative
+/// probe cannot find the bundled library; Dart passes
+/// `context.applicationInfo.nativeLibraryDir` (read over the `rbwa/system`
+/// channel) before the first render. Returns true when accepted; on desktop
+/// this is a no-op returning false (the probe already works).
+///
+/// Must run after `RustLib.init()` and before any `open_book` / render call.
+pub fn configure_native_library_dir(path: String) -> bool {
+    pdf::configure_native_library_dir(&path)
 }
 
 // =============================================================================
@@ -256,16 +303,11 @@ async fn import_book_inner(original_path: &str) -> AppResult<ImportResult> {
     }
 
     // 2. Infer the document type from the extension.
-    let ext = src
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("");
+    let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("");
     let file_type = match BookType::from_extension(ext) {
         Some(t) => t,
         None => {
-            return Ok(ImportResult::err(format!(
-                "unsupported file type: .{ext}"
-            )));
+            return Ok(ImportResult::err(format!("unsupported file type: .{ext}")));
         }
     };
 
@@ -392,9 +434,7 @@ pub fn toggle_favorite(id: i64) -> Option<Book> {
     let conn = db::db();
     let book = book_repo::get(&conn, id).ok().flatten()?;
     let new_fav = !book.favorite;
-    book_repo::set_favorite(&conn, id, new_fav)
-        .ok()
-        .flatten()
+    book_repo::set_favorite(&conn, id, new_fav).ok().flatten()
 }
 
 /// Record that a book was opened (FEATURES 2.3: recent-open sort).
@@ -610,6 +650,22 @@ pub fn get_progress(book_id: i64) -> Option<ReadingProgress> {
     progress_repo::get(&conn, book_id).ok().flatten()
 }
 
+/// Last-read page of every book, for the library shelf's progress line.
+/// Books without saved progress are absent (the card shows 0 / total).
+pub fn list_reading_progress() -> Vec<crate::models::progress::BookProgress> {
+    let conn = db::db();
+    match progress_repo::list_last_pages(&conn) {
+        Ok(rows) => rows
+            .into_iter()
+            .map(|(book_id, page)| crate::models::progress::BookProgress { book_id, page })
+            .collect(),
+        Err(e) => {
+            tracing::warn!(?e, "list_reading_progress failed");
+            Vec::new()
+        }
+    }
+}
+
 /// Save the reading position (upsert). `view_mode` is the string form
 /// ("single" / "double_scroll" / "double_page"). Returns 1 on success.
 pub fn save_progress(book_id: i64, page: i64, zoom: f64, view_mode: String) -> i32 {
@@ -789,10 +845,7 @@ pub async fn extract_translated_text(book_id: i64, page: i64) -> CharBoxResult {
             }
         };
         let path = path.clone();
-        match tokio::task::spawn_blocking(move || {
-            crate::pdf::extract_text_file(&path, page)
-        })
-        .await
+        match tokio::task::spawn_blocking(move || crate::pdf::extract_text_file(&path, page)).await
         {
             Ok(Ok(boxes)) => CharBoxResult { boxes, error: None },
             Ok(Err(e)) => CharBoxResult {
@@ -836,10 +889,7 @@ pub struct ExportResult {
 pub async fn extract_text(book_id: i64, page: i64) -> CharBoxResult {
     let _ = book_id;
     match current_boxes(page) {
-        Ok(boxes) => CharBoxResult {
-            boxes,
-            error: None,
-        },
+        Ok(boxes) => CharBoxResult { boxes, error: None },
         Err(e) => CharBoxResult {
             boxes: Vec::new(),
             error: Some(e.to_string()),
@@ -901,7 +951,10 @@ pub fn delete_annotation(annotation_id: i64) -> i32 {
 /// underneath; image-layer marks merge into their page sections.
 pub fn export_annotations_markdown(book_id: i64) -> ExportResult {
     let conn = db::db();
-    match (annotation_repo::list(&conn, book_id), image_annotation_repo::list(&conn, book_id)) {
+    match (
+        annotation_repo::list(&conn, book_id),
+        image_annotation_repo::list(&conn, book_id),
+    ) {
         (Ok(anns), Ok(marks)) => ExportResult {
             content: export::annotations_markdown(&anns, &marks),
             error: None,
@@ -917,7 +970,10 @@ pub fn export_annotations_markdown(book_id: i64) -> ExportResult {
 /// coordinates and style (FEATURES 4.5.3); image-layer marks included (5.6).
 pub fn export_annotations_json(book_id: i64) -> ExportResult {
     let conn = db::db();
-    match (annotation_repo::list(&conn, book_id), image_annotation_repo::list(&conn, book_id)) {
+    match (
+        annotation_repo::list(&conn, book_id),
+        image_annotation_repo::list(&conn, book_id),
+    ) {
         (Ok(anns), Ok(marks)) => ExportResult {
             content: export::annotations_json(book_id, &anns, &marks),
             error: None,
@@ -1024,7 +1080,6 @@ use crate::ai::AiClient as _;
 use crate::db::repository::ai as ai_repo;
 use crate::frb_generated::StreamSink;
 use crate::models::ai::{AiActionType, AiConfig, AiMessage, AiRole, AiThread};
-
 
 /// Load the BYOK AI configuration (FEATURES 6.1), or defaults on first run.
 /// The built-in text of a role template (设置 → AI 回复): the settings UI
@@ -1166,9 +1221,7 @@ pub fn delete_ai_thread(thread_id: i64) -> i32 {
     };
     if deleted == 1 {
         for rel in images {
-            let _ = std::fs::remove_file(
-                db::app_data_dir().unwrap_or_default().join(rel),
-            );
+            let _ = std::fs::remove_file(db::app_data_dir().unwrap_or_default().join(rel));
         }
     }
     deleted
@@ -1223,7 +1276,10 @@ async fn system_prompt_for(
     // translating, so it is skipped for translation. Explain / search / chat
     // are interpretive actions where the role template adds value.
     if action == AiActionType::Translate {
-        return ActionPrompt { system: base, user_prefix };
+        return ActionPrompt {
+            system: base,
+            user_prefix,
+        };
     }
     ActionPrompt {
         system: compose_system(config, &base),
@@ -1489,8 +1545,11 @@ async fn builtin_search_stream(
     // The history carries the thread's prior turns (设置 → AI 回复:
     // include_book_history off = independent turns); the role template is
     // prepended to the built-in search system prompt.
-    let mut messages =
-        history_with_system(config, history, compose_system(config, &ai::prompts::search_system(true)));
+    let mut messages = history_with_system(
+        config,
+        history,
+        compose_system(config, &ai::prompts::search_system(true)),
+    );
     let nonce = ai::search_safety::boundary_nonce();
     let extras = ai::RequestExtras::from_config(config);
     // Wrap the query in <text> tags (indirect prompt-injection defense: the
@@ -1611,12 +1670,7 @@ pub struct OcrLineEdit {
 /// hit highlighting aligns with the line boxes. Shared by scan_page (fresh
 /// scan) and update_page_ocr_lines (manual correction) so the two never
 /// drift.
-fn index_ocr_result(
-    conn: &rusqlite::Connection,
-    book_id: i64,
-    page: i64,
-    result: &OcrResult,
-) {
+fn index_ocr_result(conn: &rusqlite::Connection, book_id: i64, page: i64, result: &OcrResult) {
     let original: String = result.lines.iter().map(|l| l.text.as_str()).collect();
     if !original.trim().is_empty() {
         let _ = search_repo::index_page(
@@ -1872,9 +1926,7 @@ pub fn get_engine_status() -> crate::models::translate::EngineStatus {
 /// Installs the translation engine, streaming progress. Idempotent (a retry
 /// resumes at the first incomplete step). Completion is observed by the
 /// stream ending; errors go to `sink.add_error`.
-pub async fn install_engine(
-    sink: StreamSink<crate::models::translate::EngineInstallEvent>,
-) {
+pub async fn install_engine(sink: StreamSink<crate::models::translate::EngineInstallEvent>) {
     #[cfg(feature = "ai")]
     {
         let result = crate::translate::engine::install_engine(move |ev| {
@@ -2078,6 +2130,141 @@ pub fn set_translation_config(config: crate::models::translate::TranslationConfi
     }
 }
 
+// =============================================================================
+// Android v1 -- text-level bilingual reading
+// =============================================================================
+//
+// The mobile counterpart of the RetainPDF job: extract the visible page's
+// text blocks, translate them through the user's OpenAI-compatible endpoint,
+// cache each block, and let the UI lay the result out as a text column. No
+// Python, no PyMuPDF, no Typst -- see `translate::text_translate`.
+
+/// Extracts one page's text blocks (text layer, or local OCR when scanned).
+/// Never calls the network; `error` is set when the page has no text at all.
+pub async fn get_page_text_blocks(
+    book_id: i64,
+    page: i64,
+) -> crate::models::translate::PageTextBlocks {
+    #[cfg(feature = "ai")]
+    {
+        match crate::translate::text_translate::extract_blocks(book_id, page) {
+            Ok(blocks) => blocks,
+            Err(e) => crate::models::translate::PageTextBlocks {
+                page,
+                width: 0.0,
+                height: 0.0,
+                blocks: Vec::new(),
+                error: Some(e.to_string()),
+            },
+        }
+    }
+    #[cfg(not(feature = "ai"))]
+    {
+        let _ = (book_id, page);
+        crate::models::translate::PageTextBlocks {
+            page,
+            width: 0.0,
+            height: 0.0,
+            blocks: Vec::new(),
+            error: Some("文本对照需要 ai 构建特性".into()),
+        }
+    }
+}
+
+/// Reads the cached translation of one page without calling the LLM.
+/// Returns null when nothing (or nothing matching the current blocks) is
+/// cached.
+pub async fn get_page_text_translation(
+    book_id: i64,
+    page: i64,
+    target_lang: String,
+) -> Option<crate::models::translate::PageTextTranslation> {
+    #[cfg(feature = "ai")]
+    {
+        match crate::translate::text_translate::cached_translation(book_id, page, &target_lang) {
+            Ok(hit) => hit,
+            Err(e) => {
+                tracing::debug!(?e, book_id, page, "text translation cache probe failed");
+                None
+            }
+        }
+    }
+    #[cfg(not(feature = "ai"))]
+    {
+        let _ = (book_id, page, target_lang);
+        None
+    }
+}
+
+/// Translates one page (cache first unless [force]), streaming progress over
+/// the returned Future. Failures are reported in `error`, not thrown.
+pub async fn translate_page_text(
+    book_id: i64,
+    page: i64,
+    target_lang: String,
+    force: bool,
+) -> crate::models::translate::PageTextTranslation {
+    #[cfg(feature = "ai")]
+    {
+        crate::translate::text_translate::translate_page(
+            book_id,
+            page,
+            &target_lang,
+            force,
+            |_, _| {},
+        )
+        .await
+    }
+    #[cfg(not(feature = "ai"))]
+    {
+        let _ = (book_id, page, force);
+        crate::models::translate::PageTextTranslation {
+            page,
+            width: 0.0,
+            height: 0.0,
+            target_lang,
+            model: String::new(),
+            blocks: Vec::new(),
+            cached: false,
+            error: Some("文本对照需要 ai 构建特性".into()),
+        }
+    }
+}
+
+/// Cancels the running page translation (checked between batches).
+/// Returns 1.
+pub fn cancel_page_text_translation() -> i32 {
+    #[cfg(feature = "ai")]
+    crate::translate::text_translate::cancel();
+    1
+}
+
+/// Deletes a book's text-level translation cache. Returns the deleted rows.
+pub fn clear_book_text_translation(book_id: i64) -> i64 {
+    #[cfg(feature = "ai")]
+    {
+        crate::translate::text_translate::clear_book(book_id).unwrap_or(0)
+    }
+    #[cfg(not(feature = "ai"))]
+    {
+        let _ = book_id;
+        0
+    }
+}
+
+/// Number of pages with cached text translations (bilingual pane header).
+pub fn count_text_translated_pages(book_id: i64, target_lang: String) -> i64 {
+    #[cfg(feature = "ai")]
+    {
+        crate::translate::text_translate::cached_page_count(book_id, &target_lang).unwrap_or(0)
+    }
+    #[cfg(not(feature = "ai"))]
+    {
+        let _ = (book_id, target_lang);
+        0
+    }
+}
+
 /// Registers a book as translating (plan §7 eviction guard: a book in
 /// flight is never evicted). Returns 1.
 pub fn start_book_translation(book_id: i64) -> i32 {
@@ -2137,7 +2324,6 @@ pub fn delete_translation_glossary(id: i64) -> i32 {
         .unwrap_or(0)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2156,8 +2342,14 @@ mod tests {
         assert!(prompt.contains("专业翻译"), "{prompt}");
         assert!(prompt.contains("只输出译文"), "{prompt}");
         // ...and the "general" role segment is NOT (no "阅读助手" / "解释术语").
-        assert!(!prompt.contains("阅读助手"), "role template leaked: {prompt}");
-        assert!(!prompt.contains("结合上下文解释"), "role template leaked: {prompt}");
+        assert!(
+            !prompt.contains("阅读助手"),
+            "role template leaked: {prompt}"
+        );
+        assert!(
+            !prompt.contains("结合上下文解释"),
+            "role template leaked: {prompt}"
+        );
     }
 
     /// Explain / chat keep the role template (it adds value for interpretive
@@ -2167,7 +2359,10 @@ mod tests {
         let config = AiConfig::default();
         let prompt = system_prompt_for(AiActionType::Explain, &config, "", "n").await;
         let prompt = prompt.system;
-        assert!(prompt.contains("阅读助手"), "explain should keep the role: {prompt}");
+        assert!(
+            prompt.contains("阅读助手"),
+            "explain should keep the role: {prompt}"
+        );
         assert!(prompt.contains("讲解者"), "{prompt}");
     }
 
@@ -2176,7 +2371,10 @@ mod tests {
         let config = AiConfig::default();
         let prompt = system_prompt_for(AiActionType::Chat, &config, "", "n").await;
         let prompt = prompt.system;
-        assert!(prompt.contains("阅读助手"), "chat should keep the role: {prompt}");
+        assert!(
+            prompt.contains("阅读助手"),
+            "chat should keep the role: {prompt}"
+        );
         assert!(prompt.contains("AI 助手"), "{prompt}");
     }
 
@@ -2203,7 +2401,10 @@ mod tests {
             assert!(t.contains(payload), "payload must be inside the tags: {t}");
         }
         // Chat: verbatim (the user typed it themselves and can read it).
-        assert_eq!(wrap_untrusted_input(AiActionType::Chat, payload, nonce), payload);
+        assert_eq!(
+            wrap_untrusted_input(AiActionType::Chat, payload, nonce),
+            payload
+        );
     }
 
     /// A payload that tries to close the boundary must be neutralized, so

@@ -242,6 +242,220 @@ class GlossaryEntry {
           targetLang == other.targetLang;
 }
 
+/// Extracted blocks of one page (empty `blocks` + `error` when unavailable).
+class PageTextBlocks {
+  final PlatformInt64 page;
+  final double width;
+  final double height;
+  final List<TextBlock> blocks;
+  final String? error;
+
+  const PageTextBlocks({
+    required this.page,
+    required this.width,
+    required this.height,
+    required this.blocks,
+    this.error,
+  });
+
+  @override
+  int get hashCode =>
+      page.hashCode ^
+      width.hashCode ^
+      height.hashCode ^
+      blocks.hashCode ^
+      error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PageTextBlocks &&
+          runtimeType == other.runtimeType &&
+          page == other.page &&
+          width == other.width &&
+          height == other.height &&
+          blocks == other.blocks &&
+          error == other.error;
+}
+
+/// Result of translating (or reading the cache of) one page.
+class PageTextTranslation {
+  final PlatformInt64 page;
+  final double width;
+  final double height;
+  final String targetLang;
+  final String model;
+  final List<TranslatedTextBlock> blocks;
+
+  /// True when every block came from SQLite (no LLM call was made).
+  final bool cached;
+
+  /// Page-level failure (missing AI config, no text layer, network error);
+  /// block-level failures live on the blocks.
+  final String? error;
+
+  const PageTextTranslation({
+    required this.page,
+    required this.width,
+    required this.height,
+    required this.targetLang,
+    required this.model,
+    required this.blocks,
+    required this.cached,
+    this.error,
+  });
+
+  @override
+  int get hashCode =>
+      page.hashCode ^
+      width.hashCode ^
+      height.hashCode ^
+      targetLang.hashCode ^
+      model.hashCode ^
+      blocks.hashCode ^
+      cached.hashCode ^
+      error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PageTextTranslation &&
+          runtimeType == other.runtimeType &&
+          page == other.page &&
+          width == other.width &&
+          height == other.height &&
+          targetLang == other.targetLang &&
+          model == other.model &&
+          blocks == other.blocks &&
+          cached == other.cached &&
+          error == other.error;
+}
+
+/// One extracted text block of a page.
+class TextBlock {
+  /// Stable index within the page (translation responses reference this).
+  final PlatformInt64 index;
+
+  /// "text" | "formula".
+  final String kind;
+
+  /// Heading / body / abstract / caption / footnote / header / footer /
+  /// display_formula (same taxonomy as the flat-OCR bridge).
+  final String subType;
+
+  /// Normalized page rect (0..1, top-left origin).
+  final double x;
+  final double y;
+  final double w;
+  final double h;
+  final String text;
+
+  const TextBlock({
+    required this.index,
+    required this.kind,
+    required this.subType,
+    required this.x,
+    required this.y,
+    required this.w,
+    required this.h,
+    required this.text,
+  });
+
+  @override
+  int get hashCode =>
+      index.hashCode ^
+      kind.hashCode ^
+      subType.hashCode ^
+      x.hashCode ^
+      y.hashCode ^
+      w.hashCode ^
+      h.hashCode ^
+      text.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TextBlock &&
+          runtimeType == other.runtimeType &&
+          index == other.index &&
+          kind == other.kind &&
+          subType == other.subType &&
+          x == other.x &&
+          y == other.y &&
+          w == other.w &&
+          h == other.h &&
+          text == other.text;
+}
+
+/// Translation state of one block.
+enum TextBlockStatus {
+  done,
+
+  /// Formula / page number / empty text: intentionally left untranslated.
+  skipped,
+  failed,
+}
+
+/// One translated block, carrying the source geometry for rendering.
+class TranslatedTextBlock {
+  final PlatformInt64 index;
+  final String kind;
+  final String subType;
+  final double x;
+  final double y;
+  final double w;
+  final double h;
+  final String sourceText;
+  final String translatedText;
+  final TextBlockStatus status;
+  final String? error;
+
+  const TranslatedTextBlock({
+    required this.index,
+    required this.kind,
+    required this.subType,
+    required this.x,
+    required this.y,
+    required this.w,
+    required this.h,
+    required this.sourceText,
+    required this.translatedText,
+    required this.status,
+    this.error,
+  });
+
+  @override
+  int get hashCode =>
+      index.hashCode ^
+      kind.hashCode ^
+      subType.hashCode ^
+      x.hashCode ^
+      y.hashCode ^
+      w.hashCode ^
+      h.hashCode ^
+      sourceText.hashCode ^
+      translatedText.hashCode ^
+      status.hashCode ^
+      error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TranslatedTextBlock &&
+          runtimeType == other.runtimeType &&
+          index == other.index &&
+          kind == other.kind &&
+          subType == other.subType &&
+          x == other.x &&
+          y == other.y &&
+          w == other.w &&
+          h == other.h &&
+          sourceText == other.sourceText &&
+          translatedText == other.translatedText &&
+          status == other.status &&
+          error == other.error;
+}
+
 /// What happens to a running whole-book translation when the user switches
 /// books / closes the pane (plan §8, user decision). `Ask` is the default
 /// until the user picks a behaviour in the first-run dialog.

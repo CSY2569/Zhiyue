@@ -9,9 +9,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::AppResult;
 #[cfg(not(feature = "ocr"))]
 use crate::error::AppError;
+use crate::error::AppResult;
 
 #[cfg(feature = "ocr")]
 mod engine;

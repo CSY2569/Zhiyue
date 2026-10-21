@@ -266,7 +266,14 @@ fn run_job_inner(
         }),
     )?;
     emit("解析版式", "规范化文档结构…".into());
-    run_pipeline_step(root, book_id, "normalize-ocr", &normalize_spec, None, on_event)?;
+    run_pipeline_step(
+        root,
+        book_id,
+        "normalize-ocr",
+        &normalize_spec,
+        None,
+        on_event,
+    )?;
     if !doc_v1.is_file() {
         return Err(AppError::Internal("管线未产出 document.v1.json".into()));
     }
@@ -314,9 +321,15 @@ fn run_job_inner(
             },
         }),
     )?;
-    let output_pdf =
-        run_pipeline_step(root, book_id, "book", &book_spec, Some(&ai.api_key), on_event)?
-            .unwrap_or_default();
+    let output_pdf = run_pipeline_step(
+        root,
+        book_id,
+        "book",
+        &book_spec,
+        Some(&ai.api_key),
+        on_event,
+    )?
+    .unwrap_or_default();
     let produced = if !output_pdf.is_empty() && Path::new(&output_pdf).is_file() {
         PathBuf::from(&output_pdf)
     } else {
@@ -717,7 +730,10 @@ mod tests {
             parse_pipeline_line(art),
             LineOutcome::OutputPdf("/tmp/x/translated.pdf".into())
         );
-        assert_eq!(parse_pipeline_line("output pdf: /tmp/y.pdf"), LineOutcome::OutputPdf("/tmp/y.pdf".into()));
+        assert_eq!(
+            parse_pipeline_line("output pdf: /tmp/y.pdf"),
+            LineOutcome::OutputPdf("/tmp/y.pdf".into())
+        );
         assert_eq!(parse_pipeline_line("random noise"), LineOutcome::None);
         assert_eq!(parse_pipeline_line(""), LineOutcome::None);
     }
@@ -947,9 +963,13 @@ mod tests {
         })
         .expect("open produced pdf");
         assert_eq!(pages, fixture_pages, "page count must match the source");
-        let texts = crate::pdf::extract_document_text(&translation.mono_path).expect("extract text");
+        let texts =
+            crate::pdf::extract_document_text(&translation.mono_path).expect("extract text");
         assert!(
-            texts.first().map(|t| t.contains("模拟译文")).unwrap_or(false),
+            texts
+                .first()
+                .map(|t| t.contains("模拟译文"))
+                .unwrap_or(false),
             "translated text missing: {:?}",
             texts.first()
         );
@@ -962,7 +982,10 @@ mod tests {
             events.iter().map(|e| &e.phase).collect::<Vec<_>>()
         );
         let last = events.last().expect("events");
-        assert!(last.done && last.error.is_none(), "terminal event: {last:?}");
+        assert!(
+            last.done && last.error.is_none(),
+            "terminal event: {last:?}"
+        );
 
         if std::env::var("RBWA_KEEP_E2E").is_err() {
             let _ = std::fs::remove_dir_all(&tmp);
@@ -993,7 +1016,10 @@ mod tests {
                     .join(".local/share/RBWA/models")
             });
         if !models_src.join("high_precision").is_dir() {
-            panic!("OCR models not found at {} (set RBWA_OCR_MODELS_SRC)", models_src.display());
+            panic!(
+                "OCR models not found at {} (set RBWA_OCR_MODELS_SRC)",
+                models_src.display()
+            );
         }
         unsafe {
             std::env::set_var("RBWA_RETAIN_ENGINE_DIR", &engine);
@@ -1098,15 +1124,21 @@ mod tests {
         })
         .expect("open produced pdf");
         assert_eq!(pages, 2, "page count must match the scanned source");
-        let texts = crate::pdf::extract_document_text(&translation.mono_path).expect("extract text");
+        let texts =
+            crate::pdf::extract_document_text(&translation.mono_path).expect("extract text");
         assert!(
-            texts.first().map(|t| t.contains("模拟译文")).unwrap_or(false),
+            texts
+                .first()
+                .map(|t| t.contains("模拟译文"))
+                .unwrap_or(false),
             "OCR path translation missing: {:?}",
             texts.first()
         );
         let events = events.lock().unwrap();
         assert!(
-            events.iter().any(|e| e.phase == "解析版式" && e.detail.contains("识别扫描页")),
+            events
+                .iter()
+                .any(|e| e.phase == "解析版式" && e.detail.contains("识别扫描页")),
             "no scanned-page OCR progress: {:?}",
             events.iter().map(|e| &e.detail).collect::<Vec<_>>()
         );
@@ -1148,7 +1180,11 @@ mod tests {
         conn.execute(
             "INSERT INTO books (title, original_path, stored_path, file_type, page_count) \
              VALUES (?1, ?2, ?3, 'pdf', 2)",
-            rusqlite::params!["取消测试", book_pdf.to_string_lossy(), book_pdf.to_string_lossy()],
+            rusqlite::params![
+                "取消测试",
+                book_pdf.to_string_lossy(),
+                book_pdf.to_string_lossy()
+            ],
         )
         .expect("insert book");
         let book_id: i64 = conn.last_insert_rowid();

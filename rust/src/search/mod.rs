@@ -27,13 +27,22 @@ fn jieba() -> &'static Jieba {
 /// Segment [text] into space-joined tokens -- the form `page_text_fts`
 /// indexes (unicode61 splits on the spaces). Empty text -> empty string.
 pub fn tokenize(text: &str) -> String {
-    jieba()
-        .cut(text, false)
-        .into_iter()
-        .map(|t| t.word)
-        .filter(|w| !w.trim().is_empty())
-        .collect::<Vec<_>>()
-        .join(" ")
+    // Build the joined string while iterating: the obvious
+    // `collect::<Vec<_>>().join(" ")` allocated a second buffer the size of
+    // the page for every indexed page, on top of jieba's own token vector.
+    let tokens = jieba().cut(text, false);
+    let mut out = String::with_capacity(text.len() + tokens.len());
+    for t in &tokens {
+        let word = t.word.trim();
+        if word.is_empty() {
+            continue;
+        }
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(word);
+    }
+    out
 }
 
 /// Books whose background index build is in flight (in-memory only; the

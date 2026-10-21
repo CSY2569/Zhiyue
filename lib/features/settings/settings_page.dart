@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:rbwa/core/theme/reading_theme.dart';
 import 'package:rbwa/core/widgets/text_input_dialog.dart';
+import 'package:rbwa/core/navigation.dart';
 import 'package:rbwa/core/theme/reading_theme_controller.dart';
 import 'package:rbwa/data/repositories/ai_repository.dart';
 import 'package:rbwa/features/ai/providers/ai_config_provider.dart';
@@ -271,7 +272,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         title: const Text('设置'),
         leading: IconButton(
           icon: const Icon(LucideIcons.arrowLeft),
-          onPressed: () => context.go('/library'),
+          onPressed: () => navigateBack(GoRouter.of(context)),
         ),
       ),
       body: Center(

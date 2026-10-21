@@ -57,7 +57,8 @@ pub fn list_glossary(conn: &Connection) -> AppResult<Vec<GlossaryEntry>> {
             target_lang: row.get(4)?,
         })
     })?;
-    rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+    rows.collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(Into::into)
 }
 
 pub fn add_glossary_entry(
@@ -76,7 +77,10 @@ pub fn add_glossary_entry(
 }
 
 pub fn delete_glossary_entry(conn: &Connection, id: i64) -> AppResult<usize> {
-    Ok(conn.execute("DELETE FROM translation_glossary WHERE id = ?1", params![id])?)
+    Ok(conn.execute(
+        "DELETE FROM translation_glossary WHERE id = ?1",
+        params![id],
+    )?)
 }
 
 #[cfg(test)]

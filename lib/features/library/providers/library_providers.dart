@@ -1,4 +1,3 @@
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:rbwa/data/repositories/library_repository.dart';
@@ -22,11 +21,17 @@ class ImportSummary {
   });
 }
 
-/// Shared reload pattern for the library's async lists: flip to loading,
-/// then re-fetch (AsyncValue.guard keeps errors in the state).
+/// Shared reload pattern for the library's async lists.
+///
+/// Keeps the current data on screen while re-fetching: flipping to
+/// [AsyncValue.loading] used to replace the whole book grid with a spinner on
+/// every mutation (import / delete / favorite batch), which unmounted every
+/// card and forced all covers to decode again. The previous list stays
+/// visible until the refreshed one lands; a first load still shows the
+/// spinner because there is no data to keep.
 mixin Reloadable<T> on AsyncNotifier<T> {
   Future<void> reload(Future<T> Function() load) async {
-    state = const AsyncValue.loading();
+    if (!state.hasValue) state = const AsyncValue.loading();
     state = await AsyncValue.guard(load);
   }
 }
@@ -52,13 +57,14 @@ class LibraryBooksNotifier extends AsyncNotifier<List<Book>>
   }
 
   /// Force a full reload from the DB.
-  Future<void> refresh() => reload(() async {
-        final repo = ref.read(libraryRepositoryProvider);
-        try {
-          await repo.repairCovers();
-        } catch (_) {}
-        return repo.listBooks();
-      });
+  ///
+  /// Cover repair is deliberately NOT repeated here: it lists every book and
+  /// stats one cover file per PDF in Rust, and this refresh runs after every
+  /// mutation (favorite toggle, category move, delete, open). Mutations never
+  /// delete cover files, so the once-per-provider-lifetime repair in [build]
+  /// is enough and a tap no longer costs N filesystem checks.
+  Future<void> refresh() =>
+      reload(() => ref.read(libraryRepositoryProvider).listBooks());
 
   /// Import a batch of files (FEATURES 2.1). Returns a summary so the caller
   /// can show a SnackBar (e.g. "导入 2 本，已存在 1 本").
@@ -85,6 +91,55 @@ class LibraryBooksNotifier extends AsyncNotifier<List<Book>>
       alreadyExisted: existed,
       failed: failed,
     );
+  }
+
+  /// Bulk delete: one refresh at the end instead of one per book (the grid
+  /// stays usable while a large selection is removed).
+  Future<int> deleteMany(Iterable<int> ids) async {
+    final repo = ref.read(libraryRepositoryProvider);
+    var deleted = 0;
+    for (final id in ids) {
+      try {
+        await repo.deleteBook(id);
+        deleted++;
+      } catch (_) {
+        // Count only the ones that actually went through.
+      }
+    }
+    await refresh();
+    return deleted;
+  }
+
+  /// Bulk favorite: sets every selected book to the same state.
+  Future<void> setFavoriteMany(
+    Iterable<int> ids, {
+    required bool favorite,
+  }) async {
+    final repo = ref.read(libraryRepositoryProvider);
+    for (final id in ids) {
+      final book = state.valueOrNull?.where((b) => b.id == id).firstOrNull;
+      if (book == null) continue;
+      if (book.favorite == favorite) continue;
+      try {
+        await repo.toggleFavorite(id);
+      } catch (_) {
+        // Best-effort: the refresh below reconciles.
+      }
+    }
+    await refresh();
+  }
+
+  /// Bulk category assignment (null = unclassify).
+  Future<void> assignCategoryMany(Iterable<int> ids, int? categoryId) async {
+    final repo = ref.read(libraryRepositoryProvider);
+    for (final id in ids) {
+      try {
+        await repo.assignCategory(id, categoryId);
+      } catch (_) {
+        // Best-effort: the refresh below reconciles.
+      }
+    }
+    await refresh();
   }
 
   /// Delete a book (FEATURES 2.4). Optimistically removes it from the local
@@ -121,21 +176,23 @@ class LibraryBooksNotifier extends AsyncNotifier<List<Book>>
     await repo.assignCategory(bookId, categoryId);
     state = state.whenData(
       (books) => books
-          .map((b) => b.id == bookId
-              ? Book(
-                  id: b.id,
-                  title: b.title,
-                  originalPath: b.originalPath,
-                  storedPath: b.storedPath,
-                  fileType: b.fileType,
-                  pageCount: b.pageCount,
-                  coverPath: b.coverPath,
-                  favorite: b.favorite,
-                  categoryId: categoryId,
-                  lastOpenedAt: b.lastOpenedAt,
-                  importedAt: b.importedAt,
-                )
-              : b)
+          .map(
+            (b) => b.id == bookId
+                ? Book(
+                    id: b.id,
+                    title: b.title,
+                    originalPath: b.originalPath,
+                    storedPath: b.storedPath,
+                    fileType: b.fileType,
+                    pageCount: b.pageCount,
+                    coverPath: b.coverPath,
+                    favorite: b.favorite,
+                    categoryId: categoryId,
+                    lastOpenedAt: b.lastOpenedAt,
+                    importedAt: b.importedAt,
+                  )
+                : b,
+          )
           .toList(),
     );
   }
@@ -158,9 +215,8 @@ class CategoriesNotifier extends AsyncNotifier<List<Category>>
     return ref.read(libraryRepositoryProvider).listCategories();
   }
 
-  Future<void> refresh() => reload(
-        () => ref.read(libraryRepositoryProvider).listCategories(),
-      );
+  Future<void> refresh() =>
+      reload(() => ref.read(libraryRepositoryProvider).listCategories());
 
   /// Create a new category. Returns the created category, or null if the name
   /// was already taken.
@@ -211,20 +267,32 @@ class LibraryFilterNotifier extends StateNotifier<LibraryFilter> {
   void setSearchQuery(String q) => state = state.copyWith(searchQuery: q);
 
   /// 全部: no view filter (search still applies).
-  void showAll() =>
-      state = LibraryFilter(searchQuery: state.searchQuery);
+  void showAll() => state = LibraryFilter(searchQuery: state.searchQuery);
+
+  /// 最近使用: books with a saved open timestamp (the list is already
+  /// ordered most-recent-first by the repository).
+  void showRecent() => state = LibraryFilter(
+        searchQuery: state.searchQuery,
+        view: LibraryView.recent,
+      );
 
   /// PDF: every PDF in the library, regardless of category / favorites.
-  void showPdf() =>
-      state = LibraryFilter(searchQuery: state.searchQuery, view: LibraryView.pdf);
+  void showPdf() => state = LibraryFilter(
+        searchQuery: state.searchQuery,
+        view: LibraryView.pdf,
+      );
 
   /// 图片: every image book, regardless of category / favorites.
-  void showImage() => state =
-      LibraryFilter(searchQuery: state.searchQuery, view: LibraryView.image);
+  void showImage() => state = LibraryFilter(
+        searchQuery: state.searchQuery,
+        view: LibraryView.image,
+      );
 
   /// 收藏: every favorite, regardless of category / type.
-  void showFavorites() => state =
-      LibraryFilter(searchQuery: state.searchQuery, view: LibraryView.favorite);
+  void showFavorites() => state = LibraryFilter(
+        searchQuery: state.searchQuery,
+        view: LibraryView.favorite,
+      );
 
   /// Select a category (the only active view). `null` falls back to 全部.
   void setCategory(int? categoryId) => state = categoryId == null
@@ -238,6 +306,16 @@ class LibraryFilterNotifier extends StateNotifier<LibraryFilter> {
 
 /// Derived provider: the book list after applying the current filter
 /// (FEATURES 2.7). Recomputes whenever books or the filter change.
+/// Last-read page per book, for the shelf's progress line.
+///
+/// Watches the book list, so importing / deleting / reopening a book (which
+/// refreshes that list) also refreshes the progress map.
+final libraryProgressProvider = FutureProvider<Map<int, int>>((ref) async {
+  final books = await ref.watch(libraryBooksProvider.future);
+  if (books.isEmpty) return const {};
+  return ref.read(libraryRepositoryProvider).listReadingProgress();
+});
+
 final filteredBooksProvider = Provider<List<Book>>((ref) {
   final books = ref.watch(libraryBooksProvider).valueOrNull ?? [];
   final filter = ref.watch(libraryFilterProvider);
@@ -252,6 +330,9 @@ final filteredBooksProvider = Provider<List<Book>>((ref) {
     // entries); search is the only stacking filter.
     return switch (filter.view) {
       LibraryView.all => true,
+      // Recently opened: anything with a saved open timestamp. The list is
+      // already ordered most-recent-first by the repository.
+      LibraryView.recent => b.lastOpenedAt != null,
       LibraryView.pdf => b.fileType == BookType.pdf,
       LibraryView.image => b.fileType == BookType.image,
       LibraryView.favorite => b.favorite,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/core/platform/platform.dart';
 import 'package:rbwa/features/annotation/providers/annotation_provider.dart';
 import 'package:rbwa/features/annotation/providers/selection_provider.dart';
 import 'package:rbwa/features/annotation/widgets/highlight_layer.dart';
@@ -55,6 +56,34 @@ class _NoteComposerState extends ConsumerState<NoteComposer> {
     final sel = state.selection;
     if (pos == null || sel == null) return const SizedBox.shrink();
     final theme = Theme.of(context);
+    final screen = MediaQuery.sizeOf(context);
+    // Touch: dock at the bottom so the on-screen keyboard pushes the composer
+    // up instead of hiding it (the floating position is clipped by the
+    // viewport once the keyboard opens).
+    final mobile = PlatformCapabilities.current().isMobile ||
+        PlatformCapabilities.isCompactWidth(screen.width);
+
+    if (mobile) {
+      return Positioned(
+        left: 8,
+        right: 8,
+        bottom: 8,
+        child: Material(
+          elevation: 8,
+          borderRadius: BorderRadius.circular(12),
+          color: theme.colorScheme.surfaceContainerHigh,
+          child: Padding(
+            padding: EdgeInsets.only(
+              left: 12,
+              right: 12,
+              top: 12,
+              bottom: 12 + MediaQuery.viewInsetsOf(context).bottom,
+            ),
+            child: _body(theme, sel),
+          ),
+        ),
+      );
+    }
 
     return Positioned(
       left: pos.dx,
@@ -67,50 +96,54 @@ class _NoteComposerState extends ConsumerState<NoteComposer> {
           constraints: const BoxConstraints(maxWidth: 340, maxHeight: 260),
           child: Padding(
             padding: const EdgeInsets.all(12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('添加笔记', style: theme.textTheme.titleSmall),
-                const SizedBox(height: 4),
-                Text(
-                  sel.text,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _controller,
-                  autofocus: true,
-                  maxLines: null,
-                  decoration: const InputDecoration(
-                    isDense: true,
-                    hintText: '输入笔记内容…',
-                    border: OutlineInputBorder(),
-                  ),
-                  onSubmitted: (_) => _save(),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => ref
-                          .read(selectionProvider.notifier)
-                          .closeComposer(),
-                      child: const Text('取消'),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton(onPressed: _save, child: const Text('保存')),
-                  ],
-                ),
-              ],
-            ),
+            child: _body(theme, sel),
           ),
         ),
       ),
+    );
+  }
+
+  /// Composer content shared by the floating and docked layouts.
+  Widget _body(ThemeData theme, dynamic sel) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('添加笔记', style: theme.textTheme.titleSmall),
+        const SizedBox(height: 4),
+        Text(
+          sel.text as String,
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _controller,
+          autofocus: true,
+          maxLines: null,
+          decoration: const InputDecoration(
+            isDense: true,
+            hintText: '输入笔记内容…',
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (_) => _save(),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            TextButton(
+              onPressed: () =>
+                  ref.read(selectionProvider.notifier).closeComposer(),
+              child: const Text('取消'),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(onPressed: _save, child: const Text('保存')),
+          ],
+        ),
+      ],
     );
   }
 }

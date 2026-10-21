@@ -58,6 +58,10 @@ pub mod engine;
 pub mod flat_ocr;
 #[cfg(feature = "ai")]
 pub mod job;
+/// Text-level (block) translation for the mobile bilingual view: no Python
+/// sidecar, LLM only. Compiled with the `ai` feature.
+#[cfg(feature = "ai")]
+pub mod text_translate;
 
 /// `{data_dir}/retain_output/{book_id}` -- the engine's persistent scratch
 /// (translation-unit cache, domain cache, typography memory). Kept ACROSS

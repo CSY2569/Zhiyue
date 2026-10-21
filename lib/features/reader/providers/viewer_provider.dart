@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/core/haptics.dart';
 import 'package:rbwa/data/repositories/library_repository.dart';
 import 'package:rbwa/data/repositories/reader_repository.dart';
 import 'package:rbwa/src/rust/models/book.dart';
@@ -139,12 +140,17 @@ class ViewerNotifier extends StateNotifier<ViewerState> {
 
   void nextPage() {
     final step = state.mode == ViewMode.doublePage ? 2 : 1;
+    final before = state.currentPage;
     setPage(state.currentPage + step);
+    // Only click when the page actually changed (no feedback at the end).
+    if (state.currentPage != before) Haptics.tap();
   }
 
   void prevPage() {
     final step = state.mode == ViewMode.doublePage ? 2 : 1;
+    final before = state.currentPage;
     setPage(state.currentPage - step);
+    if (state.currentPage != before) Haptics.tap();
   }
 
   void setMode(ViewMode mode) {

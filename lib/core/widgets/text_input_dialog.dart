@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'package:rbwa/core/theme/layout_metrics.dart';
+import 'package:rbwa/core/widgets/app_overlay.dart';
+
 /// Shows a single-field modal dialog and returns the trimmed value, or null
 /// when the user cancels / the field is empty.
 ///
@@ -84,27 +87,45 @@ class _TextInputDialogState extends State<_TextInputDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.title),
-      content: TextField(
+    final scheme = Theme.of(context).colorScheme;
+    return AppDialog(
+      title: widget.title,
+      width: 460,
+      body: TextField(
         controller: _controller,
         autofocus: widget.autofocus,
         keyboardType: widget.keyboardType,
         minLines: widget.minLines,
         maxLines: widget.maxLines,
+        style: Theme.of(context).textTheme.bodyMedium,
         decoration: InputDecoration(
           labelText: widget.label,
           hintText: widget.hint,
-          border: const OutlineInputBorder(),
+          isDense: true,
+          filled: true,
+          fillColor: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
+          // Pill-ish field matching the header search box (24dp radius).
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(Golden.s13),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: Golden.s13,
+            vertical: Golden.s13,
+          ),
         ),
         onSubmitted: (_) => _submit(),
       ),
       actions: [
-        TextButton(
+        AppDialogAction(
+          label: widget.cancelLabel,
           onPressed: () => Navigator.pop(context),
-          child: Text(widget.cancelLabel),
         ),
-        FilledButton(onPressed: _submit, child: Text(widget.confirmLabel)),
+        AppDialogAction(
+          label: widget.confirmLabel,
+          primary: true,
+          onPressed: _submit,
+        ),
       ],
     );
   }

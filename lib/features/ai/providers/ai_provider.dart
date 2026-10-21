@@ -53,6 +53,16 @@ class AiNotifier extends Notifier<AiState> {
       final dbThreads = await _repo.listAiThreads();
       for (final t in dbThreads) {
         maxId = max(maxId, t.id);
+      }
+      // One `listAiMessages` round-trip per window used to run strictly one
+      // after another, so startup latency grew linearly with history. The
+      // queries are independent; issue them together and keep the window
+      // order for the result.
+      final messagesByThread = await Future.wait([
+        for (final t in dbThreads) _repo.listAiMessages(t.id),
+      ]);
+      for (var i = 0; i < dbThreads.length; i++) {
+        final t = dbThreads[i];
         final ts = AiThreadState(
           id: t.id,
           dbId: t.id,
@@ -60,9 +70,8 @@ class AiNotifier extends Notifier<AiState> {
           title: t.title,
           bookId: t.bookId,
         );
-        final msgs = await _repo.listAiMessages(t.id);
         ts.messages.addAll(
-          msgs.map(
+          messagesByThread[i].map(
             (m) => AiChatMessage(
               role: m.role,
               content: m.content,
@@ -139,8 +148,12 @@ class AiNotifier extends Notifier<AiState> {
   /// Persist the first user message together with a new window's row;
   /// back-fills [AiThreadState.dbId]. [imagePng] is the vision screenshot
   /// of a 识图 turn, stored to disk so history can show it again.
-  void _persistWindow(AiThreadState window, String firstText,
-      {Uint8List? imagePng, AiActionType? action}) {
+  void _persistWindow(
+    AiThreadState window,
+    String firstText, {
+    Uint8List? imagePng,
+    AiActionType? action,
+  }) {
     _enqueue(() async {
       final res = await _repo.createAiThread(
         title: window.title,
@@ -163,8 +176,13 @@ class AiNotifier extends Notifier<AiState> {
   /// the window's latest action in the shadow row. [action] overrides the
   /// window's action for this message (e.g. a follow-up in a translate
   /// thread runs as chat).
-  void _persistMessage(AiThreadState window, AiRole role, String content,
-      {Uint8List? imagePng, AiActionType? action}) {
+  void _persistMessage(
+    AiThreadState window,
+    AiRole role,
+    String content, {
+    Uint8List? imagePng,
+    AiActionType? action,
+  }) {
     if (content.trim().isEmpty) return;
     _enqueue(() async {
       final dbId = window.dbId;
@@ -218,13 +236,12 @@ class AiNotifier extends Notifier<AiState> {
     } catch (_) {}
     final thread = state.threadOf(threadId);
     if (thread == null) return;
-    final action =
-        thread.action == AiActionType.translate ? AiActionType.chat : thread.action;
-    thread.messages.add(AiChatMessage(
-      role: AiRole.user,
-      content: text,
-      actionType: action,
-    ));
+    final action = thread.action == AiActionType.translate
+        ? AiActionType.chat
+        : thread.action;
+    thread.messages.add(
+      AiChatMessage(role: AiRole.user, content: text, actionType: action),
+    );
     state = state.copyWith(
       activeThreadId: threadId,
       panelCleared: false,
@@ -309,17 +326,24 @@ class AiNotifier extends Notifier<AiState> {
       // Timeout: proceed without the loaded history.
     }
     final (window, isNew) = _resolveWindow(action, bookId, bookTitle);
-    window.messages.add(AiChatMessage(
-      role: AiRole.user,
-      content: text,
-      imagePng: imagePng,
-      actionType: action,
-    ));
+    window.messages.add(
+      AiChatMessage(
+        role: AiRole.user,
+        content: text,
+        imagePng: imagePng,
+        actionType: action,
+      ),
+    );
     if (isNew) {
       _persistWindow(window, text, imagePng: imagePng, action: action);
     } else {
-      _persistMessage(window, AiRole.user, text,
-          imagePng: imagePng, action: action);
+      _persistMessage(
+        window,
+        AiRole.user,
+        text,
+        imagePng: imagePng,
+        action: action,
+      );
     }
     state = state.copyWith(
       activeThreadId: window.id,
@@ -391,11 +415,13 @@ class AiNotifier extends Notifier<AiState> {
       // The assistant reply inherits the action of the user turn that
       // triggered it (so the bubble labels both halves of the exchange).
       final action = _lastUserAction(thread);
-      thread.messages.add(AiChatMessage(
-        role: AiRole.assistant,
-        content: answer,
-        actionType: action,
-      ));
+      thread.messages.add(
+        AiChatMessage(
+          role: AiRole.assistant,
+          content: answer,
+          actionType: action,
+        ),
+      );
       _persistMessage(thread, AiRole.assistant, answer, action: action);
     }
     state = state.copyWith(
@@ -427,15 +453,17 @@ class AiNotifier extends Notifier<AiState> {
       final content =
           (cut < 0 ? m.content : m.content.substring(0, cut)).trim();
       if (content.isEmpty) continue;
-      result.add(AiMessage(
-        id: -1,
-        threadId: thread.id,
-        role: m.role,
-        content: content,
-        imagePath: m.imagePath,
-        actionType: m.actionType,
-        createdAt: m.createdAt ?? '',
-      ));
+      result.add(
+        AiMessage(
+          id: -1,
+          threadId: thread.id,
+          role: m.role,
+          content: content,
+          imagePath: m.imagePath,
+          actionType: m.actionType,
+          createdAt: m.createdAt ?? '',
+        ),
+      );
     }
     return result;
   }
@@ -446,7 +474,10 @@ class AiNotifier extends Notifier<AiState> {
       final action = _lastUserAction(thread);
       thread.messages.add(
         AiChatMessage(
-            role: AiRole.assistant, content: partial, actionType: action),
+          role: AiRole.assistant,
+          content: partial,
+          actionType: action,
+        ),
       );
       _persistMessage(thread, AiRole.assistant, partial, action: action);
     }
@@ -462,7 +493,10 @@ class AiNotifier extends Notifier<AiState> {
   /// button keeps it visible with the partial answer (6.3.2). [openPanel]
   /// (the expand action) additionally opens the side panel.
   void _endStream({bool hideCard = false, bool openPanel = false}) {
-    _keepPartialAnswer(state.threadOf(state.streamingThreadId), state.streamingText);
+    _keepPartialAnswer(
+      state.threadOf(state.streamingThreadId),
+      state.streamingText,
+    );
     _session.cancel();
     state = state.copyWith(
       clearStreaming: true,
@@ -552,10 +586,8 @@ class AiNotifier extends Notifier<AiState> {
   }
 
   /// Back to the window list (the panel header's back button).
-  void showWindowList() => state = state.copyWith(
-        clearActiveThread: true,
-        showingThreadList: true,
-      );
+  void showWindowList() =>
+      state = state.copyWith(clearActiveThread: true, showingThreadList: true);
 
   String _errorText(Object e) {
     final s = e.toString();

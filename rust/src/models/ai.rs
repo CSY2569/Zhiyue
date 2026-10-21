@@ -330,8 +330,7 @@ mod tests {
         assert_eq!(cfg.search_fetch_pages, 0);
 
         // Round-trip through the current serializer keeps working.
-        let back: AiConfig =
-            serde_json::from_str(&serde_json::to_string(&cfg).unwrap()).unwrap();
+        let back: AiConfig = serde_json::from_str(&serde_json::to_string(&cfg).unwrap()).unwrap();
         assert_eq!(back.api_key, "sk-test");
         assert_eq!(back.translate_target_lang, "中文");
         assert!(!back.search_use_builtin);
@@ -364,15 +363,14 @@ mod tests {
             api_protocol: "responses".into(),
             prompt_template: "tech".into(),
             custom_prompt: "自定义角色".into(),
-            custom_prompts: vec![
-                CustomPrompt {
-                    name: "诗人".into(),
-                    text: "你是一位诗人".into(),
-                },
-            ],
-            template_overrides: std::collections::HashMap::from([
-                ("academic".to_string(), "你是一位物理学家。".to_string()),
-            ]),
+            custom_prompts: vec![CustomPrompt {
+                name: "诗人".into(),
+                text: "你是一位诗人".into(),
+            }],
+            template_overrides: std::collections::HashMap::from([(
+                "academic".to_string(),
+                "你是一位物理学家。".to_string(),
+            )]),
             embedding_enabled: true,
             embedding_base_url: Some("https://emb.example/v1".into()),
             embedding_api_key: Some("sk-emb".into()),
@@ -414,7 +412,10 @@ mod tests {
         assert_eq!(back.translate_custom_langs, vec!["日文", "法文"]);
         assert!(back.model_supports_vision);
         assert!(back.embedding_enabled);
-        assert_eq!(back.embedding_base_url.as_deref(), Some("https://emb.example/v1"));
+        assert_eq!(
+            back.embedding_base_url.as_deref(),
+            Some("https://emb.example/v1")
+        );
         assert_eq!(back.embedding_api_key.as_deref(), Some("sk-emb"));
         assert_eq!(back.embedding_model, "text-embedding-3-small");
         assert_eq!(back.vector_db_url.as_deref(), Some("https://vdb.example"));
@@ -423,9 +424,10 @@ mod tests {
 
         // A config saved by an older build (no ocr_mode) still loads: the
         // serde default kicks in.
-        let legacy: AiConfig =
-            serde_json::from_str(r#"{"base_url":"","api_key":"","text_model":"","vision_model":""}"#)
-                .unwrap();
+        let legacy: AiConfig = serde_json::from_str(
+            r#"{"base_url":"","api_key":"","text_model":"","vision_model":""}"#,
+        )
+        .unwrap();
         assert_eq!(legacy.ocr_mode, "high_precision");
         assert!(legacy.include_book_history);
         assert!(!legacy.enable_reasoning);

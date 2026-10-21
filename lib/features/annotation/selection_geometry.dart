@@ -341,3 +341,90 @@ bool isLineLevelBoxes(List<CharBox> boxes) {
   }
   return false;
 }
+
+// ===========================================================================
+// Word selection (touch): a long-press picks a whole word instead of a single
+// character, and the selection handles extend by words.
+//
+// "Word" is script-aware: CJK has no spaces, so each CJK character is a word
+// boundary by itself (the common behavior of Chinese reading apps); Latin
+// runs group letters/digits/apostrophes together.
+// ===========================================================================
+
+/// Whether [c] belongs to a CJK script (treated as one word per character).
+bool isCjkChar(String c) {
+  if (c.isEmpty) return false;
+  final rune = c.runes.first;
+  return (rune >= 0x3400 && rune <= 0x4DBF) || // ext A
+      (rune >= 0x4E00 && rune <= 0x9FFF) || // CJK unified
+      (rune >= 0xF900 && rune <= 0xFAFF) || // compatibility ideographs
+      (rune >= 0x3040 && rune <= 0x30FF) || // hiragana / katakana
+      (rune >= 0xAC00 && rune <= 0xD7AF) || // hangul syllables
+      (rune >= 0x3000 && rune <= 0x303F) || // CJK punctuation
+      (rune >= 0xFF00 && rune <= 0xFFEF); // full-width forms
+}
+
+/// Whether [c] is part of a Latin-style word (letters, digits, apostrophes,
+/// hyphenated compounds). Everything else (whitespace, punctuation) breaks a
+/// word.
+bool isWordChar(String c) {
+  if (c.isEmpty) return false;
+  if (isCjkChar(c)) return false;
+  return RegExp(r"[\p{L}\p{N}_'’\-]", unicode: true).hasMatch(c);
+}
+
+/// Expand the character index [index] to the whole word around it, for
+/// per-character boxes (native PDF text layers).
+///
+/// CJK: the character itself. Latin: the maximal run of [isWordChar].
+/// Punctuation and whitespace select exactly themselves so a long-press on a
+/// comma does not drag the neighbouring word in.
+(int, int) wordRangeAt(List<CharBox> boxes, int index) {
+  if (boxes.isEmpty) return (0, 0);
+  final i = index.clamp(0, boxes.length - 1);
+  final ch = boxes[i].char;
+  if (isCjkChar(ch)) return (i, i);
+  if (!isWordChar(ch)) return (i, i);
+
+  var lo = i;
+  while (lo > 0 && isWordChar(boxes[lo - 1].char)) {
+    lo--;
+  }
+  var hi = i;
+  while (hi + 1 < boxes.length && isWordChar(boxes[hi + 1].char)) {
+    hi++;
+  }
+  return (lo, hi);
+}
+
+/// Expand an in-line character offset to the whole word inside a single
+/// line's text (OCR line-level boxes).
+(int, int) wordRangeInLine(String text, int offset) {
+  if (text.isEmpty) return (0, 0);
+  final i = offset.clamp(0, text.length - 1);
+  final ch = text[i];
+  if (isCjkChar(ch) || !isWordChar(ch)) return (i, i);
+
+  var lo = i;
+  while (lo > 0 && isWordChar(text[lo - 1])) {
+    lo--;
+  }
+  var hi = i;
+  while (hi + 1 < text.length && isWordChar(text[hi + 1])) {
+    hi++;
+  }
+  return (lo, hi);
+}
+
+/// Word-expanded range for an encoded line position (see [encodeLinePos]).
+(int, int) wordRangeAtEncoded(
+  List<CharBox> boxes,
+  int encoded,
+) {
+  if (boxes.isEmpty) return (0, 0);
+  final line = decodeLineIndex(encoded);
+  final off = decodeCharOffset(encoded);
+  if (line < 0 || line >= boxes.length) return (0, 0);
+  final (lo, hi) = wordRangeInLine(boxes[line].char, off);
+  return (encodeLinePos(line, lo), encodeLinePos(line, hi));
+}

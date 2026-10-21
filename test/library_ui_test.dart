@@ -7,11 +7,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lucide_flutter/lucide_flutter.dart';
+import 'package:rbwa/features/library/models/library_filter.dart';
 import 'package:rbwa/features/library/providers/library_providers.dart';
 import 'helpers/widget_harness.dart';
+import 'package:rbwa/core/theme/layout_metrics.dart';
 import 'package:rbwa/features/library/widgets/book_tile.dart';
+import 'package:rbwa/core/theme/app_theme.dart';
 import 'package:rbwa/features/library/widgets/category_assign_dialog.dart';
-import 'package:rbwa/features/library/widgets/library_toolbar.dart';
+import 'package:rbwa/features/library/widgets/library_filter_bar.dart';
+
 import 'package:rbwa/src/rust/models/book.dart';
 
 void _noop() {}
@@ -44,7 +48,7 @@ Widget _tile(Book book) => ProviderScope(
           body: Center(
             child: SizedBox(
               width: 180,
-              height: 260,
+              height: Golden.cellHeightFor(180),
               child: BookTile(
                 book: book,
                 onTap: _noop,
@@ -59,28 +63,34 @@ Widget _tile(Book book) => ProviderScope(
     );
 
 void main() {
-  testWidgets('toolbar no longer duplicates rail filters', (tester) async {
-    await tester.pumpWidget(ProviderScope(
-      child: const MaterialApp(
-        home: Scaffold(
-          appBar: LibraryToolbar(
-            onToggleTheme: _noop,
-            onOpenSettings: _noop,
+  testWidgets('filter row covers every view and syncs with the rail',
+      (tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        theme: AppTheme.light(),
+        home: const Scaffold(
+          body: Padding(
+            padding: EdgeInsets.all(16),
+            child: LibraryFilterBar(),
           ),
         ),
       ),
     ));
+    await tester.pumpAndSettle();
 
-    // Filter entry points live exclusively in the left rail.
-    expect(find.text('PDF'), findsNothing);
-    expect(find.text('图片'), findsNothing);
-    expect(find.text('收藏'), findsNothing);
-    // Search + actions remain.
-    expect(find.text('搜索书名…'), findsOneWidget);
-    expect(tester.takeException(), isNull);
+    // The quick filters live in one pill row; the rail holds the rest.
+    for (final label in ['全部', '最近', 'PDF', '图片', '收藏']) {
+      expect(find.text(label), findsOneWidget, reason: label);
+    }
+    await tester.tap(find.text('PDF'));
+    await tester.pump();
+    expect(container.read(libraryFilterProvider).view, LibraryView.pdf);
   });
 
-  testWidgets('right-clicking a book card offers "分配到分类…"',
+  testWidgets('right-clicking a book card offers "移动到文件夹…"',
       (tester) async {
     var assigned = false;
     await tester.pumpWidget(ProviderScope(
@@ -89,7 +99,7 @@ void main() {
           body: Center(
             child: SizedBox(
               width: 180,
-              height: 260,
+              height: Golden.cellHeightFor(180),
               child: BookTile(
                 book: _book(),
                 onTap: _noop,
@@ -105,15 +115,52 @@ void main() {
 
     await tester.tap(find.byType(BookTile), buttons: kSecondaryMouseButton);
     await tester.pumpAndSettle();
-    expect(find.text('分配到分类…'), findsOneWidget);
+    expect(find.text('移动到文件夹…'), findsOneWidget);
 
-    await tester.tap(find.text('分配到分类…'));
+    await tester.tap(find.text('移动到文件夹…'));
     await tester.pumpAndSettle();
     expect(assigned, isTrue);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('assign dialog lists 未分类 + categories and confirms choice',
+  testWidgets('touch long-press opens the menu when drag is disabled',
+      (tester) async {
+    // Mobile branch: no LongPressDraggable competing for the long press
+    // (previously it won the arena at 200ms and the menu never appeared).
+    var assigned = false;
+    await tester.pumpWidget(ProviderScope(
+      child: MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 180,
+              height: Golden.cellHeightFor(180),
+              child: BookTile(
+                book: _book(),
+                enableDrag: false,
+                onTap: _noop,
+                onToggleFavorite: _noop,
+                onAssignCategory: () => assigned = true,
+                onDelete: _noop,
+              ),
+            ),
+          ),
+        ),
+      ),
+    ));
+
+    await tester.longPress(find.byType(BookTile));
+    await tester.pumpAndSettle();
+    expect(find.text('打开'), findsOneWidget);
+    expect(find.text('移动到文件夹…'), findsOneWidget);
+
+    await tester.tap(find.text('移动到文件夹…'));
+    await tester.pumpAndSettle();
+    expect(assigned, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('assign dialog lists 未分类 + folders and confirms choice',
       (tester) async {
     (int?, bool)? result;
     await tester.pumpWidget(ProviderScope(
@@ -142,7 +189,7 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
-    expect(find.text('分配到分类'), findsOneWidget);
+    expect(find.text('移动到文件夹'), findsOneWidget);
     expect(find.text('未分类'), findsOneWidget);
     expect(find.text('小说'), findsOneWidget);
     expect(find.text('技术'), findsOneWidget);

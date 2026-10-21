@@ -6,6 +6,27 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+/// One book's last-read page (library shelf progress line).
+class BookProgress {
+  final PlatformInt64 bookId;
+
+  /// 1-indexed page the reader last showed.
+  final PlatformInt64 page;
+
+  const BookProgress({required this.bookId, required this.page});
+
+  @override
+  int get hashCode => bookId.hashCode ^ page.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is BookProgress &&
+          runtimeType == other.runtimeType &&
+          bookId == other.bookId &&
+          page == other.page;
+}
+
 /// Persisted reading position for a book.
 class ReadingProgress {
   final PlatformInt64 bookId;

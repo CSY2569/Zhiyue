@@ -28,7 +28,12 @@
 /// 8: retire the built-in translation pipeline (replaced by the downloadable
 /// external engine) -- `page_translation_cache` DROPPED, its rows have no
 /// consumer; `translation_glossary` stays.
-pub const SCHEMA_VERSION: u32 = 9;
+/// 9: `annotations.source` -- tag each text annotation with the pane it was
+/// made on ('original' | 'translated').
+/// 10: Android text-level translation -- `page_text_translation` caches one
+/// row per (book, page, block, target language) so the mobile bilingual view
+/// never pays twice for the same paragraph.
+pub const SCHEMA_VERSION: u32 = 10;
 
 /// Indexes for per-book AI conversation windows (v3, FEATURES 6.5.4).
 ///
@@ -247,6 +252,38 @@ CREATE TABLE IF NOT EXISTS translation_glossary (
     target_lang TEXT,
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- ===========================================================================
+-- 6c. Text-level translation cache (Android v1, schema v10)
+--     One row per translated block. The RetainPDF engine keeps its caches on
+--     disk under retain_output/; this table is the mobile path's equivalent,
+--     keyed by target language and model so switching either invalidates
+--     cleanly. `source_hash` catches edited OCR text; `status` records
+--     skipped blocks (formulas) so they are not re-sent.
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS page_text_translation (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    book_id         INTEGER NOT NULL,
+    page            INTEGER NOT NULL,
+    block_index     INTEGER NOT NULL,
+    target_lang     TEXT NOT NULL,
+    model           TEXT NOT NULL,
+    source_hash     TEXT NOT NULL,
+    kind            TEXT NOT NULL,
+    sub_type        TEXT NOT NULL,
+    x               REAL NOT NULL,
+    y               REAL NOT NULL,
+    w               REAL NOT NULL,
+    h               REAL NOT NULL,
+    source_text     TEXT NOT NULL,
+    translated_text TEXT NOT NULL,
+    status          TEXT NOT NULL,                -- 'done' | 'skipped' | 'failed'
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(book_id, page, block_index, target_lang),
+    FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_page_text_translation_lookup
+    ON page_text_translation(book_id, page, target_lang);
 
 -- ===========================================================================
 -- 10. settings  (FEATURES 9.1.8 / §6.1, §8.2)

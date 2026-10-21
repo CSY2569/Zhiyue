@@ -14,4 +14,5 @@ pub mod ocr;
 pub mod progress;
 pub mod search;
 pub mod settings;
+pub mod text_translation;
 pub mod translate;

@@ -49,7 +49,8 @@ pub fn list_threads(conn: &Connection) -> AppResult<Vec<AiThread>> {
         "SELECT {THREAD_COLS} FROM ai_threads ORDER BY updated_at DESC, id DESC"
     ))?;
     let rows = stmt.query_map([], row_to_thread)?;
-    rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+    rows.collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(Into::into)
 }
 
 /// List a thread's messages in conversation order.
@@ -59,7 +60,8 @@ pub fn list_messages(conn: &Connection, thread_id: i64) -> AppResult<Vec<AiMessa
          WHERE thread_id = ?1 ORDER BY created_at, id"
     ))?;
     let rows = stmt.query_map(params![thread_id], row_to_message)?;
-    rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+    rows.collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(Into::into)
 }
 
 /// Insert a new conversation window; returns the new row id. `book_id` is
@@ -160,8 +162,7 @@ mod tests {
     fn one_window_per_book_is_enforced() {
         let conn = test_conn();
         create_thread(&conn, "窗口", AiActionType::Chat, Some(7)).unwrap();
-        let err = create_thread(&conn, "重复窗口", AiActionType::Chat, Some(7))
-            .unwrap_err();
+        let err = create_thread(&conn, "重复窗口", AiActionType::Chat, Some(7)).unwrap_err();
         assert!(err.to_string().contains("UNIQUE"), "{err}");
         // Multiple no-book windows are allowed.
         create_thread(&conn, "无书1", AiActionType::Chat, None).unwrap();

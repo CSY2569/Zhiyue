@@ -3,9 +3,11 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/core/platform/platform.dart';
 import 'package:rbwa/features/annotation/providers/annotation_provider.dart';
 import 'package:rbwa/features/annotation/widgets/highlight_layer.dart';
 import 'package:rbwa/features/annotation/widgets/image_mark_layer.dart';
@@ -255,7 +257,10 @@ class _PdfPageScrollState extends ConsumerState<PdfPageScroll> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(viewerProvider);
-    final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
+    final devicePixelRatio = effectiveRenderDpi(
+      MediaQuery.devicePixelRatioOf(context),
+      state.zoom,
+    );
 
     if (state.pageCount == 0) {
       return const Center(child: Text('无页面'));
@@ -294,6 +299,19 @@ class _PdfPageScrollState extends ConsumerState<PdfPageScroll> {
         );
     }
   }
+}
+
+/// Render DPI for the current zoom.
+///
+/// Phones report devicePixelRatio 2.75-3.5, which makes an A4 page ~26MB of
+/// RGBA at the default 1.2x zoom -- only 3-4 pages fit the byte budget, so
+/// flipping quickly always paid for a fresh render. While the page fits the
+/// screen (browsing), 2.0x is already sharper than the eye resolves at reading
+/// distance; once the reader zooms in for detail we switch back to the full
+/// device DPR and the existing sharpen pass re-renders.
+double effectiveRenderDpi(double deviceDpr, double zoom) {
+  if (zoom <= 1.4) return deviceDpr.clamp(1.0, 2.0);
+  return deviceDpr;
 }
 
 /// Gutter (horizontal gap) between the two pages of a double-mode row.
@@ -346,6 +364,11 @@ class _SingleScroll extends ConsumerWidget {
     return ListView.builder(
       controller: scrollController,
       itemCount: pageCount,
+      // Default cacheExtent (250px) is shorter than one phone page, so fast
+      // scrolling outran the renderer and showed placeholders. Keep about one
+      // page of look-ahead in each direction; bitmaps beyond it are dropped by
+      // the cache's byte budget instead of accumulating.
+      scrollCacheExtent: ScrollCacheExtent.pixels(pageH > 0 ? pageH : 800),
       itemBuilder: (context, index) {
         // NOTE: do NOT use OverflowBox here -- ListView items get an unbounded
         // height constraint, and OverflowBox(maxHeight: infinity) tries to
@@ -413,6 +436,7 @@ class _DoubleScroll extends ConsumerWidget {
     return ListView.builder(
       controller: scrollController,
       itemCount: rowCount,
+      scrollCacheExtent: ScrollCacheExtent.pixels(pageH > 0 ? pageH : 800),
       itemBuilder: (context, rowIndex) {
         final leftPage = rowIndex * 2;
         final rightPage = leftPage + 1;
@@ -661,6 +685,8 @@ class _DoublePageFlipState extends ConsumerState<_DoublePageFlip> {
         controller: _pageController,
         scrollDirection: Axis.horizontal,
         itemCount: _pairCount,
+        // Pre-render the adjacent spread so a swipe lands on a painted page.
+        allowImplicitScrolling: true,
         onPageChanged: _onPageChanged,
         itemBuilder: (context, pairIndex) {
           final leftPage = pairIndex * 2;
@@ -771,6 +797,19 @@ class _PageItemState extends ConsumerState<_PageItem> {
     }
   }
 
+  /// Render priority: the page(s) on screen go first, neighbours after.
+  /// pdfium serializes all renders, so without this a fast scroll could queue
+  /// several cacheExtent pages ahead of the one the reader is looking at.
+  int get _renderPriority {
+    final viewer = ref.read(viewerProvider);
+    final current = viewer.currentPage - 1; // 0-indexed
+    if (widget.page == current) return 0;
+    if (viewer.mode == ViewMode.doublePage && widget.page == current + 1) {
+      return 0;
+    }
+    return 1;
+  }
+
   Future<void> _load() async {
     final renderZoom = BitmapCache.quantizeZoom(widget.zoom);
     final img = await widget.cache.getOrFetch(
@@ -778,6 +817,7 @@ class _PageItemState extends ConsumerState<_PageItem> {
       page: widget.page,
       zoom: renderZoom,
       dpiScale: widget.dpiScale,
+      priority: _renderPriority,
     );
     if (!mounted) return;
     setState(() {
@@ -821,6 +861,7 @@ class _PageItemState extends ConsumerState<_PageItem> {
           page: widget.page,
           zoom: renderZoom,
           dpiScale: widget.dpiScale,
+          priority: 0,
         )
         .then((img) {
       _sharpening = false;
@@ -887,51 +928,71 @@ class _PageItemState extends ConsumerState<_PageItem> {
         child: SizedBox(
           width: displayW,
           height: displayH,
+          // Two sibling boundaries inside the page:
+          //  - the bitmap (with its theme color filter, which forces a
+          //    saveLayer) is its own layer, so selection drags / OCR markers
+          //    / search hits never re-rasterize a multi-megapixel page;
+          //  - all vector overlays share one layer, which is cheap to repaint.
+          // Before the split, every selection-drag frame repainted the whole
+          // page and this was the reader's main source of jank.
           child: Stack(
             clipBehavior: Clip.hardEdge,
             children: [
               Positioned.fill(
-                child: ThemedPageImage(image: image),
-              ),
-              Positioned.fill(
-                child: HighlightLayer(annotations: pageAnns),
-              ),
-              // Low-confidence OCR lines marked for review (7.1.6).
-              Positioned.fill(
-                child: LowConfidenceLayer(
-                  bookId: widget.bookId,
-                  page: widget.page,
-                ),
-              ),
-              // Search hit highlight (M6, 3.5.3): below the selection layer
-              // so selection previews stay visible on top of it.
-              Positioned.fill(
-                child: HitHighlightLayer(
-                  bookId: widget.bookId,
-                  page: widget.page,
+                child: RepaintBoundary(
+                  child: ThemedPageImage(image: image),
                 ),
               ),
               Positioned.fill(
-                child: SelectionLayer(
-                  bookId: widget.bookId,
-                  page: widget.page,
-                  annotations: pageAnns,
+                child: RepaintBoundary(
+                  child: Stack(
+                    clipBehavior: Clip.hardEdge,
+                    children: [
+                      Positioned.fill(
+                        child: HighlightLayer(annotations: pageAnns),
+                      ),
+                      // Low-confidence OCR lines marked for review (7.1.6).
+                      Positioned.fill(
+                        child: LowConfidenceLayer(
+                          bookId: widget.bookId,
+                          page: widget.page,
+                        ),
+                      ),
+                      // Search hit highlight (M6, 3.5.3): below the selection
+                      // layer so selection previews stay visible on top.
+                      Positioned.fill(
+                        child: HitHighlightLayer(
+                          bookId: widget.bookId,
+                          page: widget.page,
+                        ),
+                      ),
+                      Positioned.fill(
+                        child: SelectionLayer(
+                          bookId: widget.bookId,
+                          page: widget.page,
+                          annotations: pageAnns,
+                          // Touch: long-press to select so drags still scroll.
+                          longPressSelect:
+                              PlatformCapabilities.current().isMobile,
+                        ),
+                      ),
+                      // Image-layer marks (FEATURES §5): painted above the
+                      // selection layer; when a mark tool is armed this layer
+                      // captures the pointer events, otherwise it is
+                      // hit-test transparent.
+                      Positioned.fill(
+                        child: ImageMarkLayer(page: widget.page),
+                      ),
+                      // Scan prompt (FEATURES 7.1.2): anchored to this page's
+                      // top-left corner so it scrolls with the page.
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        child: ScanOverlay(page: widget.page),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              // Image-layer marks (FEATURES §5): painted above the selection
-              // layer; when a mark tool is armed this layer captures the
-              // pointer events (draw / move / resize), otherwise it is
-              // hit-test transparent.
-              Positioned.fill(
-                child: ImageMarkLayer(page: widget.page),
-              ),
-              // Scan prompt (FEATURES 7.1.2): anchored to this page's
-              // top-left corner so it scrolls with the page (only the
-              // current page renders it).
-              Positioned(
-                top: 8,
-                left: 8,
-                child: ScanOverlay(page: widget.page),
               ),
             ],
           ),

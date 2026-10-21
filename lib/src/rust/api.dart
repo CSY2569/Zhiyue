@@ -10,13 +10,12 @@ import 'models/book.dart';
 import 'models/progress.dart';
 import 'models/translate.dart';
 import 'ocr.dart';
-
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
-
 import 'pdf/types.dart';
 
-// These functions are ignored because they are not marked as `pub`: `ai_client`, `builtin_search_stream`, `current_bitmap`, `current_boxes`, `current_page_has_text`, `current_thumbnail`, `drain_stream`, `ensure_api_key`, `err`, `import_book_inner`, `index_ocr_result`, `init_result`, `ok`, `open_error`, `page_render_result`, `rebuild_cover_file`, `resolve_ai_image_path`, `save_ai_image`, `save_cover_thumbnail`, `save_rgba_as_png`, `search_system_prompt`, `system_message`, `system_prompt_for`, `try_init_at`, `try_init`, `wrap_input`, `wrap_untrusted_input`
+// These functions are ignored because they are not marked as `pub`: `ai_client`, `builtin_search_stream`, `compose_system`, `current_bitmap`, `current_boxes`, `current_page_has_text`, `current_thumbnail`, `drain_stream`, `ensure_api_key`, `err`, `history_with_system`, `import_book_inner`, `index_ocr_result`, `index_state`, `init_result`, `ok`, `open_error`, `page_render_result`, `rebuild_cover_file`, `resolve_ai_image_path`, `save_ai_image`, `save_cover_thumbnail`, `save_rgba_as_png`, `search_system_prompt`, `system_message`, `system_prompt_for`, `try_init_at`, `try_init`, `wrap_input`, `wrap_untrusted_input`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ActionPrompt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`
 
 /// Crate version, surfaced in the About / settings UI.
 Future<String> appVersion() => RustLib.instance.api.crateApiAppVersion();
@@ -32,6 +31,19 @@ Future<InitResult> initCore() => RustLib.instance.api.crateApiInitCore();
 /// [init_core] otherwise. Not used in production.
 Future<InitResult> initCoreWithDbPath({required String dbPath}) =>
     RustLib.instance.api.crateApiInitCoreWithDbPath(dbPath: dbPath);
+
+/// Initialize the core against an explicit application data directory.
+///
+/// Android has no XDG data dir (`dirs::data_dir()` is `None`) and its process
+/// CWD is `/`, so the platform layer passes
+/// `getApplicationSupportDirectory()` here before any other command. The
+/// database and every sibling path (models/, covers/, documents/, translated/)
+/// then live under that directory.
+///
+/// Desktop callers may keep using [init_core] -- this is an additive entry
+/// point with the same idempotence.
+Future<InitResult> initCoreWithDataDir({required String dataDir}) =>
+    RustLib.instance.api.crateApiInitCoreWithDataDir(dataDir: dataDir);
 
 /// Read a setting value by key (skeleton: direct KV read).
 /// Returns empty string if the key is absent. Real subsystem repos wrap
@@ -49,6 +61,18 @@ Future<String?> getSetting({required String key}) =>
 /// Panics if called before `init_core()` (programming error).
 Future<int> setSetting({required String key, required String value}) =>
     RustLib.instance.api.crateApiSetSetting(key: key, value: value);
+
+/// Tell the PDF subsystem where `libpdfium.so` lives.
+///
+/// Android: `current_exe()` is the zygote process, so the executable-relative
+/// probe cannot find the bundled library; Dart passes
+/// `context.applicationInfo.nativeLibraryDir` (read over the `rbwa/system`
+/// channel) before the first render. Returns true when accepted; on desktop
+/// this is a no-op returning false (the probe already works).
+///
+/// Must run after `RustLib.init()` and before any `open_book` / render call.
+Future<bool> configureNativeLibraryDir({required String path}) =>
+    RustLib.instance.api.crateApiConfigureNativeLibraryDir(path: path);
 
 /// List every book in the library, most-recently-opened first (FEATURES 2.2/2.3).
 /// Returns an empty vec on error (the UI shows the empty-state guide).
@@ -177,6 +201,11 @@ Future<OutlineResult> getOutline({required PlatformInt64 bookId}) =>
 /// Load the saved reading position for a book. Returns `None` on first open.
 Future<ReadingProgress?> getProgress({required PlatformInt64 bookId}) =>
     RustLib.instance.api.crateApiGetProgress(bookId: bookId);
+
+/// Last-read page of every book, for the library shelf's progress line.
+/// Books without saved progress are absent (the card shows 0 / total).
+Future<List<BookProgress>> listReadingProgress() =>
+    RustLib.instance.api.crateApiListReadingProgress();
 
 /// Save the reading position (upsert). `view_mode` is the string form
 /// ("single" / "double_scroll" / "double_page"). Returns 1 on success.
@@ -556,6 +585,60 @@ Future<TranslationConfig> getTranslationConfig() =>
 /// Persists the translation config. Returns 1 on success, 0 on failure.
 Future<int> setTranslationConfig({required TranslationConfig config}) =>
     RustLib.instance.api.crateApiSetTranslationConfig(config: config);
+
+/// Extracts one page's text blocks (text layer, or local OCR when scanned).
+/// Never calls the network; `error` is set when the page has no text at all.
+Future<PageTextBlocks> getPageTextBlocks({
+  required PlatformInt64 bookId,
+  required PlatformInt64 page,
+}) =>
+    RustLib.instance.api.crateApiGetPageTextBlocks(bookId: bookId, page: page);
+
+/// Reads the cached translation of one page without calling the LLM.
+/// Returns null when nothing (or nothing matching the current blocks) is
+/// cached.
+Future<PageTextTranslation?> getPageTextTranslation({
+  required PlatformInt64 bookId,
+  required PlatformInt64 page,
+  required String targetLang,
+}) => RustLib.instance.api.crateApiGetPageTextTranslation(
+  bookId: bookId,
+  page: page,
+  targetLang: targetLang,
+);
+
+/// Translates one page (cache first unless [force]), streaming progress over
+/// the returned Future. Failures are reported in `error`, not thrown.
+Future<PageTextTranslation> translatePageText({
+  required PlatformInt64 bookId,
+  required PlatformInt64 page,
+  required String targetLang,
+  required bool force,
+}) => RustLib.instance.api.crateApiTranslatePageText(
+  bookId: bookId,
+  page: page,
+  targetLang: targetLang,
+  force: force,
+);
+
+/// Cancels the running page translation (checked between batches).
+/// Returns 1.
+Future<int> cancelPageTextTranslation() =>
+    RustLib.instance.api.crateApiCancelPageTextTranslation();
+
+/// Deletes a book's text-level translation cache. Returns the deleted rows.
+Future<PlatformInt64> clearBookTextTranslation({
+  required PlatformInt64 bookId,
+}) => RustLib.instance.api.crateApiClearBookTextTranslation(bookId: bookId);
+
+/// Number of pages with cached text translations (bilingual pane header).
+Future<PlatformInt64> countTextTranslatedPages({
+  required PlatformInt64 bookId,
+  required String targetLang,
+}) => RustLib.instance.api.crateApiCountTextTranslatedPages(
+  bookId: bookId,
+  targetLang: targetLang,
+);
 
 /// Registers a book as translating (plan §7 eviction guard: a book in
 /// flight is never evicted). Returns 1.

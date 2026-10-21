@@ -122,7 +122,7 @@ void main() {
     expect(container.read(filteredBooksProvider).single.title, '收藏的 PDF');
   });
 
-  testWidgets('左侧栏：AI 对话在书库与分类之间，入口互斥切换', (tester) async {
+  testWidgets('左侧栏：导航 / 文件夹 页签可切换，视图互斥', (tester) async {
     await tester.pumpWidget(ProviderScope(
       overrides: [
         categoriesProvider.overrideWith(FakeCategoriesNotifier.new),
@@ -130,41 +130,44 @@ void main() {
       ],
       child: const MaterialApp(
         home: Scaffold(
-          body: Row(children: [CategoryRail(), Expanded(child: SizedBox())]),
+          body: SizedBox(width: 240, child: CategoryRail(width: 240)),
         ),
       ),
     ));
     await tester.pump();
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(CategoryRail)),
-    );
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(CategoryRail)));
 
-    // 「AI 对话」 sits below the 书库 section and above 分类 (standalone).
-    final libY = tester.getTopLeft(find.text('书库')).dy;
-    final aiY = tester.getTopLeft(find.text('AI 对话')).dy;
-    final catY = tester.getTopLeft(find.text('分类')).dy;
-    expect(aiY, greaterThan(libY));
-    expect(aiY, lessThan(catY));
+    // The navigation tab is active by default: system views are visible and
+    // the folder list is not.
+    expect(find.text('所有文档'), findsOneWidget);
+    expect(find.text('最近使用'), findsOneWidget);
+    expect(find.text('我的收藏'), findsOneWidget);
+    expect(find.text('AI 对话'), findsOneWidget);
+    expect(find.text('小说'), findsNothing);
 
-    // Clicking a category, then PDF: the PDF view replaces the category
-    // instead of stacking on it (components never interfere).
-    await tester.tap(find.text('小说'));
+    // Views are mutually exclusive.
+    await tester.tap(find.text('最近使用'));
     await tester.pump();
-    expect(container.read(libraryFilterProvider).view, LibraryView.category);
-    expect(container.read(libraryFilterProvider).categoryId, 1);
+    expect(container.read(libraryFilterProvider).view, LibraryView.recent);
 
     await tester.tap(find.text('PDF'));
     await tester.pump();
     expect(container.read(libraryFilterProvider).view, LibraryView.pdf);
     expect(container.read(libraryFilterProvider).categoryId, isNull);
 
-    await tester.tap(find.text('收藏'));
+    await tester.tap(find.text('我的收藏'));
     await tester.pump();
     expect(container.read(libraryFilterProvider).view, LibraryView.favorite);
 
-    await tester.tap(find.text('全部'));
+    // The folders tab reveals user categories; selecting one switches view.
+    await tester.tap(find.text('文件夹'));
+    await tester.pumpAndSettle();
+    expect(find.text('小说'), findsOneWidget);
+    await tester.tap(find.text('小说'));
     await tester.pump();
-    expect(container.read(libraryFilterProvider).view, LibraryView.all);
+    expect(container.read(libraryFilterProvider).view, LibraryView.category);
+    expect(container.read(libraryFilterProvider).categoryId, 1);
     expect(tester.takeException(), isNull);
   });
 }

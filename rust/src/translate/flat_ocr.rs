@@ -116,7 +116,10 @@ struct Para {
     size: f64,
 }
 
-fn collect_page_chars(doc: &pdfium_render::prelude::PdfDocument<'_>, page: i64) -> AppResult<Vec<PageChar>> {
+fn collect_page_chars(
+    doc: &pdfium_render::prelude::PdfDocument<'_>,
+    page: i64,
+) -> AppResult<Vec<PageChar>> {
     use pdfium_render::prelude::*;
     let pg = doc.pages().get((page - 1) as PdfPageIndex)?;
     let page_w = pg.width().value.max(1.0) as f64;
@@ -277,7 +280,13 @@ fn fallback_paragraphs(chars: &[PageChar]) -> Vec<Para> {
     let mut heights: Vec<f64> = ordered.iter().map(|l| l.rect.h).collect();
     let median_h = median(&mut heights).unwrap_or(0.02).max(0.005);
 
-    let wide_p95 = p95_width(ordered.iter().map(|l| l.rect.w).filter(|w| *w > 0.0).collect());
+    let wide_p95 = p95_width(
+        ordered
+            .iter()
+            .map(|l| l.rect.w)
+            .filter(|w| *w > 0.0)
+            .collect(),
+    );
     // A "display-math flag" requires BOTH the narrow/centered geometry AND
     // math-shaped text: a short last line of a prose paragraph is often
     // narrow and its center can sit near a column center, and splitting
@@ -316,8 +325,7 @@ fn fallback_paragraphs(chars: &[PageChar]) -> Vec<Para> {
             let (prev_narrow, prev_cx) = display_flag(prev);
             let gap = line.rect.y - (prev.rect.y + prev.rect.h);
             let indented = line.rect.x > prev.rect.x + 0.03;
-            let math_boundary =
-                narrow != prev_narrow || (narrow && (cx - prev_cx).abs() > 0.05);
+            let math_boundary = narrow != prev_narrow || (narrow && (cx - prev_cx).abs() > 0.05);
             if gap > median_h * 0.7 || (indented && gap > -median_h * 0.2) || math_boundary {
                 flush(&mut current, &mut paragraphs);
             }
@@ -409,7 +417,12 @@ fn ocr_lines_to_paragraphs(lines: &[OcrLine]) -> Vec<Para> {
                 .iter()
                 .map(|l| Line {
                     text: l.text.clone(),
-                    rect: NormRect { x: l.x, y: l.y, w: l.w, h: l.h },
+                    rect: NormRect {
+                        x: l.x,
+                        y: l.y,
+                        w: l.w,
+                        h: l.h,
+                    },
                     ends_hyphen: l.text.trim_end().ends_with('-'),
                 })
                 .collect::<Vec<_>>(),
@@ -420,7 +433,12 @@ fn ocr_lines_to_paragraphs(lines: &[OcrLine]) -> Vec<Para> {
                 text,
                 rects: current
                     .iter()
-                    .map(|l| NormRect { x: l.x, y: l.y, w: l.w, h: l.h })
+                    .map(|l| NormRect {
+                        x: l.x,
+                        y: l.y,
+                        w: l.w,
+                        h: l.h,
+                    })
                     .collect(),
                 size,
             });
@@ -546,8 +564,8 @@ fn is_math_font_name(name: &str) -> bool {
     let base = name.split('+').next_back().unwrap_or(name);
     let upper = base.trim().to_ascii_uppercase();
     let prefixes = [
-        "CMMI", "CMSY", "CMEX", "MTMI", "MTSY", "MTEX", "MSAM", "MSBM", "LASY", "EUFM",
-        "EUSM", "RSFS", "TXMI", "TXSY", "TXEX", "PXMI", "PXSY", "PXEX", "WASY",
+        "CMMI", "CMSY", "CMEX", "MTMI", "MTSY", "MTEX", "MSAM", "MSBM", "LASY", "EUFM", "EUSM",
+        "RSFS", "TXMI", "TXSY", "TXEX", "PXMI", "PXSY", "PXEX", "WASY",
     ];
     if prefixes.iter().any(|p| upper.starts_with(p)) {
         return true;
@@ -556,7 +574,13 @@ fn is_math_font_name(name: &str) -> bool {
         return true;
     }
     [
-        "SYMBOL", "STIX", "XITS", "ASANA", "NEO EULER", "NEWCM", "EUCLID",
+        "SYMBOL",
+        "STIX",
+        "XITS",
+        "ASANA",
+        "NEO EULER",
+        "NEWCM",
+        "EUCLID",
     ]
     .iter()
     .any(|p| upper.contains(p))
@@ -720,7 +744,11 @@ fn is_whole_paragraph_formula(
     }
     let (union, max_line_w) = union_and_max_line(rects);
     let cx = union.x + union.w / 2.0;
-    let tol = if ends_with_eq_number(text) { 0.16 } else { 0.06 };
+    let tol = if ends_with_eq_number(text) {
+        0.16
+    } else {
+        0.06
+    };
     if is_centered_short(max_line_w, cx, wide_p95, tol)
         && (math_ratio >= 0.12 || text_looks_like_formula(text))
     {
@@ -747,7 +775,10 @@ fn paragraph_font_size(p: &Para, chars: &[PageChar]) -> f64 {
         let cx = c.x + c.w / 2.0;
         let cy = c.y + c.h / 2.0;
         let inside = p.rects.iter().any(|r| {
-            cx >= r.x - 0.004 && cx <= r.x + r.w + 0.004 && cy >= r.y - 0.004 && cy <= r.y + r.h + 0.004
+            cx >= r.x - 0.004
+                && cx <= r.x + r.w + 0.004
+                && cy >= r.y - 0.004
+                && cy <= r.y + r.h + 0.004
         });
         if inside {
             sizes.push(c.scaled_size);
@@ -769,10 +800,12 @@ fn paragraph_math_ratios(p: &Para, chars: &[PageChar], signals: &MathSignals) ->
         }
         let cx = c.x + c.w / 2.0;
         let cy = c.y + c.h / 2.0;
-        let inside = p
-            .rects
-            .iter()
-            .any(|r| cx >= r.x - 0.004 && cx <= r.x + r.w + 0.004 && cy >= r.y - 0.004 && cy <= r.y + r.h + 0.004);
+        let inside = p.rects.iter().any(|r| {
+            cx >= r.x - 0.004
+                && cx <= r.x + r.w + 0.004
+                && cy >= r.y - 0.004
+                && cy <= r.y + r.h + 0.004
+        });
         if !inside {
             continue;
         }
@@ -781,14 +814,23 @@ fn paragraph_math_ratios(p: &Para, chars: &[PageChar], signals: &MathSignals) ->
         if is_math {
             math += 1;
         }
-        if c.ch.chars().next().map(|ch| ch.is_alphabetic()).unwrap_or(false) {
+        if c.ch
+            .chars()
+            .next()
+            .map(|ch| ch.is_alphabetic())
+            .unwrap_or(false)
+        {
             alpha += 1;
             if is_math {
                 alpha_math += 1;
             }
         }
     }
-    let math_ratio = if total > 0 { math as f64 / total as f64 } else { 0.0 };
+    let math_ratio = if total > 0 {
+        math as f64 / total as f64
+    } else {
+        0.0
+    };
     let alpha_ratio = if alpha > 0 {
         alpha_math as f64 / alpha as f64
     } else {
@@ -805,7 +847,9 @@ fn paragraph_math_ratios(p: &Para, chars: &[PageChar], signals: &MathSignals) ->
 fn looks_like_caption(text: &str) -> bool {
     let t = text.trim_start();
     let lower = t.to_ascii_lowercase();
-    for prefix in ["figure", "fig.", "fig ", "table", "tab.", "chart", "scheme", "equation"] {
+    for prefix in [
+        "figure", "fig.", "fig ", "table", "tab.", "chart", "scheme", "equation",
+    ] {
         if let Some(rest) = lower.strip_prefix(prefix) {
             let rest = rest.trim_start();
             if rest.starts_with(|c: char| c.is_ascii_digit()) {
@@ -845,7 +889,12 @@ fn looks_like_abstract(text: &str) -> bool {
 /// adapter maps to layout/semantic roles. [body_size] is the page's body
 /// reference (median char height for text pages, median paragraph height for
 /// OCR pages); a paragraph at least 15% larger is a heading candidate.
-fn sub_type_for(p: &Para, body_size: f64, in_top_margin: bool, in_bottom_margin: bool) -> &'static str {
+fn sub_type_for(
+    p: &Para,
+    body_size: f64,
+    in_top_margin: bool,
+    in_bottom_margin: bool,
+) -> &'static str {
     if looks_like_abstract(&p.text) {
         return "abstract";
     }
@@ -895,42 +944,93 @@ pub fn build_flat_document(
     book_id: i64,
     on_progress: &mut impl FnMut(i64, i64, String),
 ) -> AppResult<FlatDocument> {
-    // Pass 1: per-page chars + margins + page size (one document handle).
-    let pages_data: Vec<PageData> = crate::pdf::with_document_file(stored_path, |doc| {
-        let count = doc.pages().len() as i64;
-        if count <= 0 {
-            return Err(AppError::Internal("PDF 没有页面".into()));
-        }
-        let mut out = Vec::with_capacity(count as usize);
-        for page in 1..=count {
-            let pg = doc.pages().get((page - 1) as pdfium_render::prelude::PdfPageIndex)?;
-            let width = pg.width().value as f64;
-            let height = pg.height().value as f64;
-            let chars = collect_page_chars(doc, page)?;
-            let margins = margin_line_texts(&chars);
-            out.push(PageData {
-                chars,
-                margins,
-                width,
-                height,
-            });
-        }
-        Ok(out)
-    })?;
+    let total = crate::pdf::with_document_file(stored_path, |doc| Ok(doc.pages().len() as i64))?;
+    if total <= 0 {
+        return Err(AppError::Internal("PDF 没有页面".into()));
+    }
+    let all: Vec<i64> = (1..=total).collect();
+    let pages = build_page_blocks(stored_path, book_id, &all, OCR_MODE, on_progress)?;
+    on_progress(total, total, "文档结构就绪".into());
+    Ok(FlatDocument {
+        provider: "generic_flat_ocr",
+        pages,
+    })
+}
 
-    let total = pages_data.len() as i64;
-    let mut pages = Vec::with_capacity(pages_data.len());
-    for (idx, data) in pages_data.iter().enumerate() {
-        let page_no = idx as i64 + 1;
-        on_progress(page_no - 1, total, format!("构建文档结构 {page_no}/{total}"));
+/// Builds flat blocks for a page subset (Android text-level translation).
+///
+/// Same extraction/classification as [build_flat_document], but only the
+/// requested pages are kept in memory. Neighbouring pages are still read for
+/// the header/footer repetition heuristic (page `p-1` / `p+1` margin lines),
+/// which is what makes running headers disappear instead of being translated
+/// on every page.
+///
+/// [ocr_mode] selects the model set for scanned pages ("fast" on mobile,
+/// "high_precision" on desktop); cached OCR rows are keyed by mode.
+pub fn build_page_blocks(
+    stored_path: &str,
+    book_id: i64,
+    pages: &[i64],
+    ocr_mode: &str,
+    on_progress: &mut impl FnMut(i64, i64, String),
+) -> AppResult<Vec<FlatPage>> {
+    if pages.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Pass 1: chars + margins + page size for the requested pages AND their
+    // immediate neighbours (noise detection needs both). The cache keeps a
+    // contiguous run from re-extracting the same page repeatedly.
+    let mut cache: std::collections::HashMap<i64, PageData> = std::collections::HashMap::new();
+    let total = pages.len() as i64;
+    for (idx, page) in pages.iter().enumerate() {
+        on_progress(
+            idx as i64,
+            total,
+            format!("构建文档结构 {}/{}", idx + 1, total),
+        );
+        for candidate in [*page - 1, *page, *page + 1] {
+            if candidate < 1 || cache.contains_key(&candidate) {
+                continue;
+            }
+            let data = crate::pdf::with_document_file(stored_path, |doc| {
+                let count = doc.pages().len() as i64;
+                if candidate > count {
+                    return Ok(None);
+                }
+                let pg = doc
+                    .pages()
+                    .get((candidate - 1) as pdfium_render::prelude::PdfPageIndex)?;
+                let width = pg.width().value as f64;
+                let height = pg.height().value as f64;
+                let chars = collect_page_chars(doc, candidate)?;
+                let margins = margin_line_texts(&chars);
+                Ok(Some(PageData {
+                    chars,
+                    margins,
+                    width,
+                    height,
+                }))
+            })?;
+            if let Some(data) = data {
+                cache.insert(candidate, data);
+            }
+        }
+    }
+
+    let mut out = Vec::with_capacity(pages.len());
+    for (idx, page_no) in pages.iter().enumerate() {
+        let data = cache
+            .get(page_no)
+            .ok_or_else(|| AppError::Internal(format!("第 {page_no} 页不存在")))?;
 
         let neighbors: Vec<String> = {
             let mut n = Vec::new();
-            if idx > 0 {
-                n.extend(pages_data[idx - 1].margins.iter().cloned());
+            if let Some(prev) = cache.get(&(page_no - 1)) {
+                n.extend(prev.margins.iter().cloned());
             }
-            if idx + 1 < pages_data.len() {
-                n.extend(pages_data[idx + 1].margins.iter().cloned());
+            if let Some(next) = cache.get(&(page_no + 1)) {
+                n.extend(next.margins.iter().cloned());
             }
             n
         };
@@ -964,8 +1064,7 @@ pub fn build_flat_document(
                 // the size proxy: caps-only headings have SHORTER glyph boxes
                 // than lowercase body text of a smaller size.
                 p.size = paragraph_font_size(&p, &data.chars);
-                let (math_ratio, alpha_ratio) =
-                    paragraph_math_ratios(&p, &data.chars, &signals);
+                let (math_ratio, alpha_ratio) = paragraph_math_ratios(&p, &data.chars, &signals);
                 let is_formula = is_whole_paragraph_formula(
                     &p.text,
                     &p.rects,
@@ -983,7 +1082,8 @@ pub fn build_flat_document(
             }
         } else {
             // --- scanned page: local OCR ---
-            let lines = ocr_page_lines(stored_path, book_id, page_no, on_progress, total)?;
+            let lines =
+                ocr_page_lines(stored_path, book_id, *page_no, ocr_mode, on_progress, total)?;
             let paras = ocr_lines_to_paragraphs(&lines);
             let mut sizes: Vec<f64> = paras.iter().map(|p| p.size).filter(|s| *s > 0.0).collect();
             let body_size = median(&mut sizes).unwrap_or(0.0);
@@ -1006,19 +1106,16 @@ pub fn build_flat_document(
             }
         }
 
-        pages.push(FlatPage {
-            page: page_no,
+        out.push(FlatPage {
+            page: *page_no,
             width: data.width,
             height: data.height,
             unit: "pt",
             blocks,
         });
+        let _ = idx;
     }
-    on_progress(total, total, "文档结构就绪".into());
-    Ok(FlatDocument {
-        provider: "generic_flat_ocr",
-        pages,
-    })
+    Ok(out)
 }
 
 fn margin_flags(first: Option<NormRect>) -> (bool, bool) {
@@ -1031,7 +1128,13 @@ fn margin_flags(first: Option<NormRect>) -> (bool, bool) {
     }
 }
 
-fn flat_block(text: &str, rects: &[NormRect], data: &PageData, kind: &str, sub_type: &str) -> FlatBlock {
+fn flat_block(
+    text: &str,
+    rects: &[NormRect],
+    data: &PageData,
+    kind: &str,
+    sub_type: &str,
+) -> FlatBlock {
     let (union, _) = union_and_max_line(rects);
     // Clamp to the page: a long line can overflow the mediabox.
     let x0 = union.x.clamp(0.0, 1.0);
@@ -1060,12 +1163,15 @@ fn ocr_page_lines(
     stored_path: &str,
     book_id: i64,
     page: i64,
+    mode: &str,
     on_progress: &mut impl FnMut(i64, i64, String),
     total: i64,
 ) -> AppResult<Vec<OcrLine>> {
     {
         let conn = crate::db::db();
-        if let Ok(Some(cached)) = crate::db::repository::ocr::get_page_ocr(&conn, book_id, page, OCR_MODE) {
+        if let Ok(Some(cached)) =
+            crate::db::repository::ocr::get_page_ocr(&conn, book_id, page, mode)
+        {
             return Ok(cached.lines);
         }
     }
@@ -1086,10 +1192,10 @@ fn ocr_page_lines(
         width: bmp.width,
         height: bmp.height,
     };
-    let result = engine.scan(&img, OCR_MODE)?;
+    let result = engine.scan(&img, mode)?;
     {
         let conn = crate::db::db();
-        let _ = crate::db::repository::ocr::save_page_ocr(&conn, book_id, page, OCR_MODE, &result);
+        let _ = crate::db::repository::ocr::save_page_ocr(&conn, book_id, page, mode, &result);
     }
     Ok(result.lines)
 }
@@ -1156,8 +1262,16 @@ mod tests {
     #[test]
     fn page_number_like_matches_common_patterns() {
         for s in [
-            "12", " 12 ", "- 3 -", "iv", "VI", "第 12 页", "第12页", "Page 12",
-            "page 7", "· 8 ·",
+            "12",
+            " 12 ",
+            "- 3 -",
+            "iv",
+            "VI",
+            "第 12 页",
+            "第12页",
+            "Page 12",
+            "page 7",
+            "· 8 ·",
         ] {
             assert!(page_number_like(s), "{s:?} should be a page number");
         }
@@ -1198,9 +1312,30 @@ mod tests {
     #[test]
     fn ocr_lines_merge_by_gap_with_min_confidence() {
         let lines = vec![
-            OcrLine { text: "第一段第一行".into(), x: 0.1, y: 0.10, w: 0.6, h: 0.02, confidence: 0.95 },
-            OcrLine { text: "第一段第二行".into(), x: 0.1, y: 0.13, w: 0.6, h: 0.02, confidence: 0.75 },
-            OcrLine { text: "第二段".into(), x: 0.1, y: 0.30, w: 0.3, h: 0.02, confidence: 0.90 },
+            OcrLine {
+                text: "第一段第一行".into(),
+                x: 0.1,
+                y: 0.10,
+                w: 0.6,
+                h: 0.02,
+                confidence: 0.95,
+            },
+            OcrLine {
+                text: "第一段第二行".into(),
+                x: 0.1,
+                y: 0.13,
+                w: 0.6,
+                h: 0.02,
+                confidence: 0.75,
+            },
+            OcrLine {
+                text: "第二段".into(),
+                x: 0.1,
+                y: 0.30,
+                w: 0.3,
+                h: 0.02,
+                confidence: 0.90,
+            },
         ];
         let paras = ocr_lines_to_paragraphs(&lines);
         assert_eq!(paras.len(), 2);
@@ -1231,11 +1366,19 @@ mod tests {
     fn sub_type_heading_by_size_and_short() {
         let p = Para {
             text: "2. Method".into(),
-            rects: vec![NormRect { x: 0.1, y: 0.2, w: 0.3, h: 0.03 }],
+            rects: vec![NormRect {
+                x: 0.1,
+                y: 0.2,
+                w: 0.3,
+                h: 0.03,
+            }],
             size: 0.03,
         };
         assert_eq!(sub_type_for(&p, 0.02, false, false), "heading");
-        let body = Para { size: 0.02, ..p.clone() };
+        let body = Para {
+            size: 0.02,
+            ..p.clone()
+        };
         assert_eq!(sub_type_for(&body, 0.02, false, false), "body");
         // Margin paragraphs are header/footer, never heading.
         assert_eq!(sub_type_for(&p, 0.02, true, false), "header");
@@ -1244,13 +1387,32 @@ mod tests {
 
     #[test]
     fn noise_removes_page_numbers_and_repeated_margins() {
-        let rect = Some(NormRect { x: 0.4, y: 0.97, w: 0.05, h: 0.015 });
+        let rect = Some(NormRect {
+            x: 0.4,
+            y: 0.97,
+            w: 0.05,
+            h: 0.015,
+        });
         assert!(is_noise("12", rect, &[]));
-        let rect = Some(NormRect { x: 0.1, y: 0.02, w: 0.3, h: 0.015 });
-        assert!(is_noise("Journal of Testing", rect, &["Journal of Testing".into()]));
+        let rect = Some(NormRect {
+            x: 0.1,
+            y: 0.02,
+            w: 0.3,
+            h: 0.015,
+        });
+        assert!(is_noise(
+            "Journal of Testing",
+            rect,
+            &["Journal of Testing".into()]
+        ));
         assert!(!is_noise("Journal of Testing", rect, &[]));
         // Body paragraphs are never noise.
-        let rect = Some(NormRect { x: 0.1, y: 0.5, w: 0.5, h: 0.02 });
+        let rect = Some(NormRect {
+            x: 0.1,
+            y: 0.5,
+            w: 0.5,
+            h: 0.02,
+        });
         assert!(!is_noise("12", rect, &[]));
     }
 
@@ -1395,10 +1557,16 @@ mod tests {
         assert_eq!(doc.pages.len(), 2);
         assert_eq!(doc.provider, "generic_flat_ocr");
 
-        let page1_texts: Vec<&str> = doc.pages[0].blocks.iter().map(|b| b.text.as_str()).collect();
+        let page1_texts: Vec<&str> = doc.pages[0]
+            .blocks
+            .iter()
+            .map(|b| b.text.as_str())
+            .collect();
         // Noise removed: repeated header + page number.
         assert!(
-            !page1_texts.iter().any(|t| t.contains("Journal of Flat OCR")),
+            !page1_texts
+                .iter()
+                .any(|t| t.contains("Journal of Flat OCR")),
             "margin header must be removed: {page1_texts:?}"
         );
         assert!(!page1_texts.contains(&"1"), "page number must be removed");
@@ -1417,7 +1585,12 @@ mod tests {
             .find(|b| b.text.starts_with("The quick brown fox"))
             .expect("body block");
         assert_eq!(body.sub_type, "body");
-        assert!(body.text.contains("A second line continues the same paragraph"), "lines merged: {}", body.text);
+        assert!(
+            body.text
+                .contains("A second line continues the same paragraph"),
+            "lines merged: {}",
+            body.text
+        );
 
         // Caption detection.
         let caption = doc.pages[0]
@@ -1439,7 +1612,11 @@ mod tests {
         for page in &doc.pages {
             for b in &page.blocks {
                 let [x0, y0, x1, y1] = b.bbox;
-                assert!(x0 >= 0.0 && y0 >= 0.0 && x1 <= page.width && y1 <= page.height, "{:?}", b.bbox);
+                assert!(
+                    x0 >= 0.0 && y0 >= 0.0 && x1 <= page.width && y1 <= page.height,
+                    "{:?}",
+                    b.bbox
+                );
                 assert!(x0 < x1 && y0 < y1, "{:?}", b.bbox);
             }
         }

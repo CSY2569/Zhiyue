@@ -54,17 +54,11 @@ fn image_mark_line(mark: &ImageAnnotation) -> String {
         ImageAnnotationKind::Stamp => ("🔖", "图章"),
     };
     let detail = match mark.kind {
-        ImageAnnotationKind::Sticky => {
-            payload_field(&mark.payload, "text").unwrap_or_default()
-        }
-        ImageAnnotationKind::Stamp => {
-            payload_field(&mark.payload, "file").unwrap_or_default()
-        }
-        ImageAnnotationKind::Shape => {
-            payload_field(&mark.payload, "shapeType")
-                .map(|t| format!("（{t}）"))
-                .unwrap_or_default()
-        }
+        ImageAnnotationKind::Sticky => payload_field(&mark.payload, "text").unwrap_or_default(),
+        ImageAnnotationKind::Stamp => payload_field(&mark.payload, "file").unwrap_or_default(),
+        ImageAnnotationKind::Shape => payload_field(&mark.payload, "shapeType")
+            .map(|t| format!("（{t}）"))
+            .unwrap_or_default(),
         ImageAnnotationKind::Brush => format!(
             "（{} 个点）",
             serde_json::from_str::<Value>(&mark.payload)
@@ -125,7 +119,10 @@ pub fn annotations_markdown(
         pages.entry(ann.page).or_default().push(line);
     }
     for mark in image_marks {
-        pages.entry(mark.page).or_default().push(image_mark_line(mark));
+        pages
+            .entry(mark.page)
+            .or_default()
+            .push(image_mark_line(mark));
     }
 
     for (page, lines) in pages {
@@ -192,12 +189,7 @@ mod tests {
         }
     }
 
-    fn mark(
-        id: i64,
-        page: i64,
-        kind: ImageAnnotationKind,
-        payload: &str,
-    ) -> ImageAnnotation {
+    fn mark(id: i64, page: i64, kind: ImageAnnotationKind, payload: &str) -> ImageAnnotation {
         ImageAnnotation {
             id,
             book_id: 1,
@@ -224,10 +216,34 @@ mod tests {
     #[test]
     fn markdown_groups_by_page_with_icons() {
         let anns = vec![
-            ann(1, 0, TextAnnotationKind::Highlight, Some("first line"), None),
-            ann(2, 0, TextAnnotationKind::Underline, Some("second line"), None),
-            ann(3, 2, TextAnnotationKind::Note, Some("third line"), Some("my note\nwith two lines")),
-            ann(4, 2, TextAnnotationKind::Strikethrough, Some("fourth line"), None),
+            ann(
+                1,
+                0,
+                TextAnnotationKind::Highlight,
+                Some("first line"),
+                None,
+            ),
+            ann(
+                2,
+                0,
+                TextAnnotationKind::Underline,
+                Some("second line"),
+                None,
+            ),
+            ann(
+                3,
+                2,
+                TextAnnotationKind::Note,
+                Some("third line"),
+                Some("my note\nwith two lines"),
+            ),
+            ann(
+                4,
+                2,
+                TextAnnotationKind::Strikethrough,
+                Some("fourth line"),
+                None,
+            ),
         ];
         let md = annotations_markdown(&anns, &[]);
         assert!(md.contains("## 第 1 页"));
@@ -252,10 +268,30 @@ mod tests {
     fn markdown_merges_image_marks_by_page() {
         let anns = vec![ann(1, 0, TextAnnotationKind::Highlight, Some("sel"), None)];
         let marks = vec![
-            mark(10, 0, ImageAnnotationKind::Sticky, r#"{"text":"贴在页上的便签"}"#),
-            mark(11, 1, ImageAnnotationKind::Stamp, r#"{"file":"stamps/a.png"}"#),
-            mark(12, 1, ImageAnnotationKind::Brush, r#"{"points":[[0,0],[1,1]]}"#),
-            mark(13, 1, ImageAnnotationKind::Shape, r#"{"shapeType":"arrow"}"#),
+            mark(
+                10,
+                0,
+                ImageAnnotationKind::Sticky,
+                r#"{"text":"贴在页上的便签"}"#,
+            ),
+            mark(
+                11,
+                1,
+                ImageAnnotationKind::Stamp,
+                r#"{"file":"stamps/a.png"}"#,
+            ),
+            mark(
+                12,
+                1,
+                ImageAnnotationKind::Brush,
+                r#"{"points":[[0,0],[1,1]]}"#,
+            ),
+            mark(
+                13,
+                1,
+                ImageAnnotationKind::Shape,
+                r#"{"shapeType":"arrow"}"#,
+            ),
         ];
         let md = annotations_markdown(&anns, &marks);
         assert!(md.contains("## 第 1 页"));
@@ -270,7 +306,12 @@ mod tests {
     #[test]
     fn json_is_pretty_and_contains_coords() {
         let anns = vec![ann(1, 0, TextAnnotationKind::Highlight, Some("sel"), None)];
-        let marks = vec![mark(2, 0, ImageAnnotationKind::Stamp, r#"{"file":"s.png"}"#)];
+        let marks = vec![mark(
+            2,
+            0,
+            ImageAnnotationKind::Stamp,
+            r#"{"file":"s.png"}"#,
+        )];
         let json = annotations_json(7, &anns, &marks);
         assert!(json.contains("\"book_id\": 7"));
         assert!(json.contains("\"kind\": \"highlight\""));

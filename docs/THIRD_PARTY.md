@@ -12,7 +12,13 @@
 | Flutter / Dart 运行时 | UI 框架 | BSD-3-Clause |
 | PP-OCRv4 模型（rapidocr / PaddleOCR 系） | 本地 OCR | Apache-2.0 |
 | rapidocr-core、jieba-rs 等 Rust 依赖 | OCR / 中文分词 | 见 `rust/Cargo.lock` 各包声明（MIT / Apache-2.0 为主） |
+| **ONNX Runtime**（Android `librbwa_core.so` 静态链接） | Android OCR 推理 | MIT |
+| **`libc++_shared.so`**（Android NDK） | Android C++ 运行时 | Apache-2.0 WITH LLVM-exception |
 | **RetainPDF 管线引擎**（`retainpdf/`，含其依赖） | 整本翻译 + 版式重排 | 见 §2.1 |
+
+> Android 构建**不包含** RetainPDF / CPython / PyMuPDF / Typst：移动端对照阅读
+> 走 `translate/text_translate.rs` 的块级 LLM 翻译，不链接任何 AGPL 组件。
+> 移动端 OCR 与桌面共用 PP-OCRv4 模型（Apache-2.0）与 ONNX Runtime（MIT）。
 
 ## 2. 随包内置的翻译引擎（RetainPDF）
 

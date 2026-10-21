@@ -19,9 +19,7 @@ pub fn get_page_ocr(
         "SELECT result_json FROM page_ocr_cache \
          WHERE book_id = ?1 AND page = ?2 AND ocr_mode = ?3",
     )?;
-    let mut rows = stmt.query_map(params![book_id, page, mode], |row| {
-        row.get::<_, String>(0)
-    })?;
+    let mut rows = stmt.query_map(params![book_id, page, mode], |row| row.get::<_, String>(0))?;
     match rows.next() {
         Some(row) => {
             let json = row?;
@@ -91,23 +89,35 @@ mod tests {
     #[test]
     fn save_get_roundtrip_and_mode_isolation() {
         let conn = test_conn();
-        assert!(get_page_ocr(&conn, 1, 0, "high_precision").unwrap().is_none());
+        assert!(get_page_ocr(&conn, 1, 0, "high_precision")
+            .unwrap()
+            .is_none());
 
         save_page_ocr(&conn, 1, 0, "high_precision", &result("high_precision")).unwrap();
-        let cached = get_page_ocr(&conn, 1, 0, "high_precision").unwrap().unwrap();
+        let cached = get_page_ocr(&conn, 1, 0, "high_precision")
+            .unwrap()
+            .unwrap();
         assert_eq!(cached.lines.len(), 1);
         assert_eq!(cached.lines[0].text, "你好世界");
         assert_eq!(cached.lines[0].confidence, 0.98);
 
         // Different mode / page / book are isolated.
         assert!(get_page_ocr(&conn, 1, 0, "fast").unwrap().is_none());
-        assert!(get_page_ocr(&conn, 1, 1, "high_precision").unwrap().is_none());
-        assert!(get_page_ocr(&conn, 2, 0, "high_precision").unwrap().is_none());
+        assert!(get_page_ocr(&conn, 1, 1, "high_precision")
+            .unwrap()
+            .is_none());
+        assert!(get_page_ocr(&conn, 2, 0, "high_precision")
+            .unwrap()
+            .is_none());
 
         // Upsert replaces the previous result.
         save_page_ocr(&conn, 1, 0, "high_precision", &result("high_precision")).unwrap();
         assert_eq!(
-            get_page_ocr(&conn, 1, 0, "high_precision").unwrap().unwrap().lines.len(),
+            get_page_ocr(&conn, 1, 0, "high_precision")
+                .unwrap()
+                .unwrap()
+                .lines
+                .len(),
             1
         );
     }
@@ -124,7 +134,9 @@ mod tests {
         corrected.lines[0].text = "你好，修正后的世界".into();
         save_page_ocr(&conn, 1, 0, "high_precision", &corrected).unwrap();
 
-        let cached = get_page_ocr(&conn, 1, 0, "high_precision").unwrap().unwrap();
+        let cached = get_page_ocr(&conn, 1, 0, "high_precision")
+            .unwrap()
+            .unwrap();
         assert_eq!(cached.lines[0].text, "你好，修正后的世界");
         // Confidence and geometry survive the edit (only text changes).
         assert_eq!(cached.lines[0].confidence, 0.98);

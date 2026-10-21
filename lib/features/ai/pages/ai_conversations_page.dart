@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
+import 'package:rbwa/core/platform/platform.dart';
 import 'package:rbwa/core/widgets/confirm_dialog.dart';
 import 'package:rbwa/core/widgets/empty_state.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
@@ -32,79 +33,138 @@ class _AiConversationsPageState extends ConsumerState<AiConversationsPage> {
     // the hint below); a stale id is harmless.
     final selected = threads.where((t) => t.id == _selectedId).firstOrNull;
 
+    // Phones: a 280dp list plus a conversation pane leaves neither usable.
+    // Show the list, and open a conversation as its own screen.
+    final compact = PlatformCapabilities.current().isMobile ||
+        PlatformCapabilities.isCompactWidth(MediaQuery.sizeOf(context).width);
+    if (compact) {
+      if (selected == null) {
+        return _threadList(threads, compact: true);
+      }
+      return Column(
+        children: [
+          Material(
+            color: Theme.of(context).colorScheme.surfaceContainerLow,
+            child: SafeArea(
+              bottom: false,
+              child: Row(
+                children: [
+                  IconButton(
+                    tooltip: '返回列表',
+                    icon: const Icon(LucideIcons.arrowLeft, size: 20),
+                    onPressed: () => setState(() => _selectedId = null),
+                  ),
+                  Expanded(
+                    child: Text(
+                      selected.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '删除对话',
+                    icon: const Icon(LucideIcons.trash2, size: 20),
+                    onPressed: () => _confirmDelete(selected),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Expanded(child: _conversation(selected)),
+        ],
+      );
+    }
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Left: books with conversations. Material (not a colored
-        // DecoratedBox) so the ListTile ink/selection paints correctly.
-        Material(
-          color: Theme.of(context).colorScheme.surfaceContainerLow,
-          child: Container(
-            width: 280,
-            decoration: BoxDecoration(
-              border: Border(
-                right: BorderSide(
-                  color: Theme.of(context).colorScheme.outlineVariant,
-                ),
-              ),
-            ),
-            child: threads.isEmpty
-                ? const _EmptyGuide()
-                : ListView(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    children: [
-                      const AiThreadListHeader(),
-                      for (final t in threads)
-                        AiThreadTile(
-                          thread: t,
-                          selected: t.id == _selectedId,
-                          trailing: IconButton(
-                            icon: const Icon(LucideIcons.trash2, size: 20),
-                            tooltip: '删除对话',
-                            visualDensity: VisualDensity.compact,
-                            onPressed: () => _confirmDelete(t),
-                          ),
-                          onTap: () => setState(() => _selectedId = t.id),
-                        ),
-                    ],
-                  ),
-          ),
-        ),
+        // Left: books with conversations.
+        _threadList(threads, compact: false),
         // Right: the selected book's full conversation.
         Expanded(
           child: selected == null
               ? const _NoSelection()
-              : SelectionArea(
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                    children: [
-                      Text(
-                        selected.title,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '共 ${selected.messages.length} 条消息',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const Divider(height: 16),
-                      for (final m in selected.messages)
-                        AiMessageBubble(
-                          role: m.role,
-                          content: m.content,
-                          imagePng: m.imagePng,
-                          imagePath: m.imagePath,
-                          actionType: m.actionType,
-                          createdAt: m.createdAt,
-                          maxWidth: 520,
-                        ),
-                    ],
-                  ),
-                ),
+              : _conversation(selected),
         ),
       ],
+    );
+  }
+
+  /// The list of conversation windows (left pane on desktop, whole screen on
+  /// phones).
+  Widget _threadList(List<AiThreadState> threads, {required bool compact}) {
+    final list = threads.isEmpty
+        ? const _EmptyGuide()
+        : ListView(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            children: [
+              const AiThreadListHeader(),
+              for (final t in threads)
+                AiThreadTile(
+                  thread: t,
+                  selected: t.id == _selectedId,
+                  trailing: IconButton(
+                    icon: const Icon(LucideIcons.trash2, size: 20),
+                    tooltip: '删除对话',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => _confirmDelete(t),
+                  ),
+                  onTap: () => setState(() => _selectedId = t.id),
+                ),
+            ],
+          );
+    if (!compact) {
+      return Material(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        child: Container(
+          width: 280,
+          decoration: BoxDecoration(
+            border: Border(
+              right: BorderSide(
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
+            ),
+          ),
+          child: list,
+        ),
+      );
+    }
+    return Scaffold(
+      body: SafeArea(child: list),
+    );
+  }
+
+  /// One window's messages.
+  Widget _conversation(AiThreadState selected) {
+    return SelectionArea(
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        children: [
+          Text(
+            selected.title,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '共 ${selected.messages.length} 条消息',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const Divider(height: 16),
+          for (final m in selected.messages)
+            AiMessageBubble(
+              role: m.role,
+              content: m.content,
+              imagePng: m.imagePng,
+              imagePath: m.imagePath,
+              actionType: m.actionType,
+              createdAt: m.createdAt,
+              maxWidth: 520,
+            ),
+        ],
+      ),
     );
   }
 

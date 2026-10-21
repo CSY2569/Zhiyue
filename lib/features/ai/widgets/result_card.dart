@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
+import 'package:rbwa/core/platform/platform.dart';
 import 'package:rbwa/core/utils/clipboard.dart';
 import 'package:rbwa/core/widgets/toolbar_icon_button.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
@@ -38,6 +39,8 @@ class ResultCard extends ConsumerWidget {
 
     final theme = Theme.of(context);
     final screen = MediaQuery.sizeOf(context);
+    // Phones: the persisted desktop card size (440×360) is wider than the
+    // screen, so the card is docked as a bottom sheet instead of floating.
     final cardSize = ref.watch(panelLayoutProvider.select((p) => p.cardSize));
     final pos = state.cardPos;
     final thread = state.threadOf(state.activeThreadId);
@@ -47,6 +50,11 @@ class ResultCard extends ConsumerWidget {
         state.cardStreaming &&
         thread != null &&
         state.streamingThreadId == thread.id;
+    final compact = PlatformCapabilities.current().isMobile ||
+        PlatformCapabilities.isCompactWidth(screen.width);
+    if (compact) {
+      return _dockedCard(context, ref, theme, screen, streamingHere);
+    }
     final tail = streamingHere ? state.streamingText : null;
     final conversation = _conversationText(messages, streamingTail: tail);
     // Bubbles reflow with the card width (was a hardcoded 380).
@@ -200,6 +208,131 @@ class ResultCard extends ConsumerWidget {
                   ),
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Phone layout: a full-width sheet pinned to the bottom, 60% of the screen
+  /// tall, with the same content and controls as the floating card. The
+  /// floating card's width/height and drag position do not apply here -- a
+  /// 440dp card does not fit a 360dp phone.
+  Widget _dockedCard(
+    BuildContext context,
+    WidgetRef ref,
+    ThemeData theme,
+    Size screen,
+    bool streamingHere,
+  ) {
+    final thread = ref.watch(aiProvider).threadOf(
+          ref.watch(aiProvider).activeThreadId,
+        );
+    final messages = thread?.messages ?? const <AiChatMessage>[];
+    final state = ref.watch(aiProvider);
+    final tail = streamingHere ? state.streamingText : null;
+    final conversation = _conversationText(messages, streamingTail: tail);
+
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: SizedBox(
+        height: (screen.height * 0.6).clamp(280.0, screen.height * 0.9),
+        child: Material(
+          elevation: 12,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          color: theme.colorScheme.surfaceContainerHigh,
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              // Drag handle + title row.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 6, 4, 0),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 4,
+                      margin: const EdgeInsets.only(right: 10),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.outlineVariant,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    Icon(
+                      LucideIcons.sparkles,
+                      size: 16,
+                      color: theme.colorScheme.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text('AI 结果', style: theme.textTheme.titleSmall),
+                    const Spacer(),
+                    if (streamingHere)
+                      ToolbarIconButton(
+                        icon: LucideIcons.circleStop,
+                        tooltip: '停止生成',
+                        onTap: () =>
+                            ref.read(aiProvider.notifier).cancelStreaming(),
+                      ),
+                    ToolbarIconButton(
+                      icon: LucideIcons.copy,
+                      tooltip: '复制对话',
+                      onTap: () => copyTextWithSnack(
+                        context,
+                        conversation,
+                        okLabel: '已复制对话',
+                      ),
+                    ),
+                    ToolbarIconButton(
+                      icon: LucideIcons.x,
+                      tooltip: '关闭',
+                      onTap: () => ref.read(aiProvider.notifier).closeCard(),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 8),
+              Expanded(
+                child: ListView(
+                  reverse: true,
+                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+                  children: [
+                    if (tail != null)
+                      tail.isEmpty
+                          ? const _StreamingCursor()
+                          : AiMessageBubble(
+                              role: AiRole.assistant,
+                              content: tail,
+                              streaming: true,
+                              maxWidth: screen.width - 24,
+                              aiColor:
+                                  theme.colorScheme.surfaceContainerHighest,
+                            ),
+                    ...messages.reversed.map(
+                      (m) => AiMessageBubble(
+                        role: m.role,
+                        content: m.content,
+                        imagePng: m.imagePng,
+                        imagePath: m.imagePath,
+                        actionType: m.actionType,
+                        createdAt: m.createdAt,
+                        maxWidth: screen.width - 24,
+                        aiColor: theme.colorScheme.surfaceContainerHighest,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 8),
+              _CardInput(
+                streaming: streamingHere,
+                bookId: bookId,
+                bookTitle: bookTitle,
+              ),
+              const SizedBox(height: 8),
+              SizedBox(height: MediaQuery.viewInsetsOf(context).bottom),
             ],
           ),
         ),

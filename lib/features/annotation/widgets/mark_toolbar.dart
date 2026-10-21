@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
+import 'package:rbwa/core/platform/platform.dart';
 import 'package:rbwa/core/widgets/toolbar_icon_button.dart';
 import 'package:rbwa/features/annotation/providers/image_mark_provider.dart';
 import 'package:rbwa/features/annotation/widgets/highlight_layer.dart'
@@ -40,15 +41,12 @@ class MarkToolBar extends ConsumerWidget {
         tool == MarkTool.shape ||
         tool == MarkTool.stamp;
 
-    return Material(
-      elevation: 2,
-      color: theme.colorScheme.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+    // Phones: the single row is ~500dp wide and overflows a 360dp screen, so
+    // the tools wrap onto a second line (still inside the floating bar).
+    final compact = PlatformCapabilities.current().isMobile ||
+        PlatformCapabilities.isCompactWidth(MediaQuery.sizeOf(context).width);
+
+    final row = <Widget>[
             ToolbarIconButton(
               icon: LucideIcons.navigation,
               tooltip: '选择/移动',
@@ -113,12 +111,27 @@ class MarkToolBar extends ConsumerWidget {
               tooltip: '退出批注',
               onTap: () => notifier.setTool(null),
             ),
-          ],
-        ),
+      ];
+
+    return Material(
+      elevation: 2,
+      color: theme.colorScheme.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        child: compact
+            ? Wrap(
+                spacing: 0,
+                runSpacing: 0,
+                alignment: WrapAlignment.center,
+                children: row,
+              )
+            : Row(mainAxisSize: MainAxisSize.min, children: row),
       ),
     );
   }
 }
+
 
 class _ShapeTool extends ConsumerWidget {
   const _ShapeTool({required this.active});

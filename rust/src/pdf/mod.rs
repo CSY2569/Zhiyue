@@ -17,21 +17,19 @@
 pub mod types;
 
 #[cfg(feature = "pdf")]
-mod pdfium;
-#[cfg(feature = "pdf")]
 mod image_book;
+#[cfg(feature = "pdf")]
+mod pdfium;
 
 #[cfg(feature = "pdf")]
-pub use pdfium::{
-    close, extract_document_text, extract_text, extract_text_file, open, outline,
-    page_has_text, render_page, render_page_file_to_width,
-    render_page_file, render_thumbnail_file, shared_handle, thumbnail, with_document_file,
-    with_pdfium_lock,
+pub use image_book::{
+    close_image, extract_image_text, open_image, page_image_has_text, render_image, thumbnail_image,
 };
 #[cfg(feature = "pdf")]
-pub use image_book::{
-    close_image, extract_image_text, open_image, page_image_has_text, render_image,
-    thumbnail_image,
+pub use pdfium::{
+    close, extract_document_text, extract_text, extract_text_file, open, outline, page_has_text,
+    render_page, render_page_file, render_page_file_to_width, render_thumbnail_file,
+    set_native_library_dir, shared_handle, thumbnail, with_document_file, with_pdfium_lock,
 };
 
 #[cfg(not(feature = "pdf"))]
@@ -42,3 +40,18 @@ pub use fallback::{
     outline, page_has_text, page_image_has_text, render_image, render_page, render_page_file,
     render_thumbnail_file, thumbnail, thumbnail_image,
 };
+
+/// Android / packaged builds: point the PDF subsystem at the directory that
+/// holds `libpdfium.so`. On other platforms the executable-relative probe is
+/// enough, and this is a no-op returning false.
+pub fn configure_native_library_dir(dir: &str) -> bool {
+    #[cfg(all(feature = "pdf", target_os = "android"))]
+    {
+        pdfium::set_native_library_dir(std::path::PathBuf::from(dir))
+    }
+    #[cfg(not(all(feature = "pdf", target_os = "android")))]
+    {
+        let _ = dir;
+        false
+    }
+}

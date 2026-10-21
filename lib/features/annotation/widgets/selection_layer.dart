@@ -1,6 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:rbwa/core/haptics.dart';
+import 'package:rbwa/core/platform/platform.dart';
 import 'package:rbwa/core/widgets/text_input_dialog.dart';
 import 'package:rbwa/data/repositories/reader_repository.dart';
 import 'package:rbwa/features/ai/providers/ai_config_provider.dart';
@@ -11,6 +15,8 @@ import 'package:rbwa/features/annotation/providers/selection_provider.dart';
 import 'package:rbwa/features/bilingual/providers/translated_char_box_cache.dart';
 import 'package:rbwa/features/annotation/selection_geometry.dart';
 import 'package:rbwa/features/reader/providers/ocr_helpers.dart';
+import 'package:rbwa/features/reader/providers/reader_tap_provider.dart';
+import 'package:rbwa/features/reader/providers/viewer_provider.dart';
 import 'package:rbwa/features/reader/providers/scan_provider.dart';
 import 'package:rbwa/src/rust/models/annotation.dart';
 import 'package:rbwa/src/rust/ocr.dart' show OcrLine;
@@ -39,6 +45,7 @@ class SelectionLayer extends ConsumerStatefulWidget {
     required this.page, // 0-indexed
     required this.annotations, // annotations of this page
     this.translated = false,
+    this.longPressSelect = false,
   });
 
   final int bookId;
@@ -49,6 +56,11 @@ class SelectionLayer extends ConsumerStatefulWidget {
   /// translated-PDF cache and annotations / OCR markers stay off. The page
   /// index is the book's absolute page (both panes are 1:1).
   final bool translated;
+
+  /// Touch layout: start selecting with a LONG PRESS instead of a plain drag,
+  /// so a single-finger drag still scrolls the page. Desktop keeps
+  /// drag-to-select (there is no touch scrolling to compete with).
+  final bool longPressSelect;
 
   @override
   ConsumerState<SelectionLayer> createState() => _SelectionLayerState();
@@ -64,6 +76,18 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
   Offset? _dragDownPos;
   // Line layouts for OCR (line-level) boxes; null for native PDF (per-char).
   List<LineLayout>? _lineLayouts;
+
+  /// Word range selected by the long press that started the gesture. While
+  /// the finger moves, the selection spans from this whole word to the word
+  /// under the pointer, so the anchor word never shrinks to a single
+  /// character mid-drag.
+  int? _wordLo;
+  int? _wordHi;
+
+  /// Current committed endpoints, mirrored here so a handle drag knows the
+  /// fixed end. Encoded positions for line-level (OCR) boxes.
+  int? _selLo;
+  int? _selHi;
 
   @override
   void initState() {
@@ -160,6 +184,8 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
         lineRects: selectionRectsFromLines(boxes, layouts, anchor, idx),
         source: source,
       );
+      _selLo = math.min(anchor, idx);
+      _selHi = math.max(anchor, idx);
       ref.read(selectionProvider.notifier).updateSelection(sel);
     } else {
       final sel = Selection(
@@ -170,6 +196,8 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
         lineRects: selectionRects(boxes, anchor, idx),
         source: source,
       );
+      _selLo = math.min(anchor, idx);
+      _selHi = math.max(anchor, idx);
       ref.read(selectionProvider.notifier).updateSelection(sel);
     }
   }
@@ -187,7 +215,27 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
 
   void _onPanDown(DragDownDetails d) => _dragDownPos = d.localPosition;
 
-  void _onPanStart(DragStartDetails d) {
+  void _onLongPressStart(LongPressStartDetails d) {
+    _dragDownPos = d.localPosition;
+    _beginSelection(d.localPosition, expandWord: true);
+    if (_wordLo != null) Haptics.select();
+  }
+
+  void _onLongPressMoveUpdate(LongPressMoveUpdateDetails d) {
+    _updateSelection(d.localPosition);
+  }
+
+  void _onLongPressEnd(LongPressEndDetails d) {
+    _endSelection();
+  }
+
+  void _onPanStart(DragStartDetails d) => _beginSelection(d.localPosition);
+
+  void _onPanUpdate(DragUpdateDetails d) => _updateSelection(d.localPosition);
+
+  void _onPanEnd(DragEndDetails d) => _endSelection();
+
+  void _beginSelection(Offset position, {bool expandWord = false}) {
     final boxes = _boxes;
     if (boxes == null) {
       // Char boxes not loaded yet -- kick off the fetch; the provider update
@@ -197,31 +245,61 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
     }
     if (boxes.isEmpty) return; // no text layer on this page
     _ensureLineLayouts(boxes);
-    final norm = _toNorm(_dragDownPos ?? d.localPosition);
+    final norm = _toNorm(_dragDownPos ?? position);
     final idx = _lineLayouts != null
         ? lineIndexAt(boxes, _lineLayouts!, norm)
         : charIndexAt(boxes, norm);
     if (idx < 0) {
       // Drag began in whitespace: nothing to select.
+      _wordLo = null;
+      _wordHi = null;
       ref.read(selectionProvider.notifier).clear();
       return;
     }
-    _dragAnchor = idx;
-    _setSelection(idx);
+    if (!expandWord) {
+      _wordLo = null;
+      _wordHi = null;
+      _dragAnchor = idx;
+      _setSelection(idx);
+      return;
+    }
+    // Touch long-press: select the whole word under the finger.
+    final (lo, hi) = _lineLayouts != null
+        ? wordRangeAtEncoded(boxes, idx)
+        : wordRangeAt(boxes, idx);
+    _wordLo = lo;
+    _wordHi = hi;
+    _dragAnchor = lo;
+    _setSelection(hi);
   }
 
-  void _onPanUpdate(DragUpdateDetails d) {
+  void _updateSelection(Offset position) {
     final boxes = _boxes;
     if (boxes == null || _dragAnchor == null) return;
-    final norm = _toNorm(d.localPosition);
+    final norm = _toNorm(position);
     final idx = _lineLayouts != null
         ? lineIndexAt(boxes, _lineLayouts!, norm)
         : charIndexAt(boxes, norm);
     if (idx < 0) return; // pointer left the text grid; keep last range
-    _setSelection(idx);
+
+    final wordLo = _wordLo;
+    final wordHi = _wordHi;
+    if (wordLo == null || wordHi == null) {
+      _setSelection(idx);
+      return;
+    }
+    // Word-drag: include the entire word under the pointer, keeping the
+    // anchor word fully selected.
+    final (plo, phi) = _lineLayouts != null
+        ? wordRangeAtEncoded(boxes, idx)
+        : wordRangeAt(boxes, idx);
+    final lo = math.min(wordLo, plo);
+    final hi = math.max(wordHi, phi);
+    _dragAnchor = lo;
+    _setSelection(hi);
   }
 
-  void _onPanEnd(DragEndDetails d) {
+  void _endSelection() {
     _dragDownPos = null;
     if (_dragAnchor == null) return;
     _dragAnchor = null;
@@ -278,8 +356,12 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
       _editOcrLine(low.index, low.line);
       return;
     }
-    // Tap on whitespace clears the selection (FEATURES 4.1.3).
+    // Tap on whitespace clears the selection (FEATURES 4.1.3) and reports
+    // the tap so the reader can page (edges) or toggle its chrome (middle).
     ref.read(selectionProvider.notifier).clear();
+    if (PlatformCapabilities.current().isMobile && !widget.translated) {
+      ref.read(readerTapProvider.notifier).report(norm.dx);
+    }
   }
 
   /// The low-confidence line whose normalized rect contains [norm], or null.
@@ -339,6 +421,79 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
     ref.read(scanStateProvider.notifier).refreshLowConfidence(widget.page, count);
   }
 
+  /// The two handle positions (normalized page space), from the first /
+  /// last selected line rect. Start handle sits on the left edge of the first
+  /// line, end handle on the right edge of the last line.
+  ({Offset start, Offset end})? _handlePositions(Selection sel) {
+    if (sel.lineRects.isEmpty) return null;
+    final first = sel.lineRects.first;
+    final last = sel.lineRects.last;
+    return (
+      start: Offset(first.x, first.y + first.h),
+      end: Offset(last.x + last.w, last.y + last.h),
+    );
+  }
+
+  /// Updates the selection while one handle is dragged. The opposite end
+  /// stays fixed; the dragged end snaps to the word under the pointer.
+  void _dragHandle(_SelHandle handle, Offset local) {
+    final boxes = _boxes;
+    if (boxes == null) return;
+    final norm = _toNorm(local);
+    final idx = _lineLayouts != null
+        ? lineIndexAt(boxes, _lineLayouts!, norm)
+        : charIndexAt(boxes, norm);
+    if (idx < 0) return;
+
+    final (plo, phi) = _lineLayouts != null
+        ? wordRangeAtEncoded(boxes, idx)
+        : wordRangeAt(boxes, idx);
+    final lo = _selLo;
+    final hi = _selHi;
+    if (lo == null || hi == null) return;
+
+    // Dragging the START handle moves the low end; dragging the END handle
+    // moves the high end. The fixed end becomes the drag anchor so the rects
+    // / text are always built in document order.
+    if (handle == _SelHandle.start) {
+      _dragAnchor = hi;
+      _setSelection(math.min(plo, hi));
+    } else {
+      _dragAnchor = lo;
+      _setSelection(math.max(phi, lo));
+    }
+  }
+
+  void _onHandleDragStart(_SelHandle which) {
+    final sel = ref.read(selectionProvider).selection;
+    if (sel != null && _owns(sel)) {
+      _selLo = math.min(sel.anchorIndex, sel.currentIndex);
+      _selHi = math.max(sel.anchorIndex, sel.currentIndex);
+    }
+    Haptics.tap();
+  }
+
+  void _onHandleDragEnd() {
+    final sel = ref.read(selectionProvider).selection;
+    if (sel == null || !_owns(sel)) return;
+    // Re-anchor the toolbar to the updated selection.
+    final render = context.findRenderObject() as RenderBox?;
+    if (render == null || render.size.isEmpty) return;
+    final origin = render.localToGlobal(Offset.zero);
+    final size = render.size;
+    if (sel.lineRects.isEmpty) return;
+    final first = sel.lineRects.first;
+    ref.read(selectionProvider.notifier).commitSelection(
+          sel,
+          Rect.fromLTWH(
+            origin.dx + first.x * size.width,
+            origin.dy + first.y * size.height,
+            first.w * size.width,
+            first.h * size.height,
+          ),
+        );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Preview only the selection belonging to this page.
@@ -354,6 +509,36 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
     final mine = _owns(selection) ? selection : null;
     final color = Theme.of(context).colorScheme.primary;
 
+    final handles = widget.longPressSelect && mine != null
+        ? _handlePositions(mine)
+        : null;
+
+    final painter = CustomPaint(
+      painter: _SelectionPreviewPainter(mine, color),
+    );
+    if (widget.longPressSelect) {
+      // Touch: long-press to anchor the selection, drag to extend, release
+      // to show the toolbar. Ordinary drags stay with the scroll view.
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapUp: _onTapUp,
+        onDoubleTapDown: _onDoubleTapDown,
+        onDoubleTap: _onDoubleTap,
+        onLongPressStart: _onLongPressStart,
+        onLongPressMoveUpdate: _onLongPressMoveUpdate,
+        onLongPressEnd: _onLongPressEnd,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(child: painter),
+            if (handles != null) ...[
+              _handleWidget(handles.start, _SelHandle.start),
+              _handleWidget(handles.end, _SelHandle.end),
+            ],
+          ],
+        ),
+      );
+    }
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTapUp: _onTapUp,
@@ -361,10 +546,94 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
       onPanStart: _onPanStart,
       onPanUpdate: _onPanUpdate,
       onPanEnd: _onPanEnd,
-      child: CustomPaint(painter: _SelectionPreviewPainter(mine, color)),
+      child: painter,
     );
   }
+
+  /// A selection handle: a 32dp hit target (Material's minimum for precise
+  /// drags) around an 12dp dot. Only the handle itself consumes drags, so the
+  /// rest of the page still scrolls.
+  Widget _handleWidget(Offset norm, _SelHandle which) {
+    final render = context.findRenderObject() as RenderBox?;
+    final size = render?.size ?? Size.zero;
+    const hit = 40.0;
+    return Positioned(
+      left: norm.dx * size.width - hit / 2,
+      top: norm.dy * size.height - hit / 2,
+      width: hit,
+      height: hit,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        // `d.globalPosition` is in screen space; the layer converts it to its
+        // own local space. Using the handle's localPosition here would be
+        // relative to the 40dp handle box, not the page.
+        onPanStart: (_) => _onHandleDragStart(which),
+        onPanUpdate: (d) => _dragHandle(
+          which,
+          (context.findRenderObject() as RenderBox?)
+                  ?.globalToLocal(d.globalPosition) ??
+              d.globalPosition,
+        ),
+        onPanEnd: (_) => _onHandleDragEnd(),
+        onPanCancel: _onHandleDragEnd,
+        child: Center(
+          child: Container(
+            width: 14,
+            height: 14,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Theme.of(context).colorScheme.surface,
+                width: 2,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Position of the last double tap (TapDown gives the coordinates that
+  /// `onDoubleTap` itself does not).
+  Offset? _doubleTapPos;
+
+  void _onDoubleTapDown(TapDownDetails d) => _doubleTapPos = d.localPosition;
+
+  /// Double-tap on text selects the word under the finger; on blank space it
+  /// toggles zoom, preserving the reader's previous double-tap behavior.
+  void _onDoubleTap() {
+    final pos = _doubleTapPos;
+    _doubleTapPos = null;
+    if (pos == null) return;
+    final boxes = _boxes;
+    if (boxes != null && boxes.isNotEmpty) {
+      _ensureLineLayouts(boxes);
+      final norm = _toNorm(pos);
+      final idx = _lineLayouts != null
+          ? lineIndexAt(boxes, _lineLayouts!, norm)
+          : charIndexAt(boxes, norm);
+      if (idx >= 0) {
+        final (lo, hi) = _lineLayouts != null
+            ? wordRangeAtEncoded(boxes, idx)
+            : wordRangeAt(boxes, idx);
+        _wordLo = lo;
+        _wordHi = hi;
+        _dragAnchor = lo;
+        _setSelection(hi);
+        Haptics.select();
+        _endSelection();
+        return;
+      }
+    }
+    // Blank area: same zoom toggle as the reader's double tap.
+    final viewer = ref.read(viewerProvider);
+    ref.read(viewerProvider.notifier).setZoom(viewer.zoom > 1.6 ? 1.2 : 2.0);
+  }
 }
+
+/// Which end of the selection a drag is moving.
+enum _SelHandle { start, end }
 
 /// Draws the live selection preview (FEATURES 6.1: semi-transparent primary
 /// tint over each selected line).

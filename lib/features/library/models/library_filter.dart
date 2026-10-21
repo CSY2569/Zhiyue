@@ -5,7 +5,7 @@
 /// clicking a category shows that category's books -- one active view at a
 /// time, so the components never interfere. Search is the only filter that
 /// stacks on top of the active view.
-enum LibraryView { all, pdf, image, favorite, category }
+enum LibraryView { all, recent, pdf, image, favorite, category }
 
 /// Immutable filter state for the library view (FEATURES 2.7).
 ///

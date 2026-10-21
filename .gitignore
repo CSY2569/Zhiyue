@@ -62,6 +62,18 @@ app.*.map.json
 *.so
 *.dylib
 *.dll
+/android/app/src/main/jniLibs/
+/android/app/src/main/assets/models/*.onnx
+/android/app/src/main/assets/models/*.txt
+/android/app/src/main/assets/models/manifest.json
+/android/app/src/main/assets/models/**/*.onnx
+/.cache/
+
+# Android build output / local config
+/android/.gradle/
+/android/build/
+/android/local.properties
+/android/app/.cxx/
 
 # ---------------------------------------------------------------------------
 # Runtime data (never commit user data / DBs / logs)

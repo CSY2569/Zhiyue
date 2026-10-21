@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
+
+import 'package:rbwa/core/widgets/app_overlay.dart';
 
 /// Destructive confirm dialog used across the app (delete book / category /
 /// conversation, clear marks): title + content + 取消 / confirm actions.
 /// Returns true when confirmed.
 ///
+/// Rendered with [AppDialog] so it matches the library's floating panels
+/// (18dp radius, panel fill, serif title) instead of Material's default
+/// 28dp AlertDialog.
+///
 /// [confirmStyle] controls the confirm button: [ConfirmButtonStyle.destructive]
-/// tints it with the error color (the destructive convention), [.filled] uses
-/// a primary [FilledButton], [.plain] a neutral [TextButton].
+/// tints it with the error colour (the destructive convention),
+/// [.filled] uses a primary filled pill, [.plain] a neutral text action.
 Future<bool> showConfirmDialog(
   BuildContext context, {
   required String title,
@@ -16,29 +23,34 @@ Future<bool> showConfirmDialog(
 }) async {
   final ok = await showDialog<bool>(
     context: context,
-    builder: (ctx) => AlertDialog(
-      title: Text(title),
-      content: Text(content),
+    builder: (ctx) => AppDialog(
+      title: title,
+      icon: confirmStyle == ConfirmButtonStyle.destructive
+          ? LucideIcons.triangleAlert
+          : LucideIcons.circleHelp,
+      body: Text(
+        content,
+        style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(height: 1.55),
+      ),
       actions: [
-        TextButton(
+        AppDialogAction(
+          label: '取消',
           onPressed: () => Navigator.pop(ctx, false),
-          child: const Text('取消'),
         ),
         switch (confirmStyle) {
-          ConfirmButtonStyle.destructive => TextButton(
+          ConfirmButtonStyle.destructive => AppDialogAction(
+              label: confirmLabel,
+              destructive: true,
               onPressed: () => Navigator.pop(ctx, true),
-              style: TextButton.styleFrom(
-                foregroundColor: Theme.of(ctx).colorScheme.error,
-              ),
-              child: Text(confirmLabel),
             ),
-          ConfirmButtonStyle.filled => FilledButton(
+          ConfirmButtonStyle.filled => AppDialogAction(
+              label: confirmLabel,
+              primary: true,
               onPressed: () => Navigator.pop(ctx, true),
-              child: Text(confirmLabel),
             ),
-          ConfirmButtonStyle.plain => TextButton(
+          ConfirmButtonStyle.plain => AppDialogAction(
+              label: confirmLabel,
               onPressed: () => Navigator.pop(ctx, true),
-              child: Text(confirmLabel),
             ),
         },
       ],

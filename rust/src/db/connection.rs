@@ -51,6 +51,12 @@ pub fn db() -> DbGuard<'static> {
 /// Production: `$XDG_DATA_HOME/RBWA` or `~/.local/share/RBWA`.
 /// Created if missing. Falls back to `./RBWA_data` if `dirs` cannot resolve.
 ///
+/// Android: `dirs::data_dir()` returns `None` (there is no XDG home), and the
+/// process CWD is `/`, so the old fallback would try to create `/RBWA_data`.
+/// The Dart layer therefore calls [`set_data_dir_override`] with
+/// `getApplicationSupportDirectory()` before `init_core`; without it we fail
+/// loudly instead of writing somewhere unwritable.
+///
 /// Once [`init_database_at`] has run, the initialized database's parent
 /// directory wins (see [`DATA_DIR_OVERRIDE`]) -- so an isolated test DB keeps
 /// covers / documents / screenshots / models inside the same scratch dir and
@@ -60,10 +66,29 @@ pub fn app_data_dir() -> AppResult<PathBuf> {
         std::fs::create_dir_all(dir)?;
         return Ok(dir.clone());
     }
-    let base = dirs::data_dir().unwrap_or_else(|| PathBuf::from("./RBWA_data"));
-    let dir = base.join("RBWA");
-    std::fs::create_dir_all(&dir)?;
-    Ok(dir)
+    #[cfg(target_os = "android")]
+    {
+        return Err(crate::error::AppError::Internal(
+            "Android 数据目录未初始化：启动时需先调用 init_core_with_data_dir".into(),
+        ));
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let base = dirs::data_dir().unwrap_or_else(|| PathBuf::from("./RBWA_data"));
+        let dir = base.join("RBWA");
+        std::fs::create_dir_all(&dir)?;
+        Ok(dir)
+    }
+}
+
+/// Pin the app data directory for the rest of the process. Used by the
+/// Android entrypoint (Dart passes `getApplicationSupportDirectory()`), and
+/// by tests through [`init_database_at`].
+///
+/// Returns false when an override was already set (the first one wins, which
+/// keeps a test-scoped dir from being replaced later in the same process).
+pub fn set_data_dir_override(dir: PathBuf) -> bool {
+    DATA_DIR_OVERRIDE.set(dir).is_ok()
 }
 
 /// Path to the SQLite database file.
@@ -130,11 +155,9 @@ fn migrate(conn: &Connection) -> AppResult<()> {
     };
 
     let recorded: Option<u32> = conn
-        .query_row(
-            "SELECT MAX(version) FROM schema_version",
-            [],
-            |row| row.get(0),
-        )
+        .query_row("SELECT MAX(version) FROM schema_version", [], |row| {
+            row.get(0)
+        })
         .ok()
         .flatten();
 
@@ -148,9 +171,7 @@ fn migrate(conn: &Connection) -> AppResult<()> {
         }
         Some(1) => {
             tracing::info!("migrating schema 1 -> 2 (annotations.text)");
-            conn.execute_batch(
-                "ALTER TABLE annotations ADD COLUMN text TEXT;",
-            )?;
+            conn.execute_batch("ALTER TABLE annotations ADD COLUMN text TEXT;")?;
             record_version(conn)?;
         }
         Some(2) => {
@@ -164,9 +185,7 @@ fn migrate(conn: &Connection) -> AppResult<()> {
         }
         Some(3) => {
             tracing::info!("migrating schema 3 -> 4 (ai_messages.image_path)");
-            conn.execute_batch(
-                "ALTER TABLE ai_messages ADD COLUMN image_path TEXT;",
-            )?;
+            conn.execute_batch("ALTER TABLE ai_messages ADD COLUMN image_path TEXT;")?;
             record_version(conn)?;
         }
         Some(4) => {
@@ -192,9 +211,7 @@ fn migrate(conn: &Connection) -> AppResult<()> {
         }
         Some(5) => {
             tracing::info!("migrating schema 5 -> 6 (ai_messages.action_type)");
-            conn.execute_batch(
-                "ALTER TABLE ai_messages ADD COLUMN action_type TEXT;",
-            )?;
+            conn.execute_batch("ALTER TABLE ai_messages ADD COLUMN action_type TEXT;")?;
             record_version(conn)?;
         }
         Some(6) => {
@@ -223,8 +240,19 @@ fn migrate(conn: &Connection) -> AppResult<()> {
             )?;
             record_version(conn)?;
         }
+        Some(9) => {
+            // v10 only ADDS the text-level translation cache table; SCHEMA_SQL
+            // above is idempotent and already created it on the old database,
+            // so this branch just records the new version.
+            tracing::info!("migrating schema 9 -> 10 (page_text_translation)");
+            record_version(conn)?;
+        }
         Some(v) => {
-            tracing::warn!(recorded = v, expected = SCHEMA_VERSION, "schema version mismatch -- migration not yet implemented");
+            tracing::warn!(
+                recorded = v,
+                expected = SCHEMA_VERSION,
+                "schema version mismatch -- migration not yet implemented"
+            );
         }
     }
 
@@ -324,13 +352,13 @@ mod tests {
         assert_eq!(
             conn.query_row("SELECT COUNT(*) FROM ai_threads", [], |r| r
                 .get::<_, i64>(0))
-            .unwrap(),
+                .unwrap(),
             0
         );
         assert_eq!(
             conn.query_row("SELECT COUNT(*) FROM ai_messages", [], |r| r
                 .get::<_, i64>(0))
-            .unwrap(),
+                .unwrap(),
             0
         );
 
@@ -361,7 +389,7 @@ mod tests {
         assert_eq!(
             conn.query_row("SELECT COUNT(*) FROM ai_threads", [], |r| r
                 .get::<_, i64>(0))
-            .unwrap(),
+                .unwrap(),
             2
         );
     }

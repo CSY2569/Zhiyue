@@ -138,7 +138,10 @@ pub fn runtime_env(job_tmp: &Path, book_id: i64) -> Vec<(String, String)> {
     vec![
         ("PYTHONPATH".into(), s(engine.join("site-packages"))),
         ("TYPST_BIN".into(), s(engine.join("bin").join("typst"))),
-        ("TYPST_PACKAGE_PATH".into(), s(engine.join("typst-packages"))),
+        (
+            "TYPST_PACKAGE_PATH".into(),
+            s(engine.join("typst-packages")),
+        ),
         (
             "TYPST_PACKAGE_CACHE_PATH".into(),
             s(job_tmp.join("typst-package-cache")),
@@ -151,11 +154,11 @@ pub fn runtime_env(job_tmp: &Path, book_id: i64) -> Vec<(String, String)> {
             "RETAIN_PDF_TITLE_BOLD_FONT_PATH".into(),
             s(engine.join("fonts").join("SourceHanSerifSC-Bold.otf")),
         ),
+        ("RETAIN_PDF_TYPST_FONT_DIRS".into(), s(engine.join("fonts"))),
         (
-            "RETAIN_PDF_TYPST_FONT_DIRS".into(),
-            s(engine.join("fonts")),
+            "RETAIN_PDF_TYPST_FONT_FAMILY".into(),
+            "Source Han Serif SC".into(),
         ),
-        ("RETAIN_PDF_TYPST_FONT_FAMILY".into(), "Source Han Serif SC".into()),
         ("PYTHONUNBUFFERED".into(), "1".into()),
         // Engine scratch (translation-unit / domain / typography caches):
         // persistent PER BOOK so retries / re-translations reuse already-paid
@@ -207,7 +210,9 @@ pub fn get_engine_status() -> EngineStatus {
 /// v1 has no in-app installer (the engine ships with the package). The
 /// install stream reports this as a final error event so the settings card
 /// shows an actionable message instead of a hang.
-pub async fn install_engine(mut on_event: impl FnMut(EngineInstallEvent) + Send + 'static) -> AppResult<()> {
+pub async fn install_engine(
+    mut on_event: impl FnMut(EngineInstallEvent) + Send + 'static,
+) -> AppResult<()> {
     let status = probe_status();
     if status.kind == EngineStatusKind::Installed {
         on_event(EngineInstallEvent {
@@ -260,7 +265,10 @@ mod tests {
 
     #[test]
     fn manifest_parses_and_reports_version() {
-        let dir = std::env::temp_dir().join(format!("rbwa_retain_engine_manifest_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "rbwa_retain_engine_manifest_{}",
+            std::process::id()
+        ));
         std::fs::create_dir_all(dir.join("python/bin")).unwrap();
         std::fs::write(
             dir.join("engine.json"),
@@ -288,8 +296,14 @@ mod tests {
         let env = runtime_env(Path::new("/tmp/job"), 7);
         let get = |k: &str| env.iter().find(|(n, _)| n == k).map(|(_, v)| v.clone());
         assert!(get("PYTHONPATH").unwrap().ends_with("site-packages"));
-        assert_eq!(get("TYPST_BIN").unwrap(), dir.join("bin/typst").to_string_lossy());
-        assert_eq!(get("RETAIN_PDF_TYPST_FONT_FAMILY").unwrap(), "Source Han Serif SC");
+        assert_eq!(
+            get("TYPST_BIN").unwrap(),
+            dir.join("bin/typst").to_string_lossy()
+        );
+        assert_eq!(
+            get("RETAIN_PDF_TYPST_FONT_FAMILY").unwrap(),
+            "Source Han Serif SC"
+        );
         assert_eq!(get("PYTHONUNBUFFERED").unwrap(), "1");
         assert!(get("TMPDIR").unwrap().starts_with("/tmp/job"));
         assert!(

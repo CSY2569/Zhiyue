@@ -28,7 +28,9 @@
 - **分工原则**：所有重活与数据在 Rust 侧（PDF 渲染、OCR、AI 网络、数据库、搜索索引）；Flutter 只做绘制与交互。
 - **完全离线 OCR**：rapidocr-core（PP-OCRv4 det/cls/rec，ONNX Runtime 静态链接），高精度 + 快速双模式，模型随安装包内置（~210MB）。
 - **AI 侧**：OpenAI 兼容协议（BYOK，可配 DeepSeek / Kimi / 通义等），流式对话（Markdown + LaTeX 渲染）+ 自由截图多模态识图。
-- **目标平台**：Linux 桌面（Arch / Debian / Ubuntu / Fedora 等，详见 [`docs/LINUX_PACKAGES.md`](docs/LINUX_PACKAGES.md)）。
+- **目标平台**：
+  - **Linux 桌面**（Arch / Debian / Ubuntu / Fedora 等，详见 [`docs/LINUX_PACKAGES.md`](docs/LINUX_PACKAGES.md)）；
+  - **Android arm64**（v1：阅读 + 本地 OCR + 划词 AI + 文本级对照，详见 [`docs/ANDROID_V1_PLAN.md`](docs/ANDROID_V1_PLAN.md) 与 [`docs/ANDROID_PACKAGES.md`](docs/ANDROID_PACKAGES.md)）。桌面端的 RetainPDF 版式重排引擎不上移动端。
 - **零参考**：完全重写，不迁移任何旧代码。
 
 详见 [`docs/FEATURES.md`](docs/FEATURES.md)（需求）、[`docs/TECH_ROADMAP.md`](docs/TECH_ROADMAP.md)（技术路线）与 [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md)（实施状态）。
@@ -74,6 +76,8 @@ ZhiYue/
 │   ├── data/             # 数据层（repositories，桥接 FRB）
 │   └── src/rust/         # FRB 生成的 Dart 绑定（勿手改）
 ├── linux/                # Flutter Linux 桌面 runner（CMake：cargo 编译 + .so/pdfium 打包进 bundle）
+├── android/              # Flutter Android runner（Gradle：cargo-ndk + pdfium/模型 assets + 平台通道）
+│   └── app/src/main/kotlin/.../  # ModelProvisioner（OCR 模型解压）、SystemBridge（原生路径/内存回调）
 ├── test/                 # 单元 / 组件 / 冒烟测试（flutter test）
 ├── integration_test/     # 集成测试（flutter test integration_test）
 ├── packaging/            # Linux 打包资源（ZhiYue.desktop / ZhiYue.spec / 图标）

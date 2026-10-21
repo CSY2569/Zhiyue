@@ -37,6 +37,14 @@ impl ViewMode {
     }
 }
 
+/// One book's last-read page (library shelf progress line).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BookProgress {
+    pub book_id: i64,
+    /// 1-indexed page the reader last showed.
+    pub page: i64,
+}
+
 /// Persisted reading position for a book.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReadingProgress {

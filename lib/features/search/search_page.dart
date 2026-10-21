@@ -32,11 +32,17 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   /// the result rows so they never read a controller mid-animation).
   String _query = '';
 
+  /// Monotonic request id: a slow query must never overwrite the results of a
+  /// newer one (typing "量子" then "量子计算" can otherwise land out of order
+  /// and show hits for text no longer in the field).
+  int _requestSeq = 0;
+
   Future<void> _run(String raw) async {
     final query = raw.trim();
-    _query = query;
+    final seq = ++_requestSeq;
     if (query.isEmpty) {
       setState(() {
+        _query = '';
         _hits = null;
         _error = null;
         _loading = false;
@@ -46,15 +52,17 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     setState(() => _loading = true);
     try {
       final res = await ref.read(searchRepositoryProvider).searchBooks(query);
-      if (!mounted) return;
+      if (!mounted || seq != _requestSeq) return;
       setState(() {
+        _query = query;
         _hits = res.error == null ? res.hits : null;
         _error = res.error;
         _loading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || seq != _requestSeq) return;
       setState(() {
+        _query = query;
         _hits = null;
         _error = e.toString();
         _loading = false;
@@ -70,7 +78,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       page: hit.page,
       query: query,
     );
-    context.go('/reader/${hit.bookId}');
+    context.push('/reader/${hit.bookId}');
   }
 
   @override
@@ -120,16 +128,11 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       return EmptyState(
         icon: LucideIcons.searchX,
         title: '没有找到结果',
-        message:
-            '没有内容包含「$_query」\n'
+        message: '没有内容包含「$_query」\n'
             '未扫描的扫描版页面与图片书不参与搜索',
       );
     }
-    return _ResultsList(
-      hits: hits,
-      query: _query,
-      onOpen: _openHit,
-    );
+    return _ResultsList(hits: hits, query: _query, onOpen: _openHit);
   }
 }
 
@@ -149,53 +152,60 @@ class _ResultsList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final books = ref.watch(libraryBooksProvider).valueOrNull ?? const [];
-    String titleOf(int bookId) =>
-        books.where((b) => b.id == bookId).map((b) => b.title).firstOrNull ??
-        '书籍 #$bookId';
+    // One lookup map instead of a linear scan per result group.
+    final titles = {for (final b in books) b.id: b.title};
 
-    // Group preserving book order (hits are sorted by book then page).
+    // Group preserving book order (hits are sorted by book then page), then
+    // flatten to a lazy list: a query can return up to 200 hits, and building
+    // every rich-text row in one pass stalled the first frame after a search.
     final groups = <int, List<SearchHit>>{};
     for (final h in hits) {
       groups.putIfAbsent(h.bookId, () => []).add(h);
     }
+    final rows = <Object>[];
+    for (final entry in groups.entries) {
+      rows.add(entry.key);
+      rows.addAll(entry.value);
+    }
 
-    return ListView(
+    return ListView.builder(
       padding: const EdgeInsets.only(bottom: 24),
-      children: [
-        for (final entry in groups.entries) ...[
-          Padding(
+      itemCount: rows.length + 1,
+      itemBuilder: (context, index) {
+        if (index == rows.length) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Text(
+              '仅索引文字版页面与已扫描页面；图片书与未扫描页不在搜索结果中',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
+            ),
+          );
+        }
+        final row = rows[index];
+        if (row is int) {
+          return Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: Text(
-              titleOf(entry.key),
+              titles[row] ?? '书籍 #$row',
               style: theme.textTheme.titleSmall?.copyWith(
                 color: theme.colorScheme.primary,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-          ),
-          for (final hit in entry.value)
-            ListTile(
-              dense: true,
-              leading: const Icon(LucideIcons.fileText, size: 20),
-              title: Text(
-                '第 ${hit.page + 1} 页',
-                style: theme.textTheme.bodySmall,
-              ),
-              subtitle: _SnippetText(snippet: hit.snippet, query: query),
-              onTap: () => onOpen(hit, query),
-            ),
-        ],
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: Text(
-            '仅索引文字版页面与已扫描页面；图片书与未扫描页不在搜索结果中',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.outline,
-            ),
-          ),
-        ),
-      ],
+          );
+        }
+        final hit = row as SearchHit;
+        return ListTile(
+          dense: true,
+          leading: const Icon(LucideIcons.fileText, size: 20),
+          title: Text('第 ${hit.page + 1} 页', style: theme.textTheme.bodySmall),
+          subtitle: _SnippetText(snippet: hit.snippet, query: query),
+          onTap: () => onOpen(hit, query),
+        );
+      },
     );
   }
 }

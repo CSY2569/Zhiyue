@@ -33,6 +33,20 @@ pub fn get(conn: &Connection, book_id: i64) -> AppResult<Option<ReadingProgress>
     }
 }
 
+/// Last-read page for EVERY book with saved progress, in one query.
+///
+/// The library shelf shows "已读 N / M 页" on each card; asking per book would
+/// be N round-trips through the FFI for a screenful of cards.
+pub fn list_last_pages(conn: &Connection) -> AppResult<Vec<(i64, i64)>> {
+    let mut stmt = conn.prepare("SELECT book_id, page FROM reading_progress")?;
+    let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row?);
+    }
+    Ok(out)
+}
+
 /// Upsert the reading position (FEATURES 3.3.4). Called debounced from the
 /// viewer when the page or zoom changes.
 pub fn save(

@@ -68,7 +68,12 @@ impl OpenAiClient {
     /// Effective endpoint (non-empty config base URL wins, trimmed of a
     /// trailing slash so the `/chat/completions` suffix joins cleanly).
     fn endpoint(base_url: &str) -> String {
-        join_api_path(base_url, DEFAULT_OPENAI_BASE_URL, "/chat/completions", false)
+        join_api_path(
+            base_url,
+            DEFAULT_OPENAI_BASE_URL,
+            "/chat/completions",
+            false,
+        )
     }
 }
 
@@ -291,9 +296,7 @@ fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() || haystack.len() < needle.len() {
         return None;
     }
-    haystack
-        .windows(needle.len())
-        .position(|w| w == needle)
+    haystack.windows(needle.len()).position(|w| w == needle)
 }
 
 /// The `data:` payload of one SSE event (trimmed); None when absent or empty.
@@ -320,15 +323,11 @@ fn parse_event(event: &[u8]) -> Option<String> {
         return None;
     }
     let value: Value = serde_json::from_str(&data).ok()?;
-    value
-        .get("choices")?
-        .as_array()?
-        .first()?["delta"]["content"]
+    value.get("choices")?.as_array()?.first()?["delta"]["content"]
         .as_str()
         .filter(|s| !s.is_empty())
         .map(str::to_string)
 }
-
 
 /// Real web search via a Bocha-compatible endpoint (FEATURES 6.2.3). The
 /// configured base URL is used verbatim when non-empty (any provider with a
@@ -574,7 +573,10 @@ pub(crate) async fn web_search_builtin_anthropic(
     let url = anthropic_endpoint(base_url);
     let body = anthropic_search_body(model, history, query);
     let resp = post_json(http, &url, Auth::Anthropic(api_key), &body, None).await?;
-    Ok(Box::pin(sse_stream(resp.bytes_stream(), parse_anthropic_event)))
+    Ok(Box::pin(sse_stream(
+        resp.bytes_stream(),
+        parse_anthropic_event,
+    )))
 }
 
 /// Plain-text chat through the Responses API (设置 → API 协议 = Responses):
@@ -590,13 +592,7 @@ pub(crate) async fn responses_chat(
     let http = OpenAiClient::http_client()?;
     let url = responses_endpoint(&config.base_url);
     let extras = RequestExtras::from_config(config);
-    let body = responses_body(
-        &config.text_model,
-        history,
-        user_input,
-        &extras,
-        false,
-    );
+    let body = responses_body(&config.text_model, history, user_input, &extras, false);
     responses_stream_request(http, url, &config.api_key, body).await
 }
 
@@ -670,8 +666,15 @@ impl AiClient for OpenAiClient {
             let messages = text_messages(history, user_input);
             let url = Self::endpoint(&config.base_url);
             let extras = RequestExtras::from_config(config);
-            stream_request(http, url, &config.api_key, &config.text_model, messages, &extras)
-                .await
+            stream_request(
+                http,
+                url,
+                &config.api_key,
+                &config.text_model,
+                messages,
+                &extras,
+            )
+            .await
         }
     }
 
@@ -726,10 +729,7 @@ mod tests {
 
     #[test]
     fn responses_endpoint_strips_v1_and_appends_responses() {
-        assert_eq!(
-            responses_endpoint(""),
-            "https://api.openai.com/responses"
-        );
+        assert_eq!(responses_endpoint(""), "https://api.openai.com/responses");
         assert_eq!(
             responses_endpoint("https://api.deepseek.com"),
             "https://api.deepseek.com/responses"
@@ -832,7 +832,12 @@ mod tests {
             },
         ];
         let body = responses_body(
-            "deepseek-v4-flash", &history, "量子计算", &RequestExtras::default(), true);
+            "deepseek-v4-flash",
+            &history,
+            "量子计算",
+            &RequestExtras::default(),
+            true,
+        );
         assert_eq!(body["model"], "deepseek-v4-flash");
         assert_eq!(body["instructions"], "你正在执行联网搜索。");
         assert_eq!(body["stream"], true);
@@ -878,9 +883,16 @@ data: {"type":"response.completed"}
             action_type: None,
             created_at: String::new(),
         }];
-        let mut stream = web_search_builtin(&base, "test-key", "deepseek-v4-flash", &history, "量子", &RequestExtras::default())
-            .await
-            .unwrap();
+        let mut stream = web_search_builtin(
+            &base,
+            "test-key",
+            "deepseek-v4-flash",
+            &history,
+            "量子",
+            &RequestExtras::default(),
+        )
+        .await
+        .unwrap();
         let mut out = String::new();
         while let Some(chunk) = stream.next().await {
             out.push_str(&chunk.unwrap());
@@ -891,9 +903,18 @@ data: {"type":"response.completed"}
         let req = req_rx.recv().await.unwrap();
         assert!(req.starts_with("POST /responses HTTP/1.1"), "{req}");
         assert!(req_lower(&req).contains("authorization: bearer test-key"));
-        assert!(req.contains("\"tools\":[{\"type\":\"web_search\"}]"), "{req}");
-        assert!(req.contains("\"tool_choice\":{\"type\":\"web_search\"}"), "{req}");
-        assert!(req.contains("\"instructions\":\"你正在执行联网搜索。\""), "{req}");
+        assert!(
+            req.contains("\"tools\":[{\"type\":\"web_search\"}]"),
+            "{req}"
+        );
+        assert!(
+            req.contains("\"tool_choice\":{\"type\":\"web_search\"}"),
+            "{req}"
+        );
+        assert!(
+            req.contains("\"instructions\":\"你正在执行联网搜索。\""),
+            "{req}"
+        );
     }
 
     /// Plain-text Responses call (设置 → API 协议 = Responses): streams text
@@ -979,10 +1000,7 @@ data: {"type":"response.completed"}
             api_protocol: "responses".into(),
             ..Default::default()
         };
-        let mut stream = OpenAiClient
-            .stream_chat(&config, &[], "hi")
-            .await
-            .unwrap();
+        let mut stream = OpenAiClient.stream_chat(&config, &[], "hi").await.unwrap();
         let mut out = String::new();
         while let Some(chunk) = stream.next().await {
             out.push_str(&chunk.unwrap());
@@ -1005,17 +1023,20 @@ data: {"type":"response.completed"}
 
 "#;
         let (base, _rx) = mock_responses_server(events, "200 OK").await;
-        let mut stream = web_search_builtin(&base, "k", "m", &[], "q", &RequestExtras::default()).await.unwrap();
+        let mut stream = web_search_builtin(&base, "k", "m", &[], "q", &RequestExtras::default())
+            .await
+            .unwrap();
         let err = stream.next().await.unwrap().unwrap_err();
         assert!(err.to_string().contains("搜索服务不可用"), "{err}");
 
         // Non-2xx -> full error body.
         let (base2, _rx) =
             mock_responses_server(r#"{"error":"model not found"}"#, "404 Not Found").await;
-        let err2 = match web_search_builtin(&base2, "k", "m", &[], "q", &RequestExtras::default()).await {
-            Err(e) => e,
-            Ok(_) => panic!("expected HTTP error"),
-        };
+        let err2 =
+            match web_search_builtin(&base2, "k", "m", &[], "q", &RequestExtras::default()).await {
+                Err(e) => e,
+                Ok(_) => panic!("expected HTTP error"),
+            };
         assert!(err2.to_string().contains("404"), "{err2}");
         assert!(err2.to_string().contains("model not found"), "{err2}");
     }
@@ -1124,7 +1145,10 @@ data: {"type":"response.completed"}
     fn parse_anthropic_event_yields_text_deltas_and_errors() {
         let text =
             r#"data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"量子"}}"#;
-        assert_eq!(parse_anthropic_event(text.as_bytes()).unwrap().unwrap(), "量子");
+        assert_eq!(
+            parse_anthropic_event(text.as_bytes()).unwrap().unwrap(),
+            "量子"
+        );
         // Thinking / tool-use deltas and lifecycle events are ignored.
         let think = r#"data: {"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"推理"}}"#;
         assert!(parse_anthropic_event(think.as_bytes()).is_none());
@@ -1151,15 +1175,10 @@ data: {"type":"message_stop"}
 
 "#;
         let (base, mut req_rx) = mock_responses_server(events, "200 OK").await;
-        let mut stream = web_search_builtin_anthropic(
-            &base,
-            "test-key",
-            "deepseek-flash",
-            &[],
-            "量子计算",
-        )
-        .await
-        .unwrap();
+        let mut stream =
+            web_search_builtin_anthropic(&base, "test-key", "deepseek-flash", &[], "量子计算")
+                .await
+                .unwrap();
         let mut out = String::new();
         while let Some(chunk) = stream.next().await {
             out.push_str(&chunk.unwrap());
@@ -1169,7 +1188,10 @@ data: {"type":"message_stop"}
         // Request shape: /anthropic/v1/messages path (v1 stripped),
         // x-api-key auth (no bearer), and the server tool declared.
         let req = req_rx.recv().await.unwrap();
-        assert!(req.starts_with("POST /anthropic/v1/messages HTTP/1.1"), "{req}");
+        assert!(
+            req.starts_with("POST /anthropic/v1/messages HTTP/1.1"),
+            "{req}"
+        );
         assert!(req_lower(&req).contains("x-api-key: test-key"), "{req}");
         assert!(!req_lower(&req).contains("authorization:"), "{req}");
         // serde_json orders object keys alphabetically, so assert the tool
@@ -1185,8 +1207,9 @@ data: {"type":"message_stop"}
 
 "#;
         let (base, _rx) = mock_responses_server(events, "200 OK").await;
-        let mut stream =
-            web_search_builtin_anthropic(&base, "k", "m", &[], "q").await.unwrap();
+        let mut stream = web_search_builtin_anthropic(&base, "k", "m", &[], "q")
+            .await
+            .unwrap();
         let err = stream.next().await.unwrap().unwrap_err();
         assert!(err.to_string().contains("搜索配额不足"), "{err}");
 
@@ -1274,7 +1297,10 @@ data: [DONE]
         // Request shape: /v1/chat/completions + the vision model + the PNG
         // as a data URL (no `detail` field anywhere).
         let req = req_rx.recv().await.unwrap();
-        assert!(req.starts_with("POST /v1/chat/completions HTTP/1.1"), "{req}");
+        assert!(
+            req.starts_with("POST /v1/chat/completions HTTP/1.1"),
+            "{req}"
+        );
         assert!(req_lower(&req).contains("authorization: bearer vision-key"));
         assert!(req.contains("\"model\":\"vision-m\""), "{req}");
         assert!(req.contains("data:image/png;base64,AQID"), "{req}");
@@ -1325,7 +1351,9 @@ data: [DONE]
         let (base, mut req_rx) = mock_server(vec![("200 OK", body.into())]).await;
         let endpoint = format!("{base}/v1/web-search");
         let http = OpenAiClient::http_client().unwrap();
-        let out = web_search_at(http, endpoint, "test-key", "rust 语言").await.unwrap();
+        let out = web_search_at(http, endpoint, "test-key", "rust 语言")
+            .await
+            .unwrap();
         assert!(out.contains("Rust 官网"));
         assert!(out.contains("https://www.rust-lang.org/"));
         assert!(out.contains("Rust 中文社区"));
@@ -1334,7 +1362,10 @@ data: [DONE]
         // Request shape: bearer auth + query body.
         let req_text = req_rx.recv().await.unwrap();
         let req_lower = req_text.to_lowercase();
-        assert!(req_lower.contains("authorization: bearer test-key"), "{req_text}");
+        assert!(
+            req_lower.contains("authorization: bearer test-key"),
+            "{req_text}"
+        );
         assert!(req_text.contains("\"query\":\"rust 语言\""), "{req_text}");
         assert!(req_text.contains("\"count\":8"), "{req_text}");
         assert!(req_text.contains("\"freshness\":\"noLimit\""), "{req_text}");
@@ -1349,7 +1380,9 @@ data: [DONE]
         .await;
         let endpoint = format!("{base}/v1/web-search");
         let http = OpenAiClient::http_client().unwrap();
-        let err = web_search_at(http, endpoint, "bad-key", "q").await.unwrap_err();
+        let err = web_search_at(http, endpoint, "bad-key", "q")
+            .await
+            .unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("401"), "{msg}");
         assert!(msg.contains("API Key 无效"), "{msg}");

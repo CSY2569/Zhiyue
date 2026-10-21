@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -27,7 +29,34 @@ class _FakeSearchRepo extends SearchRepository {
   Future<String> indexStatus(int bookId) async => 'ready';
 }
 
-/// Fixed books list for the result titles.
+/// Serves an immediate hit for "new" and a gated one for "old", so the older
+/// request can be completed after the newer one has already rendered.
+class _OutOfOrderSearchRepo extends SearchRepository {
+  _OutOfOrderSearchRepo(this.gate);
+
+  final Completer<void> gate;
+
+  @override
+  Future<rust.SearchResult> searchBooks(String query, {int? limit}) async {
+    if (query == 'old') await gate.future;
+    return rust.SearchResult(
+      hits: [
+        rust.SearchHit(
+          bookId: 1,
+          // Distinguishable rows: old -> "第 1 页", new -> "第 5 页".
+          page: query == 'old' ? 0 : 4,
+          snippet: 'snippet',
+        ),
+      ],
+      error: null,
+    );
+  }
+
+  @override
+  Future<String> indexStatus(int bookId) async => 'ready';
+}
+
+/// Fake books list for the result titles.
 class _FakeBooksNotifier extends LibraryBooksNotifier {
   @override
   Future<List<Book>> build() async => const [
@@ -57,7 +86,41 @@ class _FakeBooksNotifier extends LibraryBooksNotifier {
 }
 
 void main() {
-  testWidgets('search page groups hits by book and jumps on tap', (tester) async {
+  testWidgets('a slow older query never overwrites a newer result', (
+    tester,
+  ) async {
+    // The first query is held open; the second resolves immediately. The
+    // late first result must be discarded, not painted over the second.
+    final gate = Completer<void>();
+    final repo = _OutOfOrderSearchRepo(gate);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          searchRepositoryProvider.overrideWithValue(repo),
+          libraryBooksProvider.overrideWith(_FakeBooksNotifier.new),
+        ],
+        child: const MaterialApp(home: SearchPage()),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField), 'old');
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.enterText(find.byType(TextField), 'new');
+    await tester.pump(const Duration(milliseconds: 350));
+    // "new" already resolved: its hits are on screen.
+    expect(find.text('第 5 页'), findsOneWidget);
+
+    gate.complete();
+    await tester.pump();
+    // The stale "old" response landed last and must not replace the view.
+    expect(find.text('第 5 页'), findsOneWidget);
+    expect(find.text('第 1 页'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('search page groups hits by book and jumps on tap', (
+    tester,
+  ) async {
     final repo = _FakeSearchRepo(const [
       rust.SearchHit(bookId: 1, page: 2, snippet: '…介绍量子计算的基础概念…'),
       rust.SearchHit(bookId: 1, page: 5, snippet: '…量子计算与经典计算…'),
@@ -66,10 +129,7 @@ void main() {
     final router = GoRouter(
       initialLocation: '/search',
       routes: [
-        GoRoute(
-          path: '/search',
-          builder: (_, _) => const SearchPage(),
-        ),
+        GoRoute(path: '/search', builder: (_, _) => const SearchPage()),
         GoRoute(
           path: '/reader/:bookId',
           builder: (_, _) => const Scaffold(body: Text('reader-stub')),
@@ -101,8 +161,9 @@ void main() {
 
     // Tapping a hit navigates to the reader and records the jump target
     // (0-indexed page + the query for in-page highlighting).
-    final container =
-        ProviderScope.containerOf(tester.element(find.byType(SearchPage)));
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(SearchPage)),
+    );
     await tester.tap(find.text('第 6 页'));
     await tester.pumpAndSettle();
     expect(find.text('reader-stub'), findsOneWidget); // on /reader/1
@@ -113,16 +174,19 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('empty query shows the guide, no results shows empty state',
-      (tester) async {
+  testWidgets('empty query shows the guide, no results shows empty state', (
+    tester,
+  ) async {
     final repo = _FakeSearchRepo(const []);
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        searchRepositoryProvider.overrideWithValue(repo),
-        libraryBooksProvider.overrideWith(_FakeBooksNotifier.new),
-      ],
-      child: const MaterialApp(home: SearchPage()),
-    ));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          searchRepositoryProvider.overrideWithValue(repo),
+          libraryBooksProvider.overrideWith(_FakeBooksNotifier.new),
+        ],
+        child: const MaterialApp(home: SearchPage()),
+      ),
+    );
 
     // Initial: guide (no search performed).
     expect(find.text('全文搜索'), findsOneWidget);

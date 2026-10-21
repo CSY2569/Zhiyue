@@ -23,8 +23,7 @@ fn row_to_annotation(row: &Row) -> rusqlite::Result<TextAnnotation> {
         id: row.get(0)?,
         book_id: row.get(1)?,
         page: row.get(2)?,
-        kind: TextAnnotationKind::from_db_str(&kind_str)
-            .unwrap_or(TextAnnotationKind::Highlight),
+        kind: TextAnnotationKind::from_db_str(&kind_str).unwrap_or(TextAnnotationKind::Highlight),
         source: source
             .filter(|v| !v.trim().is_empty())
             .unwrap_or_else(|| crate::models::annotation::ANNOTATION_SOURCE_ORIGINAL.to_string()),
@@ -45,7 +44,8 @@ pub fn list(conn: &Connection, book_id: i64) -> AppResult<Vec<TextAnnotation>> {
          WHERE book_id = ?1 ORDER BY page, created_at, id"
     ))?;
     let rows = stmt.query_map(params![book_id], row_to_annotation)?;
-    rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+    rows.collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(Into::into)
 }
 
 /// Insert a new annotation; returns the new row id.
@@ -143,8 +143,14 @@ mod tests {
         let conn = test_conn();
         let rects = vec![rect(0.2, 0.3, 0.4, 0.02)];
         let id = create(
-            &conn, 1, 5, TextAnnotationKind::Underline,
-            Some("译文文字".into()), None, rects, Some("#00ff00".into()),
+            &conn,
+            1,
+            5,
+            TextAnnotationKind::Underline,
+            Some("译文文字".into()),
+            None,
+            rects,
+            Some("#00ff00".into()),
             crate::models::annotation::ANNOTATION_SOURCE_TRANSLATED,
         )
         .unwrap();
@@ -158,8 +164,15 @@ mod tests {
 
         // An empty source falls back to 'original' (older call sites).
         let id2 = create(
-            &conn, 1, 5, TextAnnotationKind::Highlight,
-            Some("原文".into()), None, vec![rect(0.1, 0.1, 0.2, 0.02)], None, "",
+            &conn,
+            1,
+            5,
+            TextAnnotationKind::Highlight,
+            Some("原文".into()),
+            None,
+            vec![rect(0.1, 0.1, 0.2, 0.02)],
+            None,
+            "",
         )
         .unwrap();
         let all = list(&conn, 1).unwrap();
@@ -176,16 +189,28 @@ mod tests {
         let rects = vec![rect(0.1, 0.2, 0.5, 0.03), rect(0.1, 0.25, 0.7, 0.03)];
 
         let id = create(
-            &conn, 1, 3, TextAnnotationKind::Highlight,
-            Some("selected text".into()), None, rects.clone(), Some("#ff0000".into()),
+            &conn,
+            1,
+            3,
+            TextAnnotationKind::Highlight,
+            Some("selected text".into()),
+            None,
+            rects.clone(),
+            Some("#ff0000".into()),
             crate::models::annotation::ANNOTATION_SOURCE_ORIGINAL,
         )
         .unwrap();
         assert!(id > 0);
 
         let id2 = create(
-            &conn, 1, 3, TextAnnotationKind::Note,
-            Some("note text".into()), Some("my note".into()), rects.clone(), None,
+            &conn,
+            1,
+            3,
+            TextAnnotationKind::Note,
+            Some("note text".into()),
+            Some("my note".into()),
+            rects.clone(),
+            None,
             crate::models::annotation::ANNOTATION_SOURCE_ORIGINAL,
         )
         .unwrap();
@@ -193,8 +218,15 @@ mod tests {
 
         // Other book must be isolated.
         let id3 = create(
-            &conn, 2, 0, TextAnnotationKind::Underline,
-            None, None, vec![rect(0.0, 0.0, 0.1, 0.1)], None, crate::models::annotation::ANNOTATION_SOURCE_ORIGINAL,
+            &conn,
+            2,
+            0,
+            TextAnnotationKind::Underline,
+            None,
+            None,
+            vec![rect(0.0, 0.0, 0.1, 0.1)],
+            None,
+            crate::models::annotation::ANNOTATION_SOURCE_ORIGINAL,
         )
         .unwrap();
         assert!(id3 > id2);
@@ -217,8 +249,14 @@ mod tests {
     fn update_and_delete() {
         let conn = test_conn();
         let id = create(
-            &conn, 1, 0, TextAnnotationKind::Note,
-            Some("sel".into()), None, vec![rect(0.1, 0.1, 0.2, 0.05)], None,
+            &conn,
+            1,
+            0,
+            TextAnnotationKind::Note,
+            Some("sel".into()),
+            None,
+            vec![rect(0.1, 0.1, 0.2, 0.05)],
+            None,
             crate::models::annotation::ANNOTATION_SOURCE_ORIGINAL,
         )
         .unwrap();
@@ -239,8 +277,15 @@ mod tests {
     fn rects_roundtrip_empty() {
         let conn = test_conn();
         let id = create(
-            &conn, 1, 0, TextAnnotationKind::Strikethrough,
-            None, None, vec![], None, crate::models::annotation::ANNOTATION_SOURCE_ORIGINAL,
+            &conn,
+            1,
+            0,
+            TextAnnotationKind::Strikethrough,
+            None,
+            None,
+            vec![],
+            None,
+            crate::models::annotation::ANNOTATION_SOURCE_ORIGINAL,
         )
         .unwrap();
         let anns = list(&conn, 1).unwrap();

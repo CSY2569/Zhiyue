@@ -271,6 +271,115 @@ pub struct EngineInstallEvent {
     pub error: Option<String>,
 }
 
+// =============================================================================
+// Android text-level translation (v1)
+// =============================================================================
+//
+// The RetainPDF engine cannot run on Android (bundled CPython + PyMuPDF).
+// Instead the page's text blocks are translated through the user's
+// OpenAI-compatible endpoint and rendered as a text column beside the page.
+// These types carry block geometry in NORMALIZED page coordinates (0..1) so
+// the UI can overlay or list them without knowing the page size.
+
+/// One extracted text block of a page.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TextBlock {
+    /// Stable index within the page (translation responses reference this).
+    pub index: i64,
+    /// "text" | "formula".
+    pub kind: String,
+    /// Heading / body / abstract / caption / footnote / header / footer /
+    /// display_formula (same taxonomy as the flat-OCR bridge).
+    pub sub_type: String,
+    /// Normalized page rect (0..1, top-left origin).
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+    pub text: String,
+}
+
+/// Extracted blocks of one page (empty `blocks` + `error` when unavailable).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PageTextBlocks {
+    pub page: i64,
+    pub width: f64,
+    pub height: f64,
+    pub blocks: Vec<TextBlock>,
+    pub error: Option<String>,
+}
+
+/// Translation state of one block.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TextBlockStatus {
+    Done,
+    /// Formula / page number / empty text: intentionally left untranslated.
+    Skipped,
+    Failed,
+}
+
+impl TextBlockStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Done => "done",
+            Self::Skipped => "skipped",
+            Self::Failed => "failed",
+        }
+    }
+
+    pub fn from_db_str(s: &str) -> Option<Self> {
+        match s {
+            "done" => Some(Self::Done),
+            "skipped" => Some(Self::Skipped),
+            "failed" => Some(Self::Failed),
+            _ => None,
+        }
+    }
+}
+
+/// One translated block, carrying the source geometry for rendering.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TranslatedTextBlock {
+    pub index: i64,
+    pub kind: String,
+    pub sub_type: String,
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+    pub source_text: String,
+    pub translated_text: String,
+    pub status: TextBlockStatus,
+    pub error: Option<String>,
+}
+
+/// Result of translating (or reading the cache of) one page.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PageTextTranslation {
+    pub page: i64,
+    pub width: f64,
+    pub height: f64,
+    pub target_lang: String,
+    pub model: String,
+    pub blocks: Vec<TranslatedTextBlock>,
+    /// True when every block came from SQLite (no LLM call was made).
+    pub cached: bool,
+    /// Page-level failure (missing AI config, no text layer, network error);
+    /// block-level failures live on the blocks.
+    pub error: Option<String>,
+}
+
+impl PageTextTranslation {
+    /// Whether every block reached a terminal state (done or skipped).
+    pub fn complete(&self) -> bool {
+        self.error.is_none()
+            && self
+                .blocks
+                .iter()
+                .all(|b| matches!(b.status, TextBlockStatus::Done | TextBlockStatus::Skipped))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -289,14 +398,10 @@ mod tests {
         assert_eq!(cfg.cache_limit_mb, 2048);
 
         // Legacy JSON (only some fields) reads with defaults.
-        let legacy: TranslationConfig =
-            serde_json::from_str(r#"{"source_lang":"EN"}"#).unwrap();
+        let legacy: TranslationConfig = serde_json::from_str(r#"{"source_lang":"EN"}"#).unwrap();
         assert_eq!(legacy.source_lang, "EN");
         assert_eq!(legacy.mode, TranslationMode::WithProgress);
-        assert!(!matches!(
-            legacy.provider,
-            TranslationProviderKind::DeepL
-        ));
+        assert!(!matches!(legacy.provider, TranslationProviderKind::DeepL));
 
         // Round-trip.
         let cfg = TranslationConfig {
@@ -327,10 +432,7 @@ mod tests {
     #[test]
     fn enum_db_str_roundtrip() {
         for s in ["deepl", "openai_compat", "reuse_ai"] {
-            assert_eq!(
-                TranslationProviderKind::from_db_str(s).unwrap().as_str(),
-                s
-            );
+            assert_eq!(TranslationProviderKind::from_db_str(s).unwrap().as_str(), s);
         }
         for s in ["whole_book", "with_progress", "manual"] {
             assert_eq!(TranslationMode::from_db_str(s).unwrap().as_str(), s);

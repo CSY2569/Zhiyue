@@ -22,10 +22,12 @@ fn row_to_category(row: &Row) -> rusqlite::Result<Category> {
 
 /// List all categories ordered by `sort_order` then `created_at`.
 pub fn list(conn: &Connection) -> AppResult<Vec<Category>> {
-    let mut stmt =
-        conn.prepare(&format!("SELECT {SELECT_COLS} FROM categories ORDER BY sort_order, created_at"))?;
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {SELECT_COLS} FROM categories ORDER BY sort_order, created_at"
+    ))?;
     let rows = stmt.query_map([], row_to_category)?;
-    rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+    rows.collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(Into::into)
 }
 
 /// Create a new category. The `sort_order` is set to one past the current max
@@ -33,9 +35,11 @@ pub fn list(conn: &Connection) -> AppResult<Vec<Category>> {
 /// (UNIQUE constraint).
 pub fn create(conn: &Connection, name: &str) -> AppResult<Category> {
     let next_order: i64 = conn
-        .query_row("SELECT COALESCE(MAX(sort_order), -1) + 1 FROM categories", [], |row| {
-            row.get(0)
-        })
+        .query_row(
+            "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM categories",
+            [],
+            |row| row.get(0),
+        )
         .unwrap_or(0);
     conn.execute(
         "INSERT INTO categories (name, sort_order) VALUES (?1, ?2)",

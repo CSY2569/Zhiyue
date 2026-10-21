@@ -137,9 +137,7 @@ fn find_subseq(haystack: &[char], needle: &[char]) -> Option<usize> {
     if needle.is_empty() || needle.len() > haystack.len() {
         return None;
     }
-    haystack
-        .windows(needle.len())
-        .position(|w| w == needle)
+    haystack.windows(needle.len()).position(|w| w == needle)
 }
 
 /// Mark the book's index as fully built (settings KV, survives restarts;
