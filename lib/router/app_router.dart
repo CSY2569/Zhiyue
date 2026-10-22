@@ -9,6 +9,7 @@ import 'package:rbwa/features/reader/reader_page.dart';
 import 'package:rbwa/features/search/search_page.dart';
 import 'package:rbwa/features/settings/settings_page.dart';
 import 'package:rbwa/features/shell/app_title_bar.dart';
+import 'package:rbwa/platform/platform_host.dart';
 
 /// Which top-level destination the shell is currently wrapping.
 ///
@@ -64,8 +65,15 @@ final appRouter = GoRouter(
           children: [
             Consumer(
               builder: (context, ref, _) {
-                final isReader =
-                    shellDestinationFor(location) == ShellDestination.reader;
+                final destination = shellDestinationFor(location);
+                final isReader = destination == ShellDestination.reader;
+                // The reader owns its chrome on touch platforms: the phone
+                // top bar already carries back + title + page indicator.
+                // Letting the shell draw its own bar too produced two stacked
+                // title rows on Android.
+                if (isReader && PlatformHost.current.touch) {
+                  return const SizedBox.shrink();
+                }
                 final bookTitle =
                     isReader ? ref.watch(viewerProvider).book?.title : null;
                 final info =
