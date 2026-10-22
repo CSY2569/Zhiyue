@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
-import 'package:rbwa/core/platform/platform.dart';
 import 'package:rbwa/core/theme/layout_metrics.dart';
 import 'package:rbwa/core/widgets/app_overlay.dart';
 import 'package:rbwa/core/utils/clipboard.dart';
@@ -14,6 +13,7 @@ import 'package:rbwa/features/annotation/providers/selection_provider.dart';
 import 'package:rbwa/features/annotation/widgets/highlight_layer.dart';
 import 'package:rbwa/src/rust/models/ai.dart';
 import 'package:rbwa/src/rust/models/annotation.dart';
+import 'package:rbwa/platform/platform_host.dart';
 
 /// Toolbar shown for a completed selection (FEATURES 4.2): 8 actions
 /// (翻译/解释/搜索/复制/高亮/下划线/删除线/笔记).
@@ -74,8 +74,7 @@ class _FloatingToolbarState extends ConsumerState<FloatingToolbar> {
     // "Compact" is about how much width the bar has, not just the platform:
     // a half-width tablet split still cannot fit eight labelled buttons.
     final width = MediaQuery.sizeOf(context).width;
-    final compact = PlatformCapabilities.current().isMobile ||
-        PlatformCapabilities.isCompactWidth(width);
+    final compact = PlatformHost.current.useCompactLayout(width);
     final actions = _actions(context, sel, vertical: compact);
     final theme = Theme.of(context);
 
@@ -286,8 +285,7 @@ class _FloatingToolbarState extends ConsumerState<FloatingToolbar> {
   /// and rises above the keyboard. Desktop: just below the floating toolbar.
   void _openComposer(BuildContext context) {
     final screen = MediaQuery.sizeOf(context);
-    final mobile = PlatformCapabilities.current().isMobile ||
-        PlatformCapabilities.isCompactWidth(screen.width);
+    final mobile = PlatformHost.current.useCompactLayout(screen.width);
     if (mobile) {
       ref
           .read(selectionProvider.notifier)

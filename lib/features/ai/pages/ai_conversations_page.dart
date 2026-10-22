@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
-import 'package:rbwa/core/platform/platform.dart';
 import 'package:rbwa/core/widgets/confirm_dialog.dart';
 import 'package:rbwa/core/widgets/empty_state.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
 import 'package:rbwa/features/ai/widgets/ai_thread_tile.dart';
 import 'package:rbwa/features/ai/widgets/message_bubble.dart';
+import 'package:rbwa/platform/platform_host.dart';
 
 /// 「AI 对话」page (entry: the library toolbar button): every per-book
 /// conversation window -- one window per book (6.5.4) -- in a two-pane
@@ -35,8 +35,8 @@ class _AiConversationsPageState extends ConsumerState<AiConversationsPage> {
 
     // Phones: a 280dp list plus a conversation pane leaves neither usable.
     // Show the list, and open a conversation as its own screen.
-    final compact = PlatformCapabilities.current().isMobile ||
-        PlatformCapabilities.isCompactWidth(MediaQuery.sizeOf(context).width);
+    final compact =
+        PlatformHost.current.useCompactLayout(MediaQuery.sizeOf(context).width);
     if (compact) {
       if (selected == null) {
         return _threadList(threads, compact: true);

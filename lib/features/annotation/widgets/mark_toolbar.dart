@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
-import 'package:rbwa/core/platform/platform.dart';
 import 'package:rbwa/core/widgets/toolbar_icon_button.dart';
 import 'package:rbwa/features/annotation/providers/image_mark_provider.dart';
 import 'package:rbwa/features/annotation/widgets/highlight_layer.dart'
     show parseHexColor;
+import 'package:rbwa/platform/platform_host.dart';
 
 /// Mark tools as a floating bar above the reading area (FEATURES 5.1-5.5):
 /// rendered by the reader page while a mark tool is armed. The toolbar keeps
@@ -43,8 +43,8 @@ class MarkToolBar extends ConsumerWidget {
 
     // Phones: the single row is ~500dp wide and overflows a 360dp screen, so
     // the tools wrap onto a second line (still inside the floating bar).
-    final compact = PlatformCapabilities.current().isMobile ||
-        PlatformCapabilities.isCompactWidth(MediaQuery.sizeOf(context).width);
+    final compact =
+        PlatformHost.current.useCompactLayout(MediaQuery.sizeOf(context).width);
 
     final row = <Widget>[
             ToolbarIconButton(

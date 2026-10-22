@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
-/// Full-surface panel frame used on phones: a title row with a close button
-/// above the panel's own content. Mirrors the desktop side panel's role while
-/// keeping the whole width/height available.
-class MobilePanel extends StatelessWidget {
-  const MobilePanel({
+/// Full-surface panel frame for narrow layouts: a title row with a close
+/// button above the panel's own content. Mirrors the side panel's role while
+/// keeping the whole width/height available. Used whenever the window is too
+/// narrow for a side column -- on a phone and on a narrow desktop window
+/// alike, so it carries no platform logic.
+class OverlayPanel extends StatelessWidget {
+  const OverlayPanel({
     super.key,
     required this.title,
     required this.onClose,

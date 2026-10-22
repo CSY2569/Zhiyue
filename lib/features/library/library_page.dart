@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:rbwa/core/platform/platform.dart';
 import 'package:rbwa/core/theme/layout_metrics.dart';
 import 'package:rbwa/core/theme/theme_controller.dart';
 import 'package:rbwa/core/widgets/confirm_dialog.dart';
@@ -20,6 +19,7 @@ import 'package:rbwa/features/library/widgets/category_rail.dart';
 import 'package:rbwa/features/library/widgets/floating_panels.dart';
 import 'package:rbwa/features/library/widgets/library_filter_bar.dart';
 import 'package:rbwa/src/rust/models/book.dart';
+import 'package:rbwa/platform/platform_host.dart';
 
 /// Library / bookshelf page (FEATURES §2).
 ///
@@ -42,8 +42,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    final mobile = PlatformCapabilities.current().isMobile &&
-        PlatformCapabilities.isCompactWidth(width);
+    final mobile = PlatformHost.current.useCompactLayout(width);
     final allBooks = ref.watch(libraryBooksProvider).valueOrNull;
     final shownBooks = ref.watch(filteredBooksProvider);
     final railWidth = Golden.railWidthFor(width);

@@ -1,138 +1,56 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
-import 'package:window_manager/window_manager.dart';
 
 import 'package:rbwa/app.dart';
-import 'package:rbwa/core/platform/platform.dart';
-import 'package:rbwa/features/reader/providers/bitmap_cache.dart';
-import 'package:rbwa/features/reader/providers/viewer_provider.dart';
-import 'package:rbwa/src/rust/api.dart' as rust;
+import 'package:rbwa/platform/current.dart';
+import 'package:rbwa/platform/platform_host.dart';
 import 'package:rbwa/src/rust/frb_generated.dart';
 
 /// Application entrypoint.
 ///
 /// Startup sequence (TECH_ROADMAP §1, FEATURES §8.1):
-///   0. Detect the platform; desktop configures the frameless window while
-///      Android resolves its app-support data dir and native library path.
-///   1. Initialize the flutter_rust_bridge runtime (load the Rust .so).
+///   0. Install the platform host and let it configure the window.
+///   1. Initialize the flutter_rust_bridge runtime (load the Rust .dylib/.so).
 ///   2. Initialize the Rust core: open SQLite, apply schema, set up tracing.
-///   3. Android only: install the bundled OCR models on first launch (with a
-///      progress screen), then hand off to [RbwaApp].
+///   3. Platforms that ship models inside the package (Android) install them
+///      on first launch behind a progress screen, then hand off to [RbwaApp].
+///
+/// This file is intentionally platform-neutral: every difference lives behind
+/// [PlatformHost]. That keeps `main()` byte-identical on the desktop and
+/// Android branches, so merges never touch it.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  PlatformBridge.init();
+  PlatformHost.install(platformHost);
+  final host = PlatformHost.current;
 
-  // Desktop: frameless window with default geometry (FEATURES 8.1).
-  // Android has no window manager; the system draws the chrome.
-  if (!PlatformBridge.isAndroid) {
-    await _configureDesktopWindow();
-  }
+  await host.prepareWindow();
 
   // Load the Rust dynamic library and wire the FRB runtime.
   await RustLib.init();
 
-  // Rust core init: desktop keeps the XDG data dir; Android must inject the
-  // app-support dir because `dirs::data_dir()` is None there and the process
-  // CWD is `/`.
-  final initResult = await _initCore();
-
-  // Android: point pdfium at the app's native library dir, then make the
-  // bundled OCR models available under `{data_dir}/models`.
-  if (PlatformBridge.isAndroid) {
-    final libDir = await PlatformBridge.nativeLibraryDir();
-    if (libDir != null && libDir.isNotEmpty) {
-      try {
-        rust.configureNativeLibraryDir(path: libDir);
-      } catch (e) {
-        debugPrint('configureNativeLibraryDir failed: $e');
-      }
-    }
-  }
+  final initResult = await host.initCore();
 
   // One explicit container so lifecycle callbacks (which live outside the
   // widget tree) can reach providers.
   final container = ProviderContainer();
-
-  // Android memory pressure: drop cached page bitmaps before the OS kills
-  // the process. The visible page is kept so the reader does not blink.
-  if (PlatformBridge.isAndroid) {
-    PlatformBridge.onTrimMemory((level) {
-      final page = container.read(viewerProvider).currentPage - 1;
-      container.read(bitmapCacheProvider).trim(
-            keepPage: page >= 0 ? page : null,
-          );
-      PaintingBinding.instance.imageCache.clear();
-      // Critical: also release decoded thumbnails held by widgets.
-      if (level >= 80) {
-        PaintingBinding.instance.imageCache.clearLiveImages();
-      }
-    });
-  }
+  host.attachLifecycle(container);
 
   runApp(
     UncontrolledProviderScope(
       container: container,
-      child: _Bootstrap(
-        coreInit: initResult,
-        installModels: PlatformBridge.isAndroid,
-      ),
+      child: _Bootstrap(coreInit: initResult),
     ),
   );
-}
-
-Future<void> _configureDesktopWindow() async {
-  await windowManager.ensureInitialized();
-  await windowManager.waitUntilReadyToShow(
-    const WindowOptions(
-      size: Size(1280, 800),
-      minimumSize: Size(960, 600),
-      center: true,
-      titleBarStyle: TitleBarStyle.hidden,
-    ),
-    () async {
-      await windowManager.show();
-      await windowManager.focus();
-    },
-  );
-}
-
-/// Initializes the Rust core and reports failures without crashing the UI.
-Future<bool> _initCore() async {
-  try {
-    final rust.InitResult result;
-    if (PlatformBridge.isAndroid) {
-      // The Kotlin SystemBridge exposes filesDir; no path_provider needed
-      // (that plugin would also pull a JNI runtime into the desktop bundle).
-      final dir = await PlatformBridge.filesDir();
-      if (dir == null || dir.isEmpty) {
-        debugPrint('core init failed: Android filesDir unavailable');
-        return false;
-      }
-      result = await rust.initCoreWithDataDir(dataDir: dir);
-    } else {
-      result = await rust.initCore();
-    }
-    if (!result.ok) {
-      debugPrint('core init failed: ${result.error}');
-      return false;
-    }
-    debugPrint('core ready: db=${result.dbPath} schema=${result.schemaVersion}');
-    return true;
-  } catch (e) {
-    debugPrint('core init exception: $e');
-    return false;
-  }
 }
 
 /// Shows the first-run OCR model installation while it copies ~210MB out of
-/// the APK assets, then swaps in the real app. On every later launch the
-/// installer returns immediately and this is a single frame.
+/// the installer assets, then swaps in the real app. On platforms that ship
+/// models differently (desktop) this is a single frame.
 class _Bootstrap extends StatefulWidget {
-  const _Bootstrap({required this.coreInit, required this.installModels});
+  const _Bootstrap({required this.coreInit});
 
   final bool coreInit;
-  final bool installModels;
 
   @override
   State<_Bootstrap> createState() => _BootstrapState();
@@ -142,20 +60,18 @@ class _BootstrapState extends State<_Bootstrap> {
   double _progress = 0;
   String _file = '';
   String? _error;
-  bool _ready = false;
+  late bool _ready;
 
   @override
   void initState() {
     super.initState();
-    _ready = !widget.installModels;
-    if (widget.installModels) {
-      _install();
-    }
+    _ready = !PlatformHost.current.needsModelInstall;
+    if (!_ready) _install();
   }
 
   Future<void> _install() async {
     try {
-      final status = await PlatformBridge.ensureOcrModels(
+      final status = await PlatformHost.current.ensureModels(
         onProgress: (p, file) {
           if (!mounted) return;
           setState(() {
@@ -169,7 +85,7 @@ class _BootstrapState extends State<_Bootstrap> {
         if (status.installed) {
           _ready = true;
         } else {
-          _error = 'OCR 模型安装未完成';
+          _error = status.error ?? 'OCR 模型安装未完成';
         }
       });
     } catch (e) {

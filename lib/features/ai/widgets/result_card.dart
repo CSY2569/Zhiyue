@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
-import 'package:rbwa/core/platform/platform.dart';
 import 'package:rbwa/core/theme/layout_metrics.dart';
 import 'package:rbwa/core/widgets/app_overlay.dart';
 import 'package:rbwa/core/utils/clipboard.dart';
@@ -13,6 +12,7 @@ import 'package:rbwa/features/ai/widgets/message_bubble.dart'
     show AiMessageBubble, aiActionLabel;
 import 'package:rbwa/features/reader/providers/panel_layout.dart';
 import 'package:rbwa/src/rust/models/ai.dart' show AiRole;
+import 'package:rbwa/platform/platform_host.dart';
 
 /// Floating AI result card (FEATURES 6.4): shows the active thread's full
 /// conversation -- every prior turn stays visible across follow-ups (6.5.2),
@@ -63,8 +63,7 @@ class ResultCard extends ConsumerWidget {
     // being docked as a sheet. Reading apps put the answer next to the text
     // precisely so the page stays visible underneath.
     final compact =
-        PlatformCapabilities.current().isMobile ||
-        PlatformCapabilities.isCompactWidth(screen.width);
+        PlatformHost.current.useCompactLayout(screen.width);
     final cardSize = _effectiveSize(persisted, screen, compact);
     // Bubbles reflow with the card width (was a hardcoded 380).
     final bubbleMax = (cardSize.width - 24).clamp(160.0, 1000.0);
@@ -136,8 +135,7 @@ class ResultCard extends ConsumerWidget {
   void _beginDrag(BuildContext context, WidgetRef ref) {
     final screen = MediaQuery.sizeOf(context);
     final persisted = ref.read(panelLayoutProvider).cardSize;
-    final compact = PlatformCapabilities.current().isMobile ||
-        PlatformCapabilities.isCompactWidth(screen.width);
+    final compact = PlatformHost.current.useCompactLayout(screen.width);
     final cardSize = _effectiveSize(persisted, screen, compact);
     final keyboard = MediaQuery.viewInsetsOf(context).bottom;
     final maxLeft = (screen.width - cardSize.width - 12).clamp(12.0, double.infinity);

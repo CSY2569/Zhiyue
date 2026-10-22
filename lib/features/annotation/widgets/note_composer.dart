@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:rbwa/core/platform/platform.dart';
 import 'package:rbwa/features/annotation/models/selection.dart'
     show SelectionSource;
 import 'package:rbwa/features/annotation/providers/annotation_provider.dart';
 import 'package:rbwa/features/annotation/providers/selection_provider.dart';
 import 'package:rbwa/features/annotation/widgets/highlight_layer.dart';
 import 'package:rbwa/src/rust/models/annotation.dart';
+import 'package:rbwa/platform/platform_host.dart';
 
 /// Note composer: opened by the toolbar's 笔记 button, edits a note attached
 /// to the current selection (FEATURES 4.4.1). Enter saves, Esc cancels.
@@ -70,8 +70,7 @@ class _NoteComposerState extends ConsumerState<NoteComposer> {
     // Touch: dock at the bottom so the on-screen keyboard pushes the composer
     // up instead of hiding it (the floating position is clipped by the
     // viewport once the keyboard opens).
-    final mobile = PlatformCapabilities.current().isMobile ||
-        PlatformCapabilities.isCompactWidth(screen.width);
+    final mobile = PlatformHost.current.useCompactLayout(screen.width);
 
     if (mobile) {
       return Positioned(

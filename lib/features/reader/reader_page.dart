@@ -10,6 +10,7 @@ import 'package:rbwa/core/widgets/loading_state.dart';
 import 'package:rbwa/core/widgets/panel_resize_handle.dart';
 import 'package:rbwa/core/navigation.dart';
 import 'package:rbwa/core/platform/platform.dart';
+import 'package:rbwa/platform/platform_host.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
 import 'package:rbwa/features/ai/widgets/ai_panel_side.dart';
 import 'package:rbwa/features/ai/widgets/result_card.dart';
@@ -21,16 +22,11 @@ import 'package:rbwa/features/annotation/widgets/mark_toolbar.dart';
 import 'package:rbwa/features/annotation/widgets/note_composer.dart';
 import 'package:rbwa/features/annotation/widgets/note_popup.dart';
 import 'package:rbwa/features/bilingual/providers/page_translation_provider.dart';
-import 'package:rbwa/features/bilingual/widgets/translated_pane.dart'
-    show TranslatedColumn;
-import 'package:rbwa/features/bilingual/widgets/translated_text_column.dart';
 import 'package:rbwa/features/reader/providers/panel_layout.dart';
 import 'package:rbwa/features/reader/providers/reader_tap_provider.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
-import 'package:rbwa/features/reader/widgets/mobile_panel.dart';
-import 'package:rbwa/features/reader/widgets/phone_reader_chrome.dart';
+import 'package:rbwa/features/reader/widgets/overlay_panel.dart';
 import 'package:rbwa/features/reader/widgets/pdf_page_scroll.dart';
-import 'package:rbwa/features/reader/widgets/reader_toolbar.dart';
 import 'package:rbwa/features/reader/widgets/sidebars/notes_rail.dart';
 import 'package:rbwa/features/reader/widgets/sidebars/outline_tree.dart';
 import 'package:rbwa/features/reader/widgets/sidebars/thumbnail_rail.dart';
@@ -69,19 +65,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// first (the user just opened 对照), original one tap away.
   bool _mobileShowTranslation = true;
 
-  /// Phone chrome visibility: a middle tap hides the top and bottom bars so
-  /// the whole screen shows content.
-  bool _phoneChromeVisible = true;
-
-  /// Phone layout: `<700dp` wide and touch-first. Phones get the two-bar
-  /// chrome instead of the dense desktop toolbar.
-  bool _isPhone(BuildContext context) =>
-      PlatformCapabilities.current().isMobile &&
-      PlatformCapabilities.isCompactWidth(MediaQuery.sizeOf(context).width);
+  /// Reader-bar visibility: on touch platforms a middle tap hides the bars so
+  /// the whole screen shows content. The host renders the bars and watches
+  /// this notifier; desktop ignores it.
+  final ValueNotifier<bool> _chromeVisible = ValueNotifier<bool>(true);
 
   /// Set once the compact-width downgrade has run, so the post-frame callback
   /// does not reschedule on every build.
   bool _downgradedToSingle = false;
+
+  /// Layout is phone-shaped: a touch platform on a narrow screen. Distinct
+  /// from `isCompactWidth` alone -- a narrow desktop window keeps the desktop
+  /// chrome.
+  bool _compactPhone(BuildContext context) =>
+      PlatformHost.current.touch &&
+      PlatformCapabilities.isCompactWidth(MediaQuery.sizeOf(context).width);
 
   /// Two pages side by side do not fit a phone (each would be ~170dp wide).
   /// Progress restored from a tablet/desktop session can carry a double-page
@@ -155,16 +153,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     // the chrome. Ignored on desktop, where a tap is just a tap.
     _tapSub = ref.listenManual(readerTapProvider, (prev, next) {
       if (next == null || prev?.seq == next.seq) return;
-      if (!mounted || !_isPhone(context)) return;
+      if (!mounted || !PlatformHost.current.touch) return;
       _handleReaderTap(next.zone);
     });
 
-    // Phones: full-screen reading -- hide the system bars and keep the
-    // display awake while this route is on top. Restored on dispose.
-    if (PlatformCapabilities.current().isMobile) {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-      PlatformBridge.setKeepScreenOn(true);
-    }
+    // Platform reading mode (full-screen / keep-awake on touch devices).
+    PlatformHost.current.readerEntered();
 
     // The bilingual-reading queue subscription was removed together with the
     // built-in translation pipeline; the engine integration will add
@@ -179,7 +173,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       case ReaderTapZone.rightEdge:
         ref.read(viewerProvider.notifier).nextPage();
       case ReaderTapZone.center:
-        setState(() => _phoneChromeVisible = !_phoneChromeVisible);
+        _chromeVisible.value = !_chromeVisible.value;
     }
   }
 
@@ -245,12 +239,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 
   @override
   void dispose() {
-    // Leave full-screen reading: restore the system bars and let the screen
-    // sleep again.
-    if (PlatformCapabilities.current().isMobile) {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-      PlatformBridge.setKeepScreenOn(false);
-    }
+    // Leave reading mode (restore system bars / allow the screen to sleep).
+    PlatformHost.current.readerExited();
+    _chromeVisible.dispose();
     _selectionSub.close();
     _viewerSub.close();
     _aiSub.close();
@@ -270,24 +261,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
-    // Volume keys page the book on phones (a one-hand reading habit). Only
-    // while the reading surface has focus and no text field is active --
-    // otherwise the volume keys must keep working normally.
-    if (PlatformCapabilities.current().isMobile) {
-      final key = event.logicalKey;
-      final editing = FocusManager.instance.primaryFocus?.context
-              ?.widget is EditableText ||
-          ref.read(selectionProvider).composerPos != null;
-      if (!editing) {
-        if (key == LogicalKeyboardKey.audioVolumeDown) {
-          ref.read(viewerProvider.notifier).nextPage();
-          return KeyEventResult.handled;
-        }
-        if (key == LogicalKeyboardKey.audioVolumeUp) {
-          ref.read(viewerProvider.notifier).prevPage();
-          return KeyEventResult.handled;
-        }
-      }
+    // Volume keys page the book on touch platforms (a one-hand reading
+    // habit). The host decides; desktop always declines.
+    final editing = FocusManager.instance.primaryFocus?.context?.widget
+            is EditableText ||
+        ref.read(selectionProvider).composerPos != null;
+    if (PlatformHost.current.handleReaderKey(
+      event,
+      editing: editing,
+      nextPage: () => ref.read(viewerProvider.notifier).nextPage(),
+      previousPage: () => ref.read(viewerProvider.notifier).prevPage(),
+    )) {
+      return KeyEventResult.handled;
     }
 
     if (event.logicalKey == LogicalKeyboardKey.escape) {
@@ -325,7 +310,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     // 6.5.4); the AI notifier itself never reads the viewer state.
     final book = state.book;
 
-    if (_isPhone(context) && !state.loading && state.error == null) {
+    if (_compactPhone(context) && !state.loading && state.error == null) {
       _downgradeModeForPhone();
     }
 
@@ -347,6 +332,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       );
     }
 
+    final bars = PlatformHost.current.readerBars(
+      context,
+      ref,
+      visibility: _chromeVisible,
+    );
+
     return PopScope(
       // Android back button: close transient UI before leaving the reader.
       // Returning false keeps the route (the reader is the last stop before
@@ -364,26 +355,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             children: [
               Column(
                 children: [
-                  // Phones: two-bar chrome (top: back/title/page, bottom:
-                  // the five most-used actions). Desktop keeps the dense
-                  // single-row toolbar -- it does not fit a 360dp screen.
-                  if (_isPhone(context))
-                    AnimatedSlide(
-                      offset: _phoneChromeVisible
-                          ? Offset.zero
-                          : const Offset(0, -1),
-                      duration: const Duration(milliseconds: 180),
-                      child: AnimatedOpacity(
-                        opacity: _phoneChromeVisible ? 1 : 0,
-                        duration: const Duration(milliseconds: 180),
-                        child: PhoneReaderTopBar(
-                          onShowMore: () =>
-                              showPhoneReaderMoreSheet(context, ref),
-                        ),
-                      ),
-                    )
-                  else
-                    const ReaderToolbar(),
+                  // The platform decides the chrome: one dense toolbar on
+                  // desktop, two bars on phones. Both read the same viewer
+                  // state, so the widgets below stay platform-neutral.
+                  if (bars.top != null) bars.top!,
                   Expanded(
                     child: LayoutBuilder(
                       builder: (context, constraints) {
@@ -400,7 +375,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                                   child: Material(
                                     color: Theme.of(context).colorScheme.surface,
                                     child: SafeArea(
-                                      child: MobilePanel(
+                                      child: OverlayPanel(
                                         title: _sidebarTitle(state.openSidebar!),
                                         onClose: () => ref
                                             .read(viewerProvider.notifier)
@@ -484,21 +459,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                       },
                     ),
                   ),
-                  if (_isPhone(context))
-                    AnimatedSlide(
-                      offset: _phoneChromeVisible
-                          ? Offset.zero
-                          : const Offset(0, 1),
-                      duration: const Duration(milliseconds: 180),
-                      child: AnimatedOpacity(
-                        opacity: _phoneChromeVisible ? 1 : 0,
-                        duration: const Duration(milliseconds: 180),
-                        child: PhoneReaderBottomBar(
-                          onShowMore: () =>
-                              showPhoneReaderMoreSheet(context, ref),
-                        ),
-                      ),
-                    ),
+                  if (bars.bottom != null) bars.bottom!,
                 ],
               ),
               // Floating selection UI (rendered above everything, in the
@@ -596,18 +557,11 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// Which pane appears is platform-decided: desktop keeps the RetainPDF
   /// layout-preserving PDF; Android uses the text-level column (no Python).
   Widget _buildSplitContent(BuildContext context, ViewerState state) {
-    final capabilities = PlatformCapabilities.current();
     final bookId = state.book?.id;
-    final mobile = capabilities.isMobile &&
-        PlatformCapabilities.isCompactWidth(MediaQuery.sizeOf(context).width);
-    final Widget translated;
-    if (bookId == null) {
-      translated = const SizedBox.shrink();
-    } else if (capabilities.usesTextTranslation) {
-      translated = TranslatedTextColumn(bookId: bookId);
-    } else {
-      translated = const TranslatedColumn();
-    }
+    final mobile = _compactPhone(context);
+    final Widget translated = bookId == null
+        ? const SizedBox.shrink()
+        : PlatformHost.current.translatedPane(bookId);
 
     // Phone: half a phone width of translated text is unreadable. Show one
     // pane at a time with a segmented switch; the reader toolbar's 对照 button
@@ -669,18 +623,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             ref.read(viewerProvider.notifier).setZoom(state.zoom + delta);
           }
         },
-        child: PlatformCapabilities.current().isMobile
-            ? GestureDetector(
-                // Touch zoom: pinch with two fingers, double-tap to toggle
-                // between fit (1.2) and a comfortable 2.0. Both callbacks
-                // participate in the gesture arena only for their own
-                // pointer counts, so single-finger scrolling is unaffected.
-                onScaleStart: _onScaleStart,
-                onScaleUpdate: _onScaleUpdate,
-                onDoubleTap: _onDoubleTap,
-                child: const PdfPageScroll(),
-              )
-            : const PdfPageScroll(),
+        // Touch platforms add pinch-to-zoom and double-tap; desktop gets the
+        // bare scroll surface (wheel + Ctrl+wheel are handled inside it).
+        child: PlatformHost.current.wrapReadingSurface(
+          child: const PdfPageScroll(),
+          gestures: ReadingGestures(
+            onZoomStart: (pointerCount) => _onZoomStart(pointerCount),
+            onZoomUpdate: (scale, pointerCount) =>
+                _onZoomUpdate(scale, pointerCount),
+            onDoubleTap: _onDoubleTap,
+          ),
+        ),
       ),
     );
   }
@@ -693,16 +646,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// which is a scroll, not a zoom).
   double? _pinchStartZoom;
 
-  void _onScaleStart(ScaleStartDetails d) {
-    _pinchStartZoom = d.pointerCount > 1 ? ref.read(viewerProvider).zoom : null;
+  void _onZoomStart(int pointerCount) {
+    _pinchStartZoom =
+        pointerCount > 1 ? ref.read(viewerProvider).zoom : null;
   }
 
-  void _onScaleUpdate(ScaleUpdateDetails d) {
+  void _onZoomUpdate(double scale, int pointerCount) {
     final start = _pinchStartZoom;
-    if (start == null || d.pointerCount < 2) return;
-    // d.scale is relative to the gesture start; accumulate from the recorded
+    if (start == null || pointerCount < 2) return;
+    // [scale] is relative to the gesture start; accumulate from the recorded
     // zoom so slow pinches do not drift.
-    ref.read(viewerProvider.notifier).setZoom(start * d.scale);
+    ref.read(viewerProvider.notifier).setZoom(start * scale);
   }
 
   void _onDoubleTap() {

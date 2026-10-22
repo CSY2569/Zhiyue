@@ -3,8 +3,8 @@ import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'package:rbwa/core/navigation.dart';
-import 'package:rbwa/core/platform/platform.dart';
 import 'package:rbwa/router/app_router.dart';
+import 'package:rbwa/platform/platform_host.dart';
 
 /// Custom frameless title bar (FEATURES 8.1).
 ///
@@ -35,7 +35,7 @@ class AppTitleBar extends StatelessWidget {
     // Android draws its own system status bar; a 40px fake title bar with
     // minimize/maximize/close would be wrong there. Keep only a back
     // affordance when the route has a parent.
-    if (PlatformCapabilities.current().isMobile) {
+    if (PlatformHost.current.touch) {
       if (!showBack) return const SizedBox.shrink();
       return SafeArea(
         bottom: false,

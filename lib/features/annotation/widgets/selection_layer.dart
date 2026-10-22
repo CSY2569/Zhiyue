@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:rbwa/core/haptics.dart';
-import 'package:rbwa/core/platform/platform.dart';
 import 'package:rbwa/core/widgets/text_input_dialog.dart';
 import 'package:rbwa/data/repositories/reader_repository.dart';
 import 'package:rbwa/features/ai/providers/ai_config_provider.dart';
@@ -21,6 +20,7 @@ import 'package:rbwa/features/reader/providers/scan_provider.dart';
 import 'package:rbwa/src/rust/models/annotation.dart';
 import 'package:rbwa/src/rust/ocr.dart' show OcrLine;
 import 'package:rbwa/src/rust/pdf/types.dart' show CharBox;
+import 'package:rbwa/platform/platform_host.dart';
 
 /// Pointer layer on top of one page: drag to select characters (FEATURES
 /// 4.1), tap a mark to open its note (FEATURES 4.4.2), tap whitespace to
@@ -365,7 +365,7 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
     // Tap on whitespace clears the selection (FEATURES 4.1.3) and reports
     // the tap so the reader can page (edges) or toggle its chrome (middle).
     ref.read(selectionProvider.notifier).clear();
-    if (PlatformCapabilities.current().isMobile && !widget.translated) {
+    if (PlatformHost.current.touch && !widget.translated) {
       ref.read(readerTapProvider.notifier).report(norm.dx);
     }
   }

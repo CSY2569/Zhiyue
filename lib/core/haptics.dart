@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 
-import 'package:rbwa/core/platform/platform.dart';
+import 'package:rbwa/platform/platform_host.dart';
 
 /// Centralized haptic feedback.
 ///
@@ -17,22 +17,22 @@ class Haptics {
   const Haptics._();
 
   static void tap() {
-    if (!PlatformCapabilities.current().isMobile) return;
+    if (!PlatformHost.current.touch) return;
     HapticFeedback.selectionClick();
   }
 
   static void select() {
-    if (!PlatformCapabilities.current().isMobile) return;
+    if (!PlatformHost.current.touch) return;
     HapticFeedback.mediumImpact();
   }
 
   static void success() {
-    if (!PlatformCapabilities.current().isMobile) return;
+    if (!PlatformHost.current.touch) return;
     HapticFeedback.lightImpact();
   }
 
   static void warning() {
-    if (!PlatformCapabilities.current().isMobile) return;
+    if (!PlatformHost.current.touch) return;
     HapticFeedback.heavyImpact();
   }
 }

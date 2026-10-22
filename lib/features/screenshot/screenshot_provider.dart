@@ -8,8 +8,8 @@ import 'package:flutter/widgets.dart'
     show OverlayEntry, OverlayState, WidgetsBinding;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:rbwa/core/platform/platform.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
+import 'package:rbwa/platform/platform_host.dart';
 
 import 'free_screenshot_overlay.dart';
 
@@ -210,17 +210,16 @@ class ScreenshotNotifier extends Notifier<ScreenshotState> {
   }
 
   Directory _defaultDir() {
-    // Android has no HOME/Pictures; the app cache dir is the only place the
-    // process may write without a storage permission.
-    if (PlatformCapabilities.current().isAndroid) {
-      return Directory('${Directory.systemTemp.path}/RBWA');
-    }
-    // Fallback for environments without HOME (e.g. USERPROFILE on some
-    // systems); Linux desktops always set HOME.
-    final home = Platform.environment['HOME'] ??
-        Platform.environment['USERPROFILE'];
-    if (home != null && home.isNotEmpty) {
-      return Directory('$home/Pictures/RBWA');
+    // Touch platforms have no HOME/Pictures; the temp dir is the only place
+    // the process may write without a storage permission.
+    if (!PlatformHost.current.touch) {
+      // Desktop: ~/Pictures/RBWA, falling back to the temp dir when HOME is
+      // unset (Linux always sets it; Windows uses USERPROFILE).
+      final home =
+          Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
+      if (home != null && home.isNotEmpty) {
+        return Directory('$home/Pictures/RBWA');
+      }
     }
     return Directory('${Directory.systemTemp.path}/RBWA');
   }

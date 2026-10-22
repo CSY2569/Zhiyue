@@ -7,7 +7,6 @@ import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:rbwa/core/platform/platform.dart';
 import 'package:rbwa/features/annotation/providers/annotation_provider.dart';
 import 'package:rbwa/features/annotation/widgets/highlight_layer.dart';
 import 'package:rbwa/features/annotation/widgets/image_mark_layer.dart';
@@ -20,6 +19,7 @@ import 'package:rbwa/features/reader/widgets/scan_overlay.dart';
 import 'package:rbwa/features/reader/widgets/themed_page_image.dart';
 import 'package:rbwa/src/rust/models/annotation.dart' show TextAnnotation;
 import 'package:rbwa/src/rust/models/progress.dart';
+import 'package:rbwa/platform/platform_host.dart';
 
 /// Virtual-scrolling container that displays PDF pages in one of three view
 /// modes (FEATURES 3.1 / 3.6).
@@ -997,7 +997,7 @@ class _PageItemState extends ConsumerState<_PageItem> {
                           annotations: pageAnns,
                           // Touch: long-press to select so drags still scroll.
                           longPressSelect:
-                              PlatformCapabilities.current().isMobile,
+                              PlatformHost.current.touch,
                         ),
                       ),
                       // Image-layer marks (FEATURES §5): painted above the

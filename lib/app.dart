@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:rbwa/core/platform/platform.dart';
-import 'package:rbwa/core/platform/refresh_rate.dart';
+import 'package:rbwa/platform/platform_host.dart';
 import 'package:rbwa/core/theme/app_theme.dart';
 import 'package:rbwa/core/theme/reading_theme.dart';
 import 'package:rbwa/core/theme/reading_theme_controller.dart';
@@ -42,11 +41,11 @@ class _RbwaAppState extends ConsumerState<RbwaApp> with WidgetsBindingObserver {
 
   /// Files delivered by ACTION_VIEW / ACTION_SEND (Android): import them once
   /// the library provider is ready. Failures are silent -- the user sees the
-  /// normal import path if something is wrong with the file.
+  /// normal import path if something is wrong with the file. Desktop hosts
+  /// return an empty list, so this is a no-op there.
   Future<void> _importIncomingFiles() async {
-    if (!PlatformBridge.isAndroid) return;
     try {
-      final paths = await PlatformBridge.takeIncomingFiles();
+      final paths = await PlatformHost.current.takeIncomingFiles();
       if (paths.isEmpty || !mounted) return;
       final summary =
           await ref.read(libraryBooksProvider.notifier).importFiles(paths);
@@ -71,16 +70,6 @@ class _RbwaAppState extends ConsumerState<RbwaApp> with WidgetsBindingObserver {
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Background: drop the refresh-rate hint and stop the activity timer; the
-    // OS is not compositing us anyway.
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.detached) {
-      RefreshRateController.instance.goIdle();
-    }
-  }
-
-  @override
   void didChangePlatformBrightness() {
     // System light/dark flipped: re-resolve the `auto` reading theme.
     setState(() {});
@@ -98,55 +87,10 @@ class _RbwaAppState extends ConsumerState<RbwaApp> with WidgetsBindingObserver {
       theme: AppTheme.forReadingTheme(effective),
       routerConfig: appRouter,
       scaffoldMessengerKey: _messengerKey,
-      // Refresh-rate policy (Android): any pointer or scroll activity asks
-      // the panel for its top rate; going idle drops it to 30Hz. Wrapping the
-      // whole app catches every screen without per-widget wiring.
-      builder: (context, child) => RefreshRateScope(child: child),
+      // Platform wrapper: on Android this installs the refresh-rate policy
+      // (panel top rate while active, 30Hz when idle); desktop passes through.
+      builder: (context, child) => PlatformHost.current.wrapApp(child!),
     );
   }
 }
 
-/// Feeds pointer/scroll activity into [RefreshRateController].
-///
-/// A [Listener] catches direct touches; [NotificationListener] catches scroll
-/// notifications that bubble up from lists. Both only bump a timer, so the
-/// cost per event is a microsecond-scale check -- no rebuilds.
-class RefreshRateScope extends StatefulWidget {
-  const RefreshRateScope({super.key, required this.child});
-
-  final Widget? child;
-
-  @override
-  State<RefreshRateScope> createState() => _RefreshRateScopeState();
-}
-
-class _RefreshRateScopeState extends State<RefreshRateScope> {
-  @override
-  void initState() {
-    super.initState();
-    RefreshRateController.instance.init();
-  }
-
-  @override
-  void dispose() {
-    RefreshRateController.instance.goIdle();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Listener(
-      behavior: HitTestBehavior.translucent,
-      onPointerDown: (_) => RefreshRateController.instance.notifyActivity(),
-      onPointerMove: (_) => RefreshRateController.instance.notifyActivity(),
-      onPointerSignal: (_) => RefreshRateController.instance.notifyActivity(),
-      child: NotificationListener<ScrollNotification>(
-        onNotification: (_) {
-          RefreshRateController.instance.notifyActivity();
-          return false;
-        },
-        child: widget.child ?? const SizedBox.shrink(),
-      ),
-    );
-  }
-}

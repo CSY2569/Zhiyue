@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
-import 'package:rbwa/core/platform/platform.dart';
 import 'package:rbwa/core/theme/layout_metrics.dart';
 import 'package:rbwa/core/widgets/app_overlay.dart';
 import 'package:rbwa/features/search/providers/search_providers.dart';
 import 'package:rbwa/src/rust/models/book.dart';
+import 'package:rbwa/platform/platform_host.dart';
 
 /// A single book card in the library grid (FEATURES 2.2 / 2.5 / 2.6).
 ///
@@ -64,7 +64,7 @@ class BookTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final drag = enableDrag ?? !PlatformCapabilities.current().isMobile;
+    final drag = enableDrag ?? !PlatformHost.current.touch;
     // Desktop right-click opens the same menu as long-press (Flutter has no
     // built-in right-click menu on InkWell). A mouse on Android hits this
     // too; a finger uses long-press.
@@ -114,7 +114,7 @@ class BookTile extends StatelessWidget {
             onAssignCategory();
           },
         ),
-        if (onEnterSelection != null && PlatformCapabilities.current().isMobile)
+        if (onEnterSelection != null && PlatformHost.current.touch)
           AppSheetItem(
             icon: LucideIcons.listChecks,
             label: '多选',
