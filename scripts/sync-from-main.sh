@@ -21,8 +21,10 @@ if [ ! -f "$MANIFEST" ]; then
   echo "error: missing $MANIFEST" >&2
   exit 1
 fi
-if [ -n "$(git status --porcelain)" ]; then
-  echo "error: working tree is dirty; commit or stash first" >&2
+# Only tracked changes matter; untracked scratch files (local screenshots,
+# build output) must not block a sync.
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+  echo "error: working tree has uncommitted tracked changes; commit or stash first" >&2
   exit 1
 fi
 
