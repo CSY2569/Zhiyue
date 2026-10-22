@@ -113,11 +113,22 @@ class ImageMarkNotifier extends AsyncNotifier<List<ImageMark>> {
   final _redo =
       <({Future<void> Function() forward, Future<void> Function() backward})>[];
 
+  /// Book the edit history belongs to. Both stacks are cleared when the open
+  /// book changes: a closure captured for book A must never replay while book
+  /// B is on screen (undo would delete A's row behind the user's back, and
+  /// undoing a delete would recreate the mark inside the wrong book).
+  int? _historyBookId;
+
   ReaderRepository get _repo => ref.read(readerRepositoryProvider);
 
   @override
   Future<List<ImageMark>> build() {
     final bookId = ref.watch(viewerProvider.select((s) => s.book?.id));
+    if (bookId != _historyBookId) {
+      _historyBookId = bookId;
+      _undo.clear();
+      _redo.clear();
+    }
     if (bookId == null) return Future.value(const []);
     return _repo
         .listImageAnnotations(bookId)

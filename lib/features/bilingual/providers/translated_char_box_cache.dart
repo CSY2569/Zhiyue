@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rbwa/core/lru.dart';
 import 'package:rbwa/data/repositories/translation_repository.dart';
 import 'package:rbwa/features/bilingual/providers/book_translation_provider.dart';
+import 'package:rbwa/features/reader/providers/viewer_provider.dart';
 import 'package:rbwa/src/rust/pdf/types.dart' show CharBox;
 
 /// LRU cache of the TRANSLATED pages' char boxes (selection hit-testing data
@@ -25,13 +26,27 @@ class TranslatedCharBoxCache extends Notifier<Map<int, List<CharBox>>> {
   /// the previous translation artifact.
   int _generation = 0;
 
+  /// Book the cached boxes belong to. The cache is keyed by page and the
+  /// revision does not change when switching between two books that both
+  /// have translations, so without this a page-1 selection in book B hit-tested
+  /// against book A's page-1 text.
+  int? _bookId;
+
   @override
   Map<int, List<CharBox>> build() {
     // The revision identity (book id + artifact revision) is the cache's
     // lifetime: any change rebuilds the notifier with an empty map.
     ref.watch(translationRevisionProvider);
+    _bookId = ref.read(viewerProvider).book?.id;
     _generation++;
     _inflight.clear();
+    ref.listen(viewerProvider.select((s) => s.book?.id), (prev, next) {
+      if (prev == next) return;
+      _bookId = next;
+      _generation++;
+      _inflight.clear();
+      state = {};
+    });
     return {};
   }
 
@@ -63,6 +78,7 @@ class TranslatedCharBoxCache extends Notifier<Map<int, List<CharBox>>> {
     }
 
     if (generation != _generation) return boxes;
+    if ((_bookId ??= bookId) != bookId) return boxes;
     state = lruTouch(state, page, boxes, _maxPages);
     return boxes;
   }

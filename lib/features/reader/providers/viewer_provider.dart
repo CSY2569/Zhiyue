@@ -66,6 +66,14 @@ class ViewerNotifier extends StateNotifier<ViewerState> {
   final Ref _ref;
   Timer? _saveDebounce;
 
+  /// Monotonic token for [openBook]. Opening a book awaits several FFI calls;
+  /// if the user backs out and opens another book meanwhile, an older chain
+  /// can finish LAST and overwrite the newer book's state (title, page count,
+  /// restored page) -- and, because the Rust document is global, leave the
+  /// Dart state pointing at a different document than the one being rendered.
+  /// Every await re-checks the token and the stale chain bails out.
+  int _openSeq = 0;
+
   ReaderRepository get _readerRepo => _ref.read(readerRepositoryProvider);
   LibraryRepository get _libraryRepo => _ref.read(libraryRepositoryProvider);
 
@@ -73,9 +81,11 @@ class ViewerNotifier extends StateNotifier<ViewerState> {
   /// [jumpPage] (1-indexed) overrides the restored position -- the full-text
   /// search jump target (M6, 3.5.2).
   Future<void> openBook(int bookId, {int? jumpPage}) async {
+    final seq = ++_openSeq;
     state = const ViewerState().copyWith(loading: true);
     try {
       final book = await _libraryRepo.getBook(bookId);
+      if (seq != _openSeq) return; // superseded by a newer open
       if (book == null) {
         state = const ViewerState().copyWith(
           loading: false,
@@ -89,6 +99,7 @@ class ViewerNotifier extends StateNotifier<ViewerState> {
       // render pipeline. Skipping it for images left the previous PDF open,
       // so an image book rendered that PDF's first page (regression).
       final result = await _readerRepo.openBook(book.storedPath);
+      if (seq != _openSeq) return; // superseded: do not adopt this document
       if (result.error != null) {
         state = ViewerState(
           book: book,
@@ -101,11 +112,16 @@ class ViewerNotifier extends StateNotifier<ViewerState> {
 
       // Restore saved progress (a search jump wins over it).
       final progress = await _readerRepo.getProgress(bookId);
-      final page = jumpPage ?? progress?.page ?? 1;
+      if (seq != _openSeq) return;
+      final requested = jumpPage ?? progress?.page ?? 1;
       state = ViewerState(
         book: book,
         pageCount: pageCount,
-        currentPage: page.clamp(1, pageCount),
+        // clamp(1, 0) throws (lower > upper) for a 0-page document; such a
+        // book must still open so the reader can show its empty state.
+        currentPage: pageCount > 0
+            ? requested.clamp(1, pageCount)
+            : 1,
         zoom: progress?.zoom ?? 1.2,
         mode: progress?.viewMode ?? ViewMode.single,
         loading: false,
@@ -115,6 +131,7 @@ class ViewerNotifier extends StateNotifier<ViewerState> {
         _scheduleSave();
       }
     } catch (e) {
+      if (seq != _openSeq) return;
       state = const ViewerState().copyWith(
         loading: false,
         error: '打开书籍失败: $e',
@@ -133,6 +150,8 @@ class ViewerNotifier extends StateNotifier<ViewerState> {
   void resetZoom() => setZoom(1.2);
 
   void setPage(int page) {
+    // clamp(1, 0) throws for a 0-page document (lower > upper).
+    if (state.pageCount <= 0) return;
     final clamped = page.clamp(1, state.pageCount);
     state = state.copyWith(currentPage: clamped);
     _scheduleSave();

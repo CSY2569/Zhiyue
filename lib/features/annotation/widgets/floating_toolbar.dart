@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_flutter/lucide_flutter.dart';
 
 import 'package:rbwa/core/platform/platform.dart';
+import 'package:rbwa/core/theme/layout_metrics.dart';
+import 'package:rbwa/core/widgets/app_overlay.dart';
 import 'package:rbwa/core/utils/clipboard.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
 import 'package:rbwa/features/annotation/models/selection.dart'
@@ -16,33 +18,52 @@ import 'package:rbwa/src/rust/models/annotation.dart';
 /// Toolbar shown for a completed selection (FEATURES 4.2): 8 actions
 /// (翻译/解释/搜索/复制/高亮/下划线/删除线/笔记).
 ///
-/// Layout follows the input device:
-///  - **Touch (phones)**: docked above the bottom safe area as a 4×2 grid.
-///    Floating next to the selection does not work on a 360dp screen -- the
-///    8 actions do not fit, and the old fixed-width estimate produced an
-///    inverted clamp range (a runtime `ArgumentError`).
-///  - **Mouse / tablet / desktop**: floats next to the selection, positioned
-///    from the toolbar's REAL measured width and draggable (8.4).
+/// It always FLOATS next to the selection -- on phones too. The layout adapts
+/// to the input device rather than to the window class:
+///
+///  * **Phones**: a compact 4×2 grid (icon above label, fixed cells), ~262dp
+///    wide, because eight labelled buttons on one row need ~760dp. Floating
+///    keeps the selected text visible, which is the whole point of a
+///    selection toolbar.
+///  * **Tablet / desktop**: one row of labelled buttons.
+///
+/// Placement uses the toolbar's REAL measured size: centred on the selection,
+/// flipped above/below, clamped into the viewport (the clamp guards against an
+/// inverted range when the bar is wider than the window). The bar is draggable
+/// (FEATURES 4.2.2 / 8.4) -- the drag seeds the position from the bar's actual
+/// origin, so the first move never jumps.
 ///
 /// Rendered inside an OverlayPortal; returns [SizedBox.shrink] when there is
 /// no anchored selection (or while the note composer is open).
 ///
 /// [bookId] / [bookTitle] snapshot the open book for the AI actions; null =
 /// the no-book window.
-class FloatingToolbar extends ConsumerWidget {
+class FloatingToolbar extends ConsumerStatefulWidget {
   const FloatingToolbar({super.key, this.bookId, this.bookTitle});
 
   final int? bookId;
   final String? bookTitle;
 
-  /// Preferred floating width (desktop estimate for the initial position
-  /// before the first layout). Placement itself always uses the measured
-  /// width, never this constant.
-  static const double _estWidth = 760;
-  static const double _estHeight = 48;
+  @override
+  ConsumerState<FloatingToolbar> createState() => _FloatingToolbarState();
+}
+
+class _FloatingToolbarState extends ConsumerState<FloatingToolbar> {
+  /// Identifies the bar so a drag can start from its real screen position.
+  final GlobalKey _surfaceKey = GlobalKey();
+
+  /// Compact (phone) grid metrics: 4 columns × 2 rows.
+  ///
+  /// The cell is a MINIMUM, not a fixed box: 「下划线」and 「删除线」 are three
+  /// CJK glyphs (~36dp at labelSmall) and their cell would overflow at 60dp.
+  /// `IntrinsicWidth` around the bar lets the widest cell in each column
+  /// decide the column width, so labels never clip.
+  static const double _cellMinW = 62;
+  static const double _cellH = 56;
+  static const double _gridPad = 6;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final state = ref.watch(selectionProvider);
     final sel = state.selection;
     final anchor = state.toolbarAnchor;
@@ -50,111 +71,145 @@ class FloatingToolbar extends ConsumerWidget {
       return const SizedBox.shrink();
     }
 
-    final mobile = PlatformCapabilities.current().isMobile ||
-        PlatformCapabilities.isCompactWidth(MediaQuery.sizeOf(context).width);
-    final actions = _actions(context, ref, sel);
-
-    if (mobile) return _dockedBar(context, actions);
-
+    // "Compact" is about how much width the bar has, not just the platform:
+    // a half-width tablet split still cannot fit eight labelled buttons.
+    final width = MediaQuery.sizeOf(context).width;
+    final compact = PlatformCapabilities.current().isMobile ||
+        PlatformCapabilities.isCompactWidth(width);
+    final actions = _actions(context, sel, vertical: compact);
     final theme = Theme.of(context);
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final screen = Size(constraints.maxWidth, constraints.maxHeight);
         return CustomSingleChildLayout(
-          delegate: _ToolbarLayout(anchor: anchor, screen: screen),
-          child: _toolbarSurface(
-            theme,
-            actions,
-            onPanUpdate: (d) => ref.read(selectionProvider.notifier).moveToolbar(
-                  (state.toolbarPos ?? _centerOnAnchor(anchor, screen)) +
-                      d.delta,
-                ),
+          delegate: _ToolbarLayout(
+            anchor: anchor,
+            screen: screen,
+            pos: state.toolbarPos,
+          ),
+          // `CustomSingleChildLayout` hands the child LOOSE constraints, so a
+          // Row/Column here would size to infinity. IntrinsicWidth makes the
+          // bar report its natural width; the delegate then positions it.
+          child: IntrinsicWidth(
+            child: GestureDetector(
+              key: _surfaceKey,
+              // Stable handle for layout tests: `FloatingToolbar` itself
+              // fills the overlay, so size assertions need the bar's box.
+              behavior: HitTestBehavior.translucent,
+              onPanStart: (_) => _seedDragOrigin(),
+              onPanUpdate: (d) {
+                final live = ref.read(selectionProvider).toolbarPos;
+                if (live == null) return;
+                ref
+                    .read(selectionProvider.notifier)
+                    .moveToolbar(live + d.delta);
+              },
+              child: compact
+                  ? _compactSurface(theme, actions)
+                  : _rowSurface(theme, actions),
+            ),
           ),
         );
       },
     );
   }
 
-  /// Touch layout: full-width bar docked at the bottom of the reader.
-  Widget _dockedBar(BuildContext context, List<Widget> actions) {
-    final theme = Theme.of(context);
-    return Positioned(
-      left: 0,
-      right: 0,
-      bottom: 0,
-      child: Material(
-        elevation: 8,
-        color: theme.colorScheme.surfaceContainerHigh,
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.all(4),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    for (var i = 0; i < 4; i++)
-                      Expanded(child: _cell(actions[i])),
-                  ],
-                ),
-                Row(
-                  children: [
-                    for (var i = 4; i < actions.length; i++)
-                      Expanded(child: _cell(actions[i])),
-                  ],
-                ),
-              ],
-            ),
-          ),
+  /// Writes the bar's current on-screen origin into [toolbarPos] before the
+  /// first drag delta. Without this the first update would add a delta to a
+  /// stale/null position and the bar would jump to a corner.
+  void _seedDragOrigin() {
+    final box = _surfaceKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+    ref
+        .read(selectionProvider.notifier)
+        .moveToolbar(box.localToGlobal(Offset.zero));
+  }
+
+  /// Panel-styled container shared by both layouts (18dp radius, overlay
+  /// fill, hairline border, soft shadow) so the bar matches the library's
+  /// floating panels and the AI result card.
+  Widget _panel(BuildContext context, Widget child) {
+    // `Material` (not DecoratedBox) so the inner InkWells have an ink
+    // surface; the visual language still comes from the panel decoration.
+    return Material(
+      key: const Key('selection-toolbar-surface'),
+      color: appOverlayColor(context),
+      elevation: 0,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(Golden.radiusPanel),
+        side: BorderSide(color: appOverlayBorder(context)),
+      ),
+      child: child,
+    );
+  }
+
+  /// Phone layout: a clean 4×2 grid of icon-over-label cells.
+  Widget _compactSurface(ThemeData theme, List<Widget> actions) {
+    Widget row(int start) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = start; i < start + 4 && i < actions.length; i++)
+              ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: _cellMinW),
+                child: SizedBox(height: _cellH, child: actions[i]),
+              ),
+          ],
+        );
+    return _panel(
+      context,
+      Padding(
+        padding: const EdgeInsets.all(_gridPad),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [row(0), row(4)],
         ),
       ),
     );
   }
 
-  /// One grid cell: at least 48dp tall so every action is a valid touch
-  /// target, with the content centered.
-  Widget _cell(Widget child) =>
-      SizedBox(height: 48, child: Center(child: child));
-
-  Widget _toolbarSurface(
-    ThemeData theme,
-    List<Widget> actions, {
-    void Function(DragUpdateDetails)? onPanUpdate,
-  }) {
-    final material = Material(
-      elevation: 4,
-      borderRadius: BorderRadius.circular(8),
-      color: theme.colorScheme.surfaceContainerHigh,
-      child: Padding(
+  /// Tablet / desktop layout: labelled buttons in one row when they fit,
+  /// wrapping to a second row when the window is narrow (a split view can be
+  /// 800dp, where eight labelled buttons do not fit on one line).
+  Widget _rowSurface(ThemeData theme, List<Widget> actions) {
+    return _panel(
+      context,
+      Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-        child: Wrap(spacing: 2, runSpacing: 2, children: actions),
+        child: Wrap(
+          spacing: 2,
+          runSpacing: 2,
+          children: actions,
+        ),
       ),
-    );
-    if (onPanUpdate == null) return material;
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onPanUpdate: onPanUpdate,
-      child: material,
     );
   }
 
   /// The 8 selection actions in display order.
-  List<Widget> _actions(BuildContext context, WidgetRef ref, Selection sel) => [
+  List<Widget> _actions(
+    BuildContext context,
+    Selection sel, {
+    required bool vertical,
+  }) =>
+      [
         _ToolButton(
           icon: LucideIcons.languages,
           label: '翻译',
-          onTap: () => _aiAction(context, ref, AiActionType.translate),
+          onTap: () => _aiAction(context, AiActionType.translate),
+          vertical: vertical,
         ),
         _ToolButton(
           icon: LucideIcons.lightbulb,
           label: '解释',
-          onTap: () => _aiAction(context, ref, AiActionType.explain),
+          onTap: () => _aiAction(context, AiActionType.explain),
+          vertical: vertical,
         ),
         _ToolButton(
           icon: LucideIcons.search,
           label: '搜索',
-          onTap: () => _aiAction(context, ref, AiActionType.search),
+          onTap: () => _aiAction(context, AiActionType.search),
+          vertical: vertical,
         ),
         _ToolButton(
           icon: LucideIcons.copy,
@@ -164,46 +219,37 @@ class FloatingToolbar extends ConsumerWidget {
         _ToolButton(
           icon: LucideIcons.highlighter,
           label: '高亮',
-          onTap: () => _mark(context, ref, TextAnnotationKind.highlight),
+          onTap: () => _mark(context, TextAnnotationKind.highlight),
+          vertical: vertical,
         ),
         _ToolButton(
           icon: LucideIcons.underline,
           label: '下划线',
-          onTap: () => _mark(context, ref, TextAnnotationKind.underline),
+          onTap: () => _mark(context, TextAnnotationKind.underline),
+          vertical: vertical,
         ),
         _ToolButton(
           icon: LucideIcons.strikethrough,
           label: '删除线',
-          onTap: () => _mark(context, ref, TextAnnotationKind.strikethrough),
+          onTap: () => _mark(context, TextAnnotationKind.strikethrough),
+          vertical: vertical,
         ),
         _ToolButton(
           icon: LucideIcons.filePlus2,
           label: '笔记',
-          onTap: () => _openComposer(context, ref),
+          onTap: () => _openComposer(context),
+          vertical: vertical,
         ),
       ];
 
-  /// Horizontal centre for the floating toolbar before the user drags it.
-  Offset _centerOnAnchor(Rect anchor, Size screen) => Offset(
-        (anchor.left + anchor.width / 2 - _estWidth / 2).clamp(
-          8.0,
-          (screen.width - _estWidth - 8).clamp(8.0, double.infinity),
-        ),
-        anchor.top - 8 - _estHeight,
-      );
-
   /// Start an AI action on the current selection (FEATURES 6.2), then drop
   /// the selection (the toolbar closes with it).
-  Future<void> _aiAction(
-    BuildContext context,
-    WidgetRef ref,
-    AiActionType action,
-  ) async {
+  Future<void> _aiAction(BuildContext context, AiActionType action) async {
     final sel = ref.read(selectionProvider).selection;
     if (sel == null) return;
     await ref
         .read(aiProvider.notifier)
-        .startAction(action, sel.text, bookId: bookId, bookTitle: bookTitle);
+        .startAction(action, sel.text, bookId: widget.bookId, bookTitle: widget.bookTitle);
     ref.read(selectionProvider.notifier).clear();
   }
 
@@ -212,11 +258,7 @@ class FloatingToolbar extends ConsumerWidget {
   }
 
   /// Create a mark from the selection (FEATURES 4.3) and dismiss the toolbar.
-  Future<void> _mark(
-    BuildContext context,
-    WidgetRef ref,
-    TextAnnotationKind kind,
-  ) async {
+  Future<void> _mark(BuildContext context, TextAnnotationKind kind) async {
     final sel = ref.read(selectionProvider).selection;
     if (sel == null) return;
     final messenger = ScaffoldMessenger.of(context);
@@ -242,7 +284,7 @@ class FloatingToolbar extends ConsumerWidget {
   ///
   /// Touch: a marker position at the bottom edge -- the composer docks there
   /// and rises above the keyboard. Desktop: just below the floating toolbar.
-  void _openComposer(BuildContext context, WidgetRef ref) {
+  void _openComposer(BuildContext context) {
     final screen = MediaQuery.sizeOf(context);
     final mobile = PlatformCapabilities.current().isMobile ||
         PlatformCapabilities.isCompactWidth(screen.width);
@@ -256,7 +298,7 @@ class FloatingToolbar extends ConsumerWidget {
     final base = pos ?? Offset(screen.width / 2 - 160, screen.height / 2 - 80);
     ref
         .read(selectionProvider.notifier)
-        .openComposer(Offset(base.dx, base.dy + _estHeight + 8));
+        .openComposer(Offset(base.dx, base.dy + 56));
   }
 }
 
@@ -265,17 +307,35 @@ class FloatingToolbar extends ConsumerWidget {
 /// ranges are guarded so a toolbar wider than the screen pins to the left
 /// margin instead of producing `lower > upper` (which throws).
 class _ToolbarLayout extends SingleChildLayoutDelegate {
-  _ToolbarLayout({required this.anchor, required this.screen});
+  _ToolbarLayout({required this.anchor, required this.screen, this.pos});
 
   final Rect anchor;
   final Size screen;
 
+  /// User-dragged top-left position; null until the bar has been dragged.
+  final Offset? pos;
+
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
-      constraints.loosen();
+      // The viewport's width/height, not the incoming loose constraints: a
+      // Row/Column inside would otherwise be laid out with an infinite max
+      // width (the classic "overflowed by N million pixels").
+      BoxConstraints.loose(screen);
 
   @override
   Offset getPositionForChild(Size size, Size childSize) {
+    // A user-dragged toolbar keeps the position the pan handler stored:
+    // without this branch the drag updated `toolbarPos` but the layout kept
+    // re-centring the bar on the selection, so dragging looked broken.
+    if (pos != null) {
+      final maxLeft = screen.width - childSize.width - 8;
+      final maxTop = screen.height - childSize.height - 8;
+      return Offset(
+        maxLeft < 8 ? 8.0 : pos!.dx.clamp(8.0, maxLeft),
+        maxTop < 8 ? 8.0 : pos!.dy.clamp(8.0, maxTop),
+      );
+    }
+
     final desiredLeft = anchor.left + anchor.width / 2 - childSize.width / 2;
     final maxLeft = screen.width - childSize.width - 8;
     final left =
@@ -291,43 +351,72 @@ class _ToolbarLayout extends SingleChildLayoutDelegate {
 
   @override
   bool shouldRelayout(_ToolbarLayout oldDelegate) =>
-      oldDelegate.anchor != anchor || oldDelegate.screen != screen;
+      oldDelegate.anchor != anchor ||
+      oldDelegate.screen != screen ||
+      oldDelegate.pos != pos;
 }
 
-/// Compact icon + label button for the toolbar. The docked (touch) layout
-/// wraps it in a 48dp cell; the floating layout keeps the compact look.
+/// Compact icon + label button for the toolbar.
+///
+/// [vertical] selects the phone grid form (icon above label, filling its
+/// fixed cell) instead of the desktop row form (icon beside label). Both keep
+/// the tap target at the full cell size.
 class _ToolButton extends StatelessWidget {
   const _ToolButton({
     required this.icon,
     required this.label,
     required this.onTap,
+    this.vertical = false,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final bool vertical;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final content = vertical
+        ? Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 20, color: theme.colorScheme.onSurfaceVariant),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+            ],
+          )
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 20, color: theme.colorScheme.onSurfaceVariant),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+            ],
+          );
+
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(Golden.radiusSmall),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, color: theme.colorScheme.onSurfaceVariant),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurface,
-              ),
-            ),
-          ],
+        padding: EdgeInsets.symmetric(
+          horizontal: vertical ? 5 : 9,
+          vertical: vertical ? 4 : 7,
         ),
+        child: content,
       ),
     );
   }

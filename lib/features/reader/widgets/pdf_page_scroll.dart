@@ -62,6 +62,10 @@ class _PdfPageScrollState extends ConsumerState<PdfPageScroll> {
   // within-tier nudges stay exact (the SliverList re-lays out items at the
   // new display height, and the scroll math tracks it).
   double? _alignedPhysicalH;
+  // Most recent page requested while a programmatic scroll animation was
+  // running; the animation's completion jumps to it instead of stranding the
+  // list on the previous page.
+  int? _pendingPageJump;
   late final ProviderSubscription _pageSub;
   late final ProviderSubscription _pageHeightSub;
   late final ProviderSubscription _realignSub;
@@ -76,18 +80,15 @@ class _PdfPageScrollState extends ConsumerState<PdfPageScroll> {
     _pageSub = ref.listenManual(
       viewerProvider.select((s) => s.currentPage),
       (prev, next) {
-        if (_fromScroll || !_scrollController.hasClients) return;
+        if (!_scrollController.hasClients) return;
         if (ref.read(viewerProvider).mode == ViewMode.doublePage) return;
-        _fromScroll = true;
-        final target = _offsetForPage(next, _currentStride())
-            .clamp(0.0, _scrollController.position.maxScrollExtent);
-        _scrollController
-            .animateTo(
-              target,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOutCubic,
-            )
-            .whenComplete(() => _fromScroll = false);
+        // A page change arriving while the previous animation runs (rapid
+        // next/prev taps, volume-key flips) must RE-TARGET the scroll, not
+        // be dropped: dropping it left the list on page 2 while the state
+        // said page 3, until the next manual scroll.
+        _pendingPageJump = next;
+        if (_fromScroll) return;
+        _animateToPage(next);
       },
     );
     // When the page height becomes known (first page rendered) or changes
@@ -211,6 +212,29 @@ class _PdfPageScrollState extends ConsumerState<PdfPageScroll> {
       return ((page - 1) ~/ 2) * stride;
     }
     return (page - 1) * stride;
+  }
+
+  /// Animates to [page] and, if another page was requested meanwhile, keeps
+  /// going to the latest one instead of stopping at the stale target.
+  void _animateToPage(int page) {
+    if (!_scrollController.hasClients) return;
+    final target = _offsetForPage(page, _currentStride())
+        .clamp(0.0, _scrollController.position.maxScrollExtent);
+    _fromScroll = true;
+    _scrollController
+        .animateTo(
+          target,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+        )
+        .whenComplete(() {
+          _fromScroll = false;
+          final pending = _pendingPageJump;
+          _pendingPageJump = null;
+          if (pending != null && pending != page) {
+            _animateToPage(pending);
+          }
+        });
   }
 
   @override

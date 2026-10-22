@@ -15,13 +15,13 @@
 //!     rec.onnx
 //! ```
 //!
-//! The engine lazy-loads on the first scan (7.1.5): `OnceLock` per mode,
-//! sessions are created once and reused. Inference runs on the calling
-//! thread (a FRB async worker, off the UI isolate), serialized per mode via
-//! a mutex because ONNX Runtime sessions execute statefully.
+//! The engine lazy-loads on the first scan (7.1.5), sessions are created
+//! once and reused. Inference runs on the calling thread (a FRB async
+//! worker, off the UI isolate), serialized per mode via a mutex because ONNX
+//! Runtime sessions execute statefully.
 
 use std::path::PathBuf;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 
 use image::RgbImage;
 use rapidocr_core::config::{
@@ -59,7 +59,10 @@ pub(crate) struct RapidOcrEngine;
 
 type LoadResult = Result<Mutex<RapidOcr>, String>;
 
-static ENGINES: [OnceLock<LoadResult>; 2] = [OnceLock::new(), OnceLock::new()];
+/// One lazily loaded engine per mode. `None` = not loaded yet (or the last
+/// attempt failed and will be retried); a successful load is kept for the
+/// rest of the process.
+static ENGINES: [Mutex<Option<Arc<Mutex<RapidOcr>>>>; 2] = [Mutex::new(None), Mutex::new(None)];
 
 impl RapidOcrEngine {
     /// Slot index per mode ("high_precision" = 0, "fast" = 1).
@@ -186,11 +189,24 @@ impl RapidOcrEngine {
         // 7.1.10: adaptive page-quality enhancement (no-op on clean pages).
         let enhanced = enhance(rgb);
 
-        let slot = &ENGINES[Self::slot(mode)];
-        let loaded = slot.get_or_init(|| Self::load(mode));
-        let mut engine = loaded
-            .as_ref()
-            .map_err(|e| AppError::Ocr(e.clone()))?
+        // Engines are loaded lazily and only SUCCESSFUL loads are kept: the
+        // first scan can fail transiently (ONNX session creation under
+        // memory pressure, model files still being provisioned), and caching
+        // that failure in a OnceLock made every later scan return the same
+        // error for the rest of the process while availability still read
+        // true (so the UI never offered to reinstall the models).
+        let engine_handle = {
+            let slot = &ENGINES[Self::slot(mode)];
+            let mut cached = slot.lock().unwrap_or_else(|e| e.into_inner());
+            if cached.is_none() {
+                match Self::load(mode) {
+                    Ok(engine) => *cached = Some(Arc::new(engine)),
+                    Err(e) => return Err(AppError::Ocr(e)),
+                }
+            }
+            Arc::clone(cached.as_ref().expect("just populated"))
+        };
+        let mut engine = engine_handle
             .lock()
             .map_err(|_| AppError::Ocr("OCR 引擎内部错误（锁中毒）".into()))?;
 

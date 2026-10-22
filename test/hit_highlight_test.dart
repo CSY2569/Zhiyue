@@ -54,4 +54,32 @@ void main() {
     expect(hitRects(_page(), '不存在'), isEmpty);
     expect(hitRects(const [], '量子'), isEmpty);
   });
+
+  test('hitRects maps character offsets onto OCR line boxes', () {
+    // OCR pages have ONE box per recognized line, so the joined-text offset
+    // is not a box index. Using it directly clamped every hit onto the last
+    // line -- the marker landed on an unrelated line (often the footer).
+    const boxes = [
+      CharBox(char: '第一行开头', x: 0.0, y: 0.10, w: 0.5, h: 0.05),
+      CharBox(char: '中间这一行有目标词', x: 0.0, y: 0.30, w: 0.6, h: 0.05),
+      CharBox(char: '最后一行', x: 0.0, y: 0.50, w: 0.3, h: 0.05),
+    ];
+    final rects = hitRects(boxes, '目标词');
+    expect(rects, hasLength(1));
+    // The rect belongs to line 2, not the last box.
+    expect(rects.single.y, closeTo(0.30, 1e-9));
+    expect(rects.single.h, closeTo(0.05, 1e-9));
+  });
+
+  test('hitRects spans OCR lines when the match crosses a box boundary', () {
+    const boxes = [
+      CharBox(char: '结尾相接', x: 0.0, y: 0.10, w: 0.4, h: 0.05),
+      CharBox(char: '继续文本', x: 0.0, y: 0.30, w: 0.4, h: 0.05),
+    ];
+    // "接继" straddles the two boxes -> both lines highlighted.
+    final rects = hitRects(boxes, '接继');
+    expect(rects, hasLength(2));
+    expect(rects[0].y, closeTo(0.10, 1e-9));
+    expect(rects[1].y, closeTo(0.30, 1e-9));
+  });
 }

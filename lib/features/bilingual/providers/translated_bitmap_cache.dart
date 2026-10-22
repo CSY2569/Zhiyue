@@ -33,6 +33,10 @@ class TranslatedBitmapCache {
       LruCache(maxEntries: _maxEntries, onEvict: (_, image) => image.dispose());
   final Map<_CacheKey, Future<ui.Image?>> _pending = {};
 
+  /// Bumped by every clear; a render that started before the bump must not
+  /// write its (stale) result back into the cleared cache.
+  int _generation = 0;
+
   /// The translated pane shows ~1-3 pages at a time; 12 tiers-deep covers
   /// back-scroll without the original cache's ~180MB footprint.
   static const int _maxEntries = 12;
@@ -65,7 +69,8 @@ class TranslatedBitmapCache {
       return TranslatedPageImage(image: img, hasTranslation: img != null);
     }
 
-    final future = _render(key, bookId, page);
+    final generation = _generation;
+    final future = _render(key, bookId, page, generation);
     _pending[key] = future;
     try {
       final img = await future;
@@ -75,11 +80,16 @@ class TranslatedBitmapCache {
         error: img == null ? '译文页渲染失败' : null,
       );
     } finally {
-      _pending.remove(key);
+      if (identical(_pending[key], future)) _pending.remove(key);
     }
   }
 
-  Future<ui.Image?> _render(_CacheKey key, int bookId, int page) async {
+  Future<ui.Image?> _render(
+    _CacheKey key,
+    int bookId,
+    int page,
+    int generation,
+  ) async {
     try {
       final bmp = await _repo.renderTranslatedPage(
         bookId: bookId,
@@ -89,6 +99,12 @@ class TranslatedBitmapCache {
       if (bmp.error != null || bmp.rgba.isEmpty) return null;
       final image = await decodeRgbaImage(bmp.width, bmp.height, bmp.rgba);
       if (image == null) return null;
+      // The translation was replaced/deleted while rendering: the image is
+      // from the old artifact and belongs to no one.
+      if (generation != _generation) {
+        image.dispose();
+        return null;
+      }
       _cache.put(key, image);
       return image;
     } catch (_) {
@@ -97,12 +113,20 @@ class TranslatedBitmapCache {
   }
 
   /// Drop every cached page of [bookId] (translation replaced or deleted).
+  ///
+  /// Pending renders of that book are dropped too: keeping them would let a
+  /// request started before the revision bump finish and re-insert the OLD
+  /// artifact's page into the cache that was just cleared.
   void clearBook(int bookId) {
     _cache.removeWhere((key, _) => key.bookId == bookId);
+    _pending.removeWhere((key, _) => key.bookId == bookId);
+    _generation++;
   }
 
   void clearAll() {
     _cache.clear();
+    _pending.clear();
+    _generation++;
   }
 }
 

@@ -145,14 +145,20 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
   /// Build line layouts for OCR (line-level) boxes. Called after boxes arrive
   /// when [isLineLevelBoxes] is true. The page width in pixels is the layer's
   /// render width (so TextPainter lays out at display resolution).
+  ///
+  /// Layouts are built for EVERY box, keeping `layouts[i]` aligned with
+  /// `boxes[i]`: the selection helpers index both lists with the same line
+  /// number, so skipping short boxes (a lone page number / symbol recognised
+  /// as its own line) shifted every later layout onto the wrong line -- the
+  /// wrong text was selected, and a trailing short box made `layouts[i]`
+  /// throw RangeError mid-gesture.
   void _ensureLineLayouts(List<CharBox> boxes) {
     if (_lineLayouts != null) return; // already built
     if (!isLineLevelBoxes(boxes)) return; // native PDF: per-char, no layouts
     final render = context.findRenderObject() as RenderBox?;
     final pageWidthPx = render?.size.width ?? 800.0;
     _lineLayouts = [
-      for (final b in boxes)
-        if (b.char.length > 1) LineLayout(b, pageWidthPx),
+      for (final b in boxes) LineLayout(b, pageWidthPx),
     ];
   }
 

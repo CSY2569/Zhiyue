@@ -56,16 +56,50 @@ class HitHighlightLayer extends ConsumerWidget {
 /// Normalized rects of every occurrence of [query] in the page's box text
 /// (case-insensitive; each occurrence is one or more line rects via
 /// [selectionRects]).
+///
+/// The match offset is a CHARACTER offset in the joined text, which must be
+/// translated back to BOX indices before building rects: on OCR pages one
+/// box holds an entire recognized line, so using the offset directly clamped
+/// every hit onto the last line (the amber marker landed on an unrelated
+/// line, often the page footer).
 List<NormRect> hitRects(List<CharBox> boxes, String query) {
   final q = query.trim().toLowerCase();
   if (q.isEmpty || boxes.isEmpty) return const [];
-  final text = boxes.map((b) => b.char).join().toLowerCase();
+
+  final parts = [for (final b in boxes) b.char.toLowerCase()];
+  final starts = List<int>.filled(parts.length, 0);
+  var total = 0;
+  for (var i = 0; i < parts.length; i++) {
+    starts[i] = total;
+    total += parts[i].length;
+  }
+  final text = parts.join();
+
+  // Index of the box containing [offset] (last box whose start precedes it).
+  int boxAt(int offset) {
+    var lo = 0;
+    var hi = starts.length - 1;
+    var ans = 0;
+    while (lo <= hi) {
+      final mid = (lo + hi) >> 1;
+      if (starts[mid] <= offset) {
+        ans = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return ans;
+  }
+
   final out = <NormRect>[];
   var from = 0;
   while (true) {
     final idx = text.indexOf(q, from);
     if (idx < 0) break;
-    out.addAll(selectionRects(boxes, idx, idx + q.length - 1));
+    final loBox = boxAt(idx);
+    final hiBox = boxAt(idx + q.length - 1);
+    out.addAll(selectionRects(boxes, loBox, hiBox));
     from = idx + q.length;
   }
   return out;

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:rbwa/core/platform/platform.dart';
+import 'package:rbwa/features/annotation/models/selection.dart'
+    show SelectionSource;
 import 'package:rbwa/features/annotation/providers/annotation_provider.dart';
 import 'package:rbwa/features/annotation/providers/selection_provider.dart';
 import 'package:rbwa/features/annotation/widgets/highlight_layer.dart';
@@ -39,6 +41,14 @@ class _NoteComposerState extends ConsumerState<NoteComposer> {
           content: content.isEmpty ? null : content,
           rects: sel.lineRects,
           color: colorToHex(Theme.of(context).colorScheme.primary),
+          // Marks made on the 对照 view's translated pane must carry that
+          // pane: the highlight layer filters by it, and the rects are in
+          // translated-page coordinates. Omitting it stored the note against
+          // the ORIGINAL page, where it was invisible in the pane that
+          // created it and painted at the wrong position on the original.
+          pane: sel.source == SelectionSource.translated
+              ? AnnotationPane.translated
+              : AnnotationPane.original,
         );
     if (!mounted) return;
     // Drop the selection and the composer either way (FEATURES 4.4.1).

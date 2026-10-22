@@ -523,6 +523,12 @@ class AiNotifier extends Notifier<AiState> {
   void moveCard(Offset delta) =>
       state = state.copyWith(cardPos: state.cardPos + delta);
 
+  /// Absolute card position. Used by the drag handler to seed the card's real
+  /// on-screen origin before the first delta: a phone renders the card centred
+  /// while `cardPos` still holds the desktop default, so a relative-only
+  /// update would jump by the difference.
+  void setCardPosition(Offset pos) => state = state.copyWith(cardPos: pos);
+
   // ---------------------------------------------------------------------------
   // Side panel (FEATURES 6.5)
   // ---------------------------------------------------------------------------
@@ -561,11 +567,16 @@ class AiNotifier extends Notifier<AiState> {
     } catch (_) {}
     final remaining = state.threads.where((w) => w.id != threadId).toList();
     if (remaining.length == state.threads.length) return;
-    _session.cancel();
+    // Cancel the stream only when the deleted window OWNS it. Cancelling
+    // unconditionally killed an unrelated in-flight answer while
+    // `streamingThreadId` stayed set, leaving the card / panel stuck on
+    // "生成中…" with the input disabled and no way to clear it.
+    final deletingStreaming = state.streamingThreadId == threadId;
+    if (deletingStreaming) _session.cancel();
     state = state.copyWith(
       threads: remaining,
       clearActiveThread: state.activeThreadId == threadId,
-      clearStreaming: state.streamingThreadId == threadId,
+      clearStreaming: deletingStreaming,
       cardVisible: state.activeThreadId == threadId ? false : state.cardVisible,
       // Deleting the active window lands back on the window list.
       showingThreadList: state.activeThreadId == threadId,

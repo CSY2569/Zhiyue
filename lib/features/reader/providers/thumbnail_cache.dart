@@ -21,14 +21,21 @@ class ThumbnailCache extends Notifier<Map<int, ui.Image>> {
   // Pages currently being rendered (de-dup: one render per page).
   final _inflight = <int, Future<ui.Image?>>{};
 
+  /// Book the cached thumbnails belong to. A render that completes after a
+  /// book switch must not publish into the new book's map (same page key,
+  /// different document) -- the rail would show the previous book's page.
+  int? _bookId;
+
   @override
   Map<int, ui.Image> build() {
+    _bookId = ref.read(viewerProvider).book?.id;
+    _inflight.clear();
     // Switching books invalidates thumbnails of the previous book.
     ref.listen(viewerProvider.select((s) => s.book?.id), (prev, next) {
-      if (prev != next) {
-        _inflight.clear();
-        state = {};
-      }
+      if (prev == next) return;
+      _bookId = next;
+      _inflight.clear();
+      state = {};
     });
     return {};
   }
@@ -42,7 +49,11 @@ class ThumbnailCache extends Notifier<Map<int, ui.Image>> {
     if (inFlight != null) return inFlight;
     final future = _fetch(bookId, page);
     _inflight[page] = future;
-    future.whenComplete(() => _inflight.remove(page));
+    future.whenComplete(() {
+      // Only clear our own entry: a book switch clears the map, and a newer
+      // request for the same page may already have replaced it.
+      if (identical(_inflight[page], future)) _inflight.remove(page);
+    });
     return future;
   }
 
@@ -54,6 +65,10 @@ class ThumbnailCache extends Notifier<Map<int, ui.Image>> {
       final image =
           await decodeRgbaImage(result.width, result.height, result.rgba);
       if (image == null) return null;
+      // The book changed while rendering: hand the image to the caller but
+      // never cache it under the new book.
+      final current = _bookId ??= bookId;
+      if (current != bookId) return image;
       // Touch in the LRU (re-inserted at the tail).
       state = lruTouch(state, page, image, _maxEntries);
       return image;

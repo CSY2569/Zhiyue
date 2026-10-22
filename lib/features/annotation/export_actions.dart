@@ -67,6 +67,14 @@ Future<void> exportMergedImage(BuildContext context, WidgetRef ref) async {
   if (book == null) return;
   final page = state.currentPage - 1; // 0-indexed
   final repo = ref.read(readerRepositoryProvider);
+  // Snapshot the marks BEFORE the first await: the export button lives in
+  // the annotations sidebar, which can be closed (disposing this WidgetRef)
+  // while a full-resolution render + decode is in flight. Reading `ref` after
+  // that threw and aborted the export with no file and no message.
+  final marks = [
+    for (final m in ref.read(imageMarkProvider).valueOrNull ?? const [])
+      if (m.page == page) m,
+  ];
 
   // 1. Original-resolution page bitmap (7.1.8-style source, not the
   // on-screen zoom).
@@ -83,10 +91,6 @@ Future<void> exportMergedImage(BuildContext context, WidgetRef ref) async {
   }
 
   // 2. Load stamp images referenced by this page's marks.
-  final marks = [
-    for (final m in ref.read(imageMarkProvider).valueOrNull ?? const [])
-      if (m.page == page) m,
-  ];
   final stampImages = <String, ui.Image>{};
   for (final m in marks) {
     final file = m.stampFile;

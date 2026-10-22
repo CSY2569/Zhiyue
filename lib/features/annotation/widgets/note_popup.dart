@@ -22,7 +22,7 @@ class NotePopup extends ConsumerStatefulWidget {
 class _NotePopupState extends ConsumerState<NotePopup> {
   final _controller = TextEditingController();
   Offset? _dragPos;
-  bool _synced = false; // controller initialized from the current annotation
+  int? _syncedId; // annotation whose content is in the editor
 
   static const Size _size = Size(340, 300);
 
@@ -32,10 +32,14 @@ class _NotePopupState extends ConsumerState<NotePopup> {
     super.dispose();
   }
 
-  /// Load the annotation's content into the editor once per open.
+  /// Load the annotation's content into the editor whenever the popup starts
+  /// showing a DIFFERENT note. Tracking the id (not a one-shot bool) matters:
+  /// tapping another mark while the popup is open only swaps `noteTargetId`,
+  /// so the same element is reused -- a latched flag left the previous note's
+  /// text in the editor and 保存 then overwrote the new mark's note with it.
   void _syncContent(TextAnnotation? ann) {
-    if (_synced || ann == null) return;
-    _synced = true;
+    if (ann == null || ann.id == _syncedId) return;
+    _syncedId = ann.id;
     _controller.text = ann.content ?? '';
   }
 

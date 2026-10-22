@@ -402,14 +402,29 @@ class _ImageMarkLayerState extends ConsumerState<ImageMarkLayer> {
         final startPos = _markStartPos;
         if (start == null || startPos == null) return;
         final delta = p - start;
-        if (_scaleCorner != null) {
+        final corner = _scaleCorner;
+        if (corner != null) {
           final sw = _scaleStartW;
           final sh = _scaleStartH;
           if (sw == null || sh == null) return;
-          final newW = (sw + 2 * delta.dx).clamp(0.01, 2.0);
-          final newH = (sh + 2 * delta.dy).clamp(0.01, 2.0);
-          setState(
-              () => _applyDrag(_selectedId!, startPos, w: newW, h: newH));
+          // Resize around the OPPOSITE corner: dragging the top-left handle
+          // right/down must shrink the mark, and the grabbed corner must
+          // follow the pointer. Growing symmetrically around the centre
+          // (the old `sw + 2*dx`) inverted both top/left handles -- the mark
+          // shrank and the corner ran away from the cursor.
+          final sx = corner == _Corner.topLeft || corner == _Corner.bottomLeft
+              ? -1.0
+              : 1.0;
+          final sy = corner == _Corner.topLeft || corner == _Corner.topRight
+              ? -1.0
+              : 1.0;
+          final newW = (sw + sx * delta.dx).clamp(0.01, 2.0);
+          final newH = (sh + sy * delta.dy).clamp(0.01, 2.0);
+          // The centre moves by half the size change, keeping the anchored
+          // corner exactly where it was (also after the clamp above).
+          final center = startPos +
+              Offset((newW - sw) / 2 * sx, (newH - sh) / 2 * sy);
+          setState(() => _applyDrag(_selectedId!, center, w: newW, h: newH));
         } else {
           setState(() => _applyDrag(_selectedId!, startPos + delta));
         }

@@ -34,6 +34,7 @@ class SearchIndexStatusNotifier extends Notifier<Map<int, String>> {
   Timer? _poll;
   bool _refreshing = false;
   bool _refreshQueued = false;
+  bool _polling = false;
   bool _disposed = false;
 
   @override
@@ -94,7 +95,10 @@ class SearchIndexStatusNotifier extends Notifier<Map<int, String>> {
       final toQuery = <int>[];
       for (final id in ids) {
         final prev = known[id];
-        if (prev != null && prev != 'missing') {
+        // "failed" is re-queried too: the Rust side retries such a book once
+        // per process and clears the marker, so the badge must be able to
+        // go failed -> building -> ready without a restart.
+        if (prev != null && prev != 'missing' && prev != 'failed') {
           statuses[id] = prev;
         } else {
           toQuery.add(id);
@@ -109,8 +113,9 @@ class SearchIndexStatusNotifier extends Notifier<Map<int, String>> {
       }
       // Fire-and-forget: the Rust side spawns one build thread per book and
       // dedups re-entry; awaiting them would serialize independent builds.
+      // A "failed" book is retried at most once per process, inside Rust.
       for (final entry in statuses.entries) {
-        if (entry.value == 'missing') {
+        if (entry.value == 'missing' || entry.value == 'failed') {
           repo.ensureBookIndex(entry.key).ignore();
         }
       }
@@ -131,14 +136,32 @@ class SearchIndexStatusNotifier extends Notifier<Map<int, String>> {
   void _startPoll() {
     if (_disposed || _poll != null) return;
     _poll = Timer.periodic(const Duration(seconds: 1), (_) async {
+      // Re-entrancy guard: a poll slower than 1 s (large library, DB mutex
+      // contention) must not stack a second batch on top of the first --
+      // overlapping batches also let older results overwrite newer ones.
+      if (_polling) return;
+      _polling = true;
       try {
         final repo = ref.read(searchRepositoryProvider);
-        final ids = state.keys.toList();
+        // Only building books change; re-querying every ready book each
+        // second was pure FFI/DB load during a long index build.
+        final ids = [
+          for (final e in state.entries)
+            if (e.value == 'building') e.key,
+        ];
+        if (ids.isEmpty) {
+          _poll?.cancel();
+          _poll = null;
+          return;
+        }
         final queried = await Future.wait([
           for (final id in ids) repo.indexStatus(id),
         ]);
         if (_disposed) return;
-        final next = {for (var i = 0; i < ids.length; i++) ids[i]: queried[i]};
+        final next = Map<int, String>.from(state);
+        for (var i = 0; i < ids.length; i++) {
+          next[ids[i]] = queried[i];
+        }
         if (!mapEquals(state, next)) state = next;
         if (!next.containsValue('building')) {
           _poll?.cancel();
@@ -147,6 +170,8 @@ class SearchIndexStatusNotifier extends Notifier<Map<int, String>> {
       } catch (_) {
         _poll?.cancel();
         _poll = null;
+      } finally {
+        _polling = false;
       }
     });
   }

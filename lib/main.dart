@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'package:rbwa/app.dart';
@@ -179,6 +180,37 @@ class _BootstrapState extends State<_Bootstrap> {
 
   @override
   Widget build(BuildContext context) {
+    // The Rust core could not be initialized (corrupt database, unwritable
+    // data dir, failed migration). Every DB call would panic inside the
+    // dynamic library -- and release builds abort the whole process on a
+    // panic -- so the app must stop here with a recoverable explanation
+    // instead of entering the library and crashing on the first tap.
+    if (!widget.coreInit) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          body: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(LucideIcons.circleAlert, size: 48),
+                  const SizedBox(height: 16),
+                  const Text('数据初始化失败', style: TextStyle(fontSize: 18)),
+                  const SizedBox(height: 12),
+                  const Text(
+                    '无法打开本地数据库。请检查磁盘空间与数据目录权限后重启应用；\n'
+                    '若问题持续，可备份后删除 ~/.local/share/RBWA/rbwa.db 再启动。',
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     if (_ready) return const RbwaApp();
     return MaterialApp(
       debugShowCheckedModeBanner: false,
