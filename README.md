@@ -35,6 +35,18 @@
 
 详见 [`docs/FEATURES.md`](docs/FEATURES.md)（需求）、[`docs/TECH_ROADMAP.md`](docs/TECH_ROADMAP.md)（技术路线）与 [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md)（实施状态）。
 
+## 分支策略
+
+按目标平台分为两条长期分支（详见 [`docs/BRANCHING.md`](docs/BRANCHING.md)）：
+
+| 分支 | 职责 | 构建产物 |
+|---|---|---|
+| `main` | Linux / Windows 桌面版（主干） | deb / rpm / AppImage |
+| `android` | Android arm64 版 | APK |
+
+两条分支共享 `lib/` 与 `rust/`；平台无关的修复先落 `main`，再合并到
+`android`。Android 专属改动只留在 `android` 分支。
+
 ## 目录结构
 
 ```
