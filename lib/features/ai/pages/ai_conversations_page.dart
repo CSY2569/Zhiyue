@@ -36,7 +36,7 @@ class _AiConversationsPageState extends ConsumerState<AiConversationsPage> {
     // Phones: a 280dp list plus a conversation pane leaves neither usable.
     // Show the list, and open a conversation as its own screen.
     final compact =
-        PlatformHost.current.useCompactLayout(MediaQuery.sizeOf(context).width);
+        PlatformHost.current.compactUi(MediaQuery.sizeOf(context).width);
     if (compact) {
       if (selected == null) {
         return _threadList(threads, compact: true);

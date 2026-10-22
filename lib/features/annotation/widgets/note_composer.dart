@@ -70,7 +70,7 @@ class _NoteComposerState extends ConsumerState<NoteComposer> {
     // Touch: dock at the bottom so the on-screen keyboard pushes the composer
     // up instead of hiding it (the floating position is clipped by the
     // viewport once the keyboard opens).
-    final mobile = PlatformHost.current.useCompactLayout(screen.width);
+    final mobile = PlatformHost.current.compactUi(screen.width);
 
     if (mobile) {
       return Positioned(

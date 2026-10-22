@@ -63,7 +63,7 @@ class ResultCard extends ConsumerWidget {
     // being docked as a sheet. Reading apps put the answer next to the text
     // precisely so the page stays visible underneath.
     final compact =
-        PlatformHost.current.useCompactLayout(screen.width);
+        PlatformHost.current.compactUi(screen.width);
     final cardSize = _effectiveSize(persisted, screen, compact);
     // Bubbles reflow with the card width (was a hardcoded 380).
     final bubbleMax = (cardSize.width - 24).clamp(160.0, 1000.0);
@@ -135,7 +135,7 @@ class ResultCard extends ConsumerWidget {
   void _beginDrag(BuildContext context, WidgetRef ref) {
     final screen = MediaQuery.sizeOf(context);
     final persisted = ref.read(panelLayoutProvider).cardSize;
-    final compact = PlatformHost.current.useCompactLayout(screen.width);
+    final compact = PlatformHost.current.compactUi(screen.width);
     final cardSize = _effectiveSize(persisted, screen, compact);
     final keyboard = MediaQuery.viewInsetsOf(context).bottom;
     final maxLeft = (screen.width - cardSize.width - 12).clamp(12.0, double.infinity);

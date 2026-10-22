@@ -61,15 +61,22 @@ abstract class PlatformHost {
   /// Touch-first input: haptics, long-press selection, long-press drag.
   bool get touch => false;
 
-  /// Whether the UI should use its compact form at this width: modal panels
-  /// instead of side columns, bars instead of a toolbar.
+  /// Phone-shaped layout: a touch device on a narrow screen.
   ///
-  /// True on a touch device of ANY width (a landscape tablet keeps the phone
-  /// layout, matching the tested behaviour) and on a narrow window of any
-  /// platform. The desktop window minimum is 960dp, so this stays false on
-  /// desktop in practice.
-  bool useCompactLayout(double width) =>
-      touch || isCompactWidth(width);
+  /// Used where the phone layout differs structurally from the tablet/desktop
+  /// one: drawer instead of a nav rail, two reader bars instead of one
+  /// toolbar, one bilingual pane at a time. A tablet at 776dp is touch but
+  /// wide, so it keeps the side-column layout.
+  bool phoneLayout(double width) => touch && isCompactWidth(width);
+
+  /// Compact form for self-contained controls (floating toolbar, note
+  /// composer, result card, conversation list).
+  ///
+  /// These widgets stack vertically whenever either condition holds: any
+  /// touch device (a landscape tablet still must not overflow) or any narrow
+  /// window. This matches the pre-split behaviour of those widgets, which
+  /// used `isMobile || isCompactWidth`.
+  bool compactUi(double width) => touch || isCompactWidth(width);
 
   /// Whether a first-run model install screen is required.
   bool get needsModelInstall => false;

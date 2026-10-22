@@ -44,7 +44,7 @@ class MarkToolBar extends ConsumerWidget {
     // Phones: the single row is ~500dp wide and overflows a 360dp screen, so
     // the tools wrap onto a second line (still inside the floating bar).
     final compact =
-        PlatformHost.current.useCompactLayout(MediaQuery.sizeOf(context).width);
+        PlatformHost.current.compactUi(MediaQuery.sizeOf(context).width);
 
     final row = <Widget>[
             ToolbarIconButton(
