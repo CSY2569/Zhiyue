@@ -1,4 +1,4 @@
-package io.github.csy2569.zhiyue
+package work.csywxk.icefish_zhiyue
 
 import android.app.Activity
 import android.app.ActivityManager

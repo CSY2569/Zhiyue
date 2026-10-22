@@ -15,7 +15,7 @@ val rbwaRustDir: File = rootProject.projectDir.parentFile.resolve("rust")
 val rbwaJniLibsDir: File = projectDir.resolve("src/main/jniLibs")
 
 android {
-    namespace = "io.github.csy2569.zhiyue"
+    namespace = "work.csywxk.icefish_zhiyue"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -25,7 +25,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "io.github.csy2569.zhiyue"
+        applicationId = "work.csywxk.icefish_zhiyue"
         // Android 8.0 -- the floor for modern SAF and 16KB-page capable devices.
         minSdk = 26
         targetSdk = 35
