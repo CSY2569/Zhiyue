@@ -42,7 +42,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    final mobile = PlatformHost.current.useCompactLayout(width);
+    final mobile = PlatformHost.current.phoneLayout(width);
     final allBooks = ref.watch(libraryBooksProvider).valueOrNull;
     final shownBooks = ref.watch(filteredBooksProvider);
     final railWidth = Golden.railWidthFor(width);

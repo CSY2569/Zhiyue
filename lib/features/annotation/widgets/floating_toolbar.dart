@@ -74,7 +74,7 @@ class _FloatingToolbarState extends ConsumerState<FloatingToolbar> {
     // "Compact" is about how much width the bar has, not just the platform:
     // a half-width tablet split still cannot fit eight labelled buttons.
     final width = MediaQuery.sizeOf(context).width;
-    final compact = PlatformHost.current.useCompactLayout(width);
+    final compact = PlatformHost.current.compactUi(width);
     final actions = _actions(context, sel, vertical: compact);
     final theme = Theme.of(context);
 
@@ -285,7 +285,7 @@ class _FloatingToolbarState extends ConsumerState<FloatingToolbar> {
   /// and rises above the keyboard. Desktop: just below the floating toolbar.
   void _openComposer(BuildContext context) {
     final screen = MediaQuery.sizeOf(context);
-    final mobile = PlatformHost.current.useCompactLayout(screen.width);
+    final mobile = PlatformHost.current.compactUi(screen.width);
     if (mobile) {
       ref
           .read(selectionProvider.notifier)
