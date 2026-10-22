@@ -9,7 +9,7 @@ import 'package:rbwa/core/widgets/empty_state.dart';
 import 'package:rbwa/core/widgets/loading_state.dart';
 import 'package:rbwa/core/widgets/panel_resize_handle.dart';
 import 'package:rbwa/core/navigation.dart';
-import 'package:rbwa/core/platform/platform.dart';
+import 'package:rbwa/core/layout_breakpoints.dart';
 import 'package:rbwa/platform/platform_host.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
 import 'package:rbwa/features/ai/widgets/ai_panel_side.dart';
@@ -79,7 +79,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   /// chrome.
   bool _compactPhone(BuildContext context) =>
       PlatformHost.current.touch &&
-      PlatformCapabilities.isCompactWidth(MediaQuery.sizeOf(context).width);
+      isCompactWidth(MediaQuery.sizeOf(context).width);
 
   /// Two pages side by side do not fit a phone (each would be ~170dp wide).
   /// Progress restored from a tablet/desktop session can carry a double-page
@@ -364,7 +364,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                       builder: (context, constraints) {
                         // Phones: panels are full-surface overlays, so the
                         // reading area never gets squeezed to a sliver.
-                        if (PlatformCapabilities.isCompactWidth(
+                        if (isCompactWidth(
                           constraints.maxWidth,
                         )) {
                           return Stack(

@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:rbwa/core/platform/platform.dart';
+import 'package:rbwa/core/layout_breakpoints.dart';
 import 'package:rbwa/features/bilingual/widgets/translated_pane.dart';
 import 'package:rbwa/features/reader/widgets/reader_toolbar.dart';
 import 'package:rbwa/platform/desktop/desktop_host.dart';
@@ -46,7 +46,7 @@ class ReadingGestures {
 ///
 /// Layout decisions that only depend on the available width (a narrow window
 /// on desktop behaves like a phone) are NOT platform differences and stay in
-/// the shared widgets as `PlatformCapabilities.isCompactWidth`.
+/// the shared widgets as `isCompactWidth`.
 abstract class PlatformHost {
   const PlatformHost();
 
@@ -69,7 +69,7 @@ abstract class PlatformHost {
   /// platform. The desktop window minimum is 960dp, so this stays false on
   /// desktop in practice.
   bool useCompactLayout(double width) =>
-      touch || PlatformCapabilities.isCompactWidth(width);
+      touch || isCompactWidth(width);
 
   /// Whether a first-run model install screen is required.
   bool get needsModelInstall => false;

@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- Matches the artwork's own background plate (#FDFDFF). -->
-    <color name="ic_launcher_background">#FDFDFF</color>
-</resources>

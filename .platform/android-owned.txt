@@ -1,0 +1,36 @@
+# Paths owned by the `android` branch.
+#
+# `main` does not carry these; `scripts/sync-from-main.sh` restores them from
+# the pre-merge tip after a merge so `git merge main` cannot delete them.
+# One path per line, directories allowed. Blank lines and '#' are ignored.
+
+# --- Android build surface -------------------------------------------------
+android/
+scripts/build_android.sh
+scripts/fetch_pdfium_android.sh
+scripts/stage_android_models.sh
+
+# --- Android platform implementation --------------------------------------
+lib/platform/android/
+lib/platform/current.dart
+
+# --- Android-only UI ------------------------------------------------------
+lib/features/reader/widgets/phone_reader_chrome.dart
+lib/features/bilingual/widgets/translated_text_column.dart
+lib/features/bilingual/providers/page_text_translation_provider.dart
+lib/data/repositories/text_translation_repository.dart
+
+# --- Android-only platform plumbing ---------------------------------------
+lib/core/platform/refresh_rate.dart
+lib/core/platform/platform_bridge.dart
+
+# --- Android-only tests ---------------------------------------------------
+test/phone_layout_test.dart
+test/reader_tap_test.dart
+test/text_translation_test.dart
+test/refresh_rate_test.dart
+
+# --- Android docs ---------------------------------------------------------
+docs/ANDROID_V1_PLAN.md
+docs/ANDROID_PACKAGES.md
+docs/ANDROID_TOUCH_OPTIMIZATION_PLAN.md
