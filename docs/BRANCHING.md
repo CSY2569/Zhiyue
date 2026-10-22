@@ -21,25 +21,46 @@
 
 ## 同步规则
 
-1. **共享修复先落 `main`**，然后在 `android` 上合并：
+1. **共享修复先落 `main`**，然后在 `android` 上用同步脚本合并：
    ```bash
    git checkout android
-   git merge main
+   bash scripts/sync-from-main.sh main
    ```
-   使用 `merge`，不要对已推送的历史做 `rebase`。
+   **不要直接 `git merge main`**：`main` 上不存在 Android 专属文件，git 会把
+   `android` 未改动过的这些路径**静默删除**，分支随即失去构建 APK 的能力。
+   `sync-from-main.sh` 合并后按 `.platform/android-owned.txt` 从合并前的提交
+   恢复这些路径（新增 Android 文件时记得同步更新该清单）。
 2. **Android 专属改动不回灌 `main`**，除非它已被抽象成平台无关实现。
+3. **不要 rebase 已推送的历史**。
 3. 发版前，`android` 必须先合并一次最新的 `main`，确保共享层一致。
 4. 两端的版本号独立演进：桌面版与 Android 版可以有不同的 `version`，
    tag 建议加平台后缀（如 `v1.0.0-linux`、`v1.0.0-android`），避免同名 tag 冲突。
 
 ## 平台判断写在哪里
 
-运行时差异统一通过 `lib/core/platform/platform.dart` 的 `PlatformCapabilities`
-表达（是否移动端、对照阅读走 RetainPDF 还是文本级翻译），不要在业务代码里
-直接读 `Platform.isAndroid` 之类的判断。Rust 侧使用 `cfg!(target_os = "android")`。
+所有平台差异都走 `lib/platform/platform_host.dart` 的 `PlatformHost`：
 
-## 当前状态说明
+- `PlatformHost.current.touch`：是否触摸优先（触觉、长按选择、长按拖拽）；
+- `useCompactLayout(width)`：是否用紧凑布局（触摸设备任意宽度，或窄窗口）；
+- `translatedPane(bookId)`：对照阅读的右侧面板（RetainPDF PDF / 文本栏）；
+- `readerBars(...)`：阅读器 chrome（桌面单行工具条 / 手机双栏）；
+- `wrapReadingSurface(...)`：双指缩放与双击；
+- `prepareWindow` / `initCore` / `ensureModels` / `attachLifecycle`：启动链路。
 
-拆分时 `main` 已包含完整的 Android 实现（`android/` 工程与移动布局），
-这条快照保留可构建性，但**后续 Android 开发只在 `android` 分支进行**；
-`main` 上的 Android 代码不再更新，也不作为发布依据。
+不要在新代码里写 `Platform.isAndroid` 判断；`isCompactWidth(width)`
+（`lib/core/layout_breakpoints.dart`）是纯尺寸事实，可以直接用。
+Rust 侧继续使用 `cfg!(target_os = "android")`。
+
+`test/platform_boundary_test.dart` 会拦截越界引用。
+
+## 当前状态
+
+拆分已完成：
+
+- `main` 不含 `android/`、Android Kotlin 桥、移动端 widget/provider 与 Android
+  测试；`flutter build linux --release` 可用，`flutter build apk` 会失败（预期）。
+- `android` 在共享代码之上保留全部 Android 实现，`flutter build apk` 可用。
+- 两条分支唯一的差异文件是 `lib/platform/current.dart`（选择平台 host）；
+  其余共享文件逐字节相同。
+- 每次改完 `api.rs` 都要在两条分支各自执行
+  `flutter_rust_bridge_codegen generate` 并一起提交，否则生成的绑定会与实现不符。
