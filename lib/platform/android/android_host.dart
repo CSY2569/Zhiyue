@@ -31,7 +31,10 @@ class AndroidPlatformHost extends PlatformHost {
 
   @override
   Future<void> prepareWindow() async {
-    // Android has no window manager; the system draws the chrome.
+    // Android has no window manager; the system draws the chrome. This is
+    // also where the channel bridge arms itself: `initCore()` reads
+    // `filesDir` through it, and every method is a no-op until `init` ran.
+    PlatformBridge.init();
   }
 
   @override
