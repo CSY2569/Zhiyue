@@ -98,6 +98,15 @@ app.*.map.json
 .vscode/
 .fvm/
 
+# ---------------------------------------------------------------------------
+# Screenshots are NEVER committed.
+#
+# Product screenshots and captured UI evidence stay local. Only real app
+# assets (assets/, packaging/icon/, launcher icons) belong in the repo.
+# ---------------------------------------------------------------------------
+/screenshot/
+/screenshots/
+
 # Local env files
 .env
 .env.local

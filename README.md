@@ -98,6 +98,15 @@ ZhiYue/
 └── pubspec.yaml
 ```
 
+## 仓库约定
+
+- **截图永远不提交。** `screenshot/` 与 `screenshots/` 已加入 `.gitignore`，
+  本地保留即可（UI 截图、实机验证图、反馈对照图都不进版本库）。仓库里只保留
+  真正的应用资源：`assets/ZhiYue.png`、`packaging/icon/zhiyue.png`、
+  `ic_launcher.png` 以及 `android/` 下的启动图标。
+- 提交前跑 `flutter analyze` 与 `flutter test`，两者都应为零问题。
+- `lib/src/rust/`、`rust/src/frb_generated*.rs` 由 FRB codegen 生成，勿手改。
+
 ## 快速开始
 
 ### 1. 安装工具链
