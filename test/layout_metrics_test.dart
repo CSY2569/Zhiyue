@@ -33,6 +33,39 @@ void main() {
   });
 
   group('grid solving', () {
+    /// Width available to the shelf for a given window width: the floating
+    /// shell reserves 8dp outer padding + an 8dp gap + the rail, and the grid
+    /// pads 21dp on each side. `compact` windows drop the rail.
+    double shelfWidth(double window, {bool compact = false}) {
+      final rail = compact ? 0.0 : Golden.railWidthFor(window);
+      return window - (compact ? 0 : 16) - rail - (compact ? 0 : 8) - Golden.s21 * 2;
+    }
+
+    test('landscape tablet shows five books per row', () {
+      // Xiaomi Pad 6: 2136x3200 @ 440dpi -> 1163x776dp in landscape. This is
+      // the case that used to show four oversized books.
+      final grid = Golden.gridFor(shelfWidth(1163));
+      expect(grid.columns, 5);
+      // Cards stay a comfortable size, not squashed.
+      expect(grid.cardWidth, greaterThanOrEqualTo(150));
+    });
+
+    test('portrait tablet stays at three columns', () {
+      expect(Golden.gridFor(shelfWidth(776)).columns, 3);
+    });
+
+    test('a 360dp phone keeps two columns', () {
+      // 318dp of shelf: two 148dp cards. Rejecting sub-152dp cards used to
+      // collapse this to ONE 318dp card.
+      final grid = Golden.gridFor(shelfWidth(360, compact: true));
+      expect(grid.columns, 2);
+      expect(grid.cardWidth, greaterThan(140));
+    });
+
+    test('desktop keeps five columns at 1280dp', () {
+      expect(Golden.gridFor(shelfWidth(1280)).columns, 5);
+    });
+
     test('a phone gets 1-2 columns near the target width', () {
       final phone = Golden.gridFor(360 - 13 * 2);
       expect(phone.columns, inInclusiveRange(1, 2));

@@ -107,15 +107,14 @@ void main() {
       expect(button.height, greaterThanOrEqualTo(48));
     });
 
-    testWidgets('selection toolbar docks at the bottom and does not throw',
+    testWidgets('selection toolbar floats next to the selection on a phone',
         (tester) async {
       _usePhoneSurface(tester);
       late ProviderContainer container;
       await tester.pumpWidget(ProviderScope(
         overrides: [
           aiConfigProvider.overrideWith(() => _FixedAiConfig(testAiConfig())),
-          textTranslationRepositoryProvider
-              .overrideWithValue(_NoopTextRepo()),
+          textTranslationRepositoryProvider.overrideWithValue(_NoopTextRepo()),
         ],
         child: Builder(
           builder: (context) {
@@ -123,9 +122,7 @@ void main() {
             return MaterialApp(
               theme: AppTheme.light(),
               home: const Scaffold(
-                body: Stack(
-                  children: [FloatingToolbar()],
-                ),
+                body: Stack(children: [FloatingToolbar()]),
               ),
             );
           },
@@ -142,13 +139,17 @@ void main() {
       if (tester.takeException() case final e?) {
         fail('selection toolbar threw on a phone: $e');
       }
-      // All eight actions are present in the docked 4×2 grid.
+      // All eight actions are present (the phone grid is 4x2).
       for (final label in ['翻译', '解释', '搜索', '复制', '高亮', '下划线', '删除线', '笔记']) {
         expect(find.text(label), findsOneWidget);
       }
-      // Docked at the bottom: the bar's top edge sits in the lower half.
-      final bar = tester.getRect(find.text('翻译'));
-      expect(bar.center.dy, greaterThan(390));
+      // It FLOATS: it must not span the full phone width nor touch the bottom
+      // edge (that was the old docked bar).
+      final bar = tester.getRect(
+        find.byKey(const Key('selection-toolbar-surface')),
+      );
+      expect(bar.width, lessThan(360));
+      expect(bar.height, lessThan(200));
     });
 
     testWidgets('tablet-sized library grid lays out without overflow',

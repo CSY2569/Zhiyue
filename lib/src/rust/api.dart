@@ -13,7 +13,7 @@ import 'ocr.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'pdf/types.dart';
 
-// These functions are ignored because they are not marked as `pub`: `ai_client`, `builtin_search_stream`, `compose_system`, `current_bitmap`, `current_boxes`, `current_page_has_text`, `current_thumbnail`, `drain_stream`, `ensure_api_key`, `err`, `history_with_system`, `import_book_inner`, `index_ocr_result`, `index_state`, `init_result`, `ok`, `open_error`, `page_render_result`, `rebuild_cover_file`, `resolve_ai_image_path`, `save_ai_image`, `save_cover_thumbnail`, `save_rgba_as_png`, `search_system_prompt`, `system_message`, `system_prompt_for`, `try_init_at`, `try_init`, `wrap_input`, `wrap_untrusted_input`
+// These functions are ignored because they are not marked as `pub`: `ai_client`, `builtin_search_stream`, `compose_system`, `current_bitmap`, `current_boxes`, `current_page_has_text`, `current_thumbnail`, `drain_stream`, `ensure_api_key`, `err`, `hash_file`, `history_with_system`, `import_book_inner`, `index_ocr_result`, `index_state`, `init_result`, `ok`, `open_error`, `page_render_result`, `rebuild_cover_file`, `resolve_ai_image_path`, `save_ai_image`, `save_cover_thumbnail`, `save_rgba_as_png`, `search_system_prompt`, `system_message`, `system_prompt_for`, `try_init_at`, `try_init`, `wrap_input`, `wrap_untrusted_input`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ActionPrompt`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`
 
@@ -91,6 +91,38 @@ Future<Book?> getBook({required PlatformInt64 id}) =>
 /// Called by the library screen after loading, so a lost cover heals without
 /// the user having to open each book (and without any user-visible action).
 Future<int> repairCovers() => RustLib.instance.api.crateApiRepairCovers();
+
+/// Removes duplicate library rows that share a content hash.
+///
+/// Builds released before schema v11 de-duplicated by path only, so a library
+/// upgraded from them can already contain the same document twice (the
+/// printed shelf shows two identical covers). Backfilling the hashes makes the
+/// duplicates detectable; this pass collapses them.
+///
+/// For each group the KEEPER is, in order of preference:
+///
+/// 1. a row with saved reading progress (the user has actually read it),
+/// 2. the most recently opened row,
+/// 3. the oldest row (lowest id, i.e. the original import).
+///
+/// Its favourite flag / category win; a missing category is filled from a
+/// duplicate. The rest are deleted through the normal path so their files,
+/// covers, annotations, OCR rows and translation artifacts go with them.
+///
+/// Returns how many duplicate rows were removed.
+Future<int> dedupeBooksByContentHash() =>
+    RustLib.instance.api.crateApiDedupeBooksByContentHash();
+
+/// Backfills `content_hash` for books imported before schema v11.
+///
+/// Without this, a v10 library has NULL hashes and the first re-import of an
+/// existing book would slip past the content check (path de-dup still catches
+/// the common case, but not the cache-copy one).
+///
+/// Runs once per launch, only over rows whose hash is missing. Calls that
+/// fail (missing/corrupt file) leave the hash NULL and are retried next time.
+Future<int> backfillContentHashes() =>
+    RustLib.instance.api.crateApiBackfillContentHashes();
 
 /// Import a single file into the library (FEATURES 2.1).
 ///
@@ -505,10 +537,8 @@ Future<SearchResult> searchBooks({
 }) => RustLib.instance.api.crateApiSearchBooks(query: query, limit: limit);
 
 /// Ensure [book_id]'s pages are indexed (3.5.1 pre-build): triggers a
-/// background build when the index is missing (builds run on an independent
-/// pdfium document, so they never disturb the reader). Books whose build
-/// failed (unreadable file) are not retried until re-imported. Returns
-/// nothing -- poll [search_index_status] for progress.
+/// background build when the index is missing, and retries a previously
+/// failed build once per process (see [INDEX_RETRIED]).
 Future<void> ensureBookIndex({required PlatformInt64 bookId}) =>
     RustLib.instance.api.crateApiEnsureBookIndex(bookId: bookId);
 

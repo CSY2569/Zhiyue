@@ -102,6 +102,23 @@ fn try_init_at(path: &std::path::Path) -> AppResult<std::path::PathBuf> {
     if let Err(e) = crate::translate::enforce_cache_limit() {
         tracing::warn!(?e, "translation cache eviction failed");
     }
+
+    // Schema v11: books imported by older builds have no content hash, so the
+    // duplicate-import check would miss them until their next import attempt.
+    let filled = backfill_content_hashes();
+    if filled > 0 {
+        tracing::info!(filled, "content hashes ready for import de-duplication");
+    }
+    // Collapse duplicates that older path-only de-dup allowed in, then make
+    // the constraint structural so it cannot recur.
+    let removed = dedupe_books_by_content_hash();
+    if removed > 0 {
+        tracing::info!(removed, "collapsed duplicate books");
+    }
+    {
+        let conn = db::db();
+        let _ = crate::db::schema::ensure_book_hash_unique_index(&conn);
+    }
     Ok(path)
 }
 
@@ -277,6 +294,178 @@ pub fn repair_covers() -> i32 {
     repaired
 }
 
+/// SHA-256 of a file's bytes, streamed in 64KiB chunks.
+///
+/// Used as the import de-duplication key (schema v11). Streamed so importing a
+/// large PDF never loads it into memory.
+fn hash_file(path: &Path) -> AppResult<String> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+
+    let mut file = std::fs::File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        let n = file.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+/// Removes duplicate library rows that share a content hash.
+///
+/// Builds released before schema v11 de-duplicated by path only, so a library
+/// upgraded from them can already contain the same document twice (the
+/// printed shelf shows two identical covers). Backfilling the hashes makes the
+/// duplicates detectable; this pass collapses them.
+///
+/// For each group the KEEPER is, in order of preference:
+///
+/// 1. a row with saved reading progress (the user has actually read it),
+/// 2. the most recently opened row,
+/// 3. the oldest row (lowest id, i.e. the original import).
+///
+/// Its favourite flag / category win; a missing category is filled from a
+/// duplicate. The rest are deleted through the normal path so their files,
+/// covers, annotations, OCR rows and translation artifacts go with them.
+///
+/// Returns how many duplicate rows were removed.
+pub fn dedupe_books_by_content_hash() -> i32 {
+    let groups: Vec<(String, Vec<i64>)> = {
+        let conn = db::db();
+        let built = conn
+            .prepare(
+                "SELECT content_hash, GROUP_CONCAT(id) FROM books \
+                 WHERE content_hash IS NOT NULL AND content_hash != '' \
+                 GROUP BY content_hash HAVING COUNT(*) > 1",
+            )
+            .and_then(|mut stmt| {
+                let iter = stmt.query_map([], |row| {
+                    let hash: String = row.get(0)?;
+                    let ids: String = row.get(1)?;
+                    Ok((hash, ids))
+                })?;
+                Ok(iter
+                    .flatten()
+                    .map(|(hash, ids)| {
+                        let mut list: Vec<i64> = ids
+                            .split(',')
+                            .filter_map(|s| s.trim().parse().ok())
+                            .collect();
+                        list.sort_unstable();
+                        (hash, list)
+                    })
+                    .collect::<Vec<_>>())
+            });
+        built.unwrap_or_default()
+    };
+
+    let mut removed = 0;
+    for (_hash, ids) in groups {
+        if ids.len() < 2 {
+            continue;
+        }
+
+        // Gather the facts needed to choose a keeper and merge its metadata.
+        let mut has_progress: Vec<(i64, bool)> = Vec::new();
+        let mut infos: Vec<(i64, bool, Option<i64>, Option<String>)> = Vec::new();
+        {
+            let conn = db::db();
+            for id in &ids {
+                let progress = conn
+                    .query_row(
+                        "SELECT 1 FROM reading_progress WHERE book_id = ?1",
+                        rusqlite::params![id],
+                        |r| r.get::<_, i64>(0),
+                    )
+                    .is_ok();
+                has_progress.push((*id, progress));
+                if let Ok(Some(b)) = book_repo::get(&conn, *id) {
+                    infos.push((*id, b.favorite, b.category_id, b.last_opened_at));
+                }
+            }
+        }
+
+        // Keeper: progress > most recently opened > oldest.
+        let keeper = has_progress
+            .iter()
+            .find(|(_, p)| *p)
+            .map(|(id, _)| *id)
+            .or_else(|| {
+                infos
+                    .iter()
+                    .filter(|(_, _, _, opened)| opened.is_some())
+                    .max_by(|a, b| a.3.cmp(&b.3))
+                    .map(|(id, _, _, _)| *id)
+            })
+            .unwrap_or(ids[0]);
+
+        // Merge metadata from the duplicates into the keeper.
+        {
+            let conn = db::db();
+            let favorite = infos.iter().any(|(_, fav, _, _)| *fav);
+            let category = infos
+                .iter()
+                .find(|(id, _, _, _)| *id == keeper)
+                .and_then(|(_, _, cat, _)| *cat)
+                .or_else(|| infos.iter().find_map(|(_, _, cat, _)| *cat));
+            let _ = book_repo::set_favorite(&conn, keeper, favorite);
+            if let Some(cat) = category {
+                let _ = book_repo::set_category(&conn, keeper, Some(cat));
+            }
+        }
+
+        for id in ids.iter().filter(|id| **id != keeper) {
+            if delete_book(*id) > 0 {
+                removed += 1;
+                tracing::info!(kept = keeper, removed = *id, "removed duplicate book");
+            }
+        }
+    }
+    removed
+}
+
+/// Backfills `content_hash` for books imported before schema v11.
+///
+/// Without this, a v10 library has NULL hashes and the first re-import of an
+/// existing book would slip past the content check (path de-dup still catches
+/// the common case, but not the cache-copy one).
+///
+/// Runs once per launch, only over rows whose hash is missing. Calls that
+/// fail (missing/corrupt file) leave the hash NULL and are retried next time.
+pub fn backfill_content_hashes() -> i32 {
+    let rows: Vec<(i64, String)> = {
+        let conn = db::db();
+        let built = conn
+            .prepare(
+                "SELECT id, stored_path FROM books \
+                 WHERE content_hash IS NULL OR content_hash = ''",
+            )
+            .and_then(|mut stmt| {
+                let iter = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+                Ok(iter.flatten().collect::<Vec<(i64, String)>>())
+            });
+        built.unwrap_or_default()
+    };
+    let mut filled = 0;
+    for (id, path) in rows {
+        let Ok(hash) = hash_file(Path::new(&path)) else {
+            continue;
+        };
+        let conn = db::db();
+        if book_repo::set_content_hash(&conn, id, &hash).is_ok() {
+            filled += 1;
+        }
+    }
+    if filled > 0 {
+        tracing::info!(filled, "backfilled book content hashes");
+    }
+    filled
+}
+
 /// Import a single file into the library (FEATURES 2.1).
 ///
 /// Steps: validate path → infer type → de-dup by `original_path` → copy file
@@ -311,10 +500,32 @@ async fn import_book_inner(original_path: &str) -> AppResult<ImportResult> {
         }
     };
 
-    // 3. De-dup by original_path (FEATURES 2.1). Drop the lock before file IO.
+    // 3. De-dup. Two keys, cheapest first:
+    //
+    //    a) original_path -- the same file imported twice from the same place.
+    //    b) content hash  -- the same DOCUMENT imported from a different
+    //       place. This is the case that produced duplicate rows in practice:
+    //       the file picker reports the real path while ACTION_VIEW /
+    //       ACTION_SEND deliver a temporary copy under cacheDir/incoming, so
+    //       path-only de-dup let an identical book appear twice.
+    //
+    //    The hash costs one full read of the file, which is small next to the
+    //    copy we are about to do anyway.
     {
         let conn = db::db();
         if let Some(existing) = book_repo::find_by_original_path(&conn, original_path)? {
+            return Ok(ImportResult::ok(existing, true));
+        }
+    }
+    let content_hash = hash_file(src)?;
+    {
+        let conn = db::db();
+        if let Some(existing) = book_repo::find_by_content_hash(&conn, &content_hash)? {
+            tracing::info!(
+                existing_id = existing.id,
+                %content_hash,
+                "import skipped: same content is already in the library"
+            );
             return Ok(ImportResult::ok(existing, true));
         }
     }
@@ -349,6 +560,7 @@ async fn import_book_inner(original_path: &str) -> AppResult<ImportResult> {
         file_type,
         page_count,
         cover_path,
+        content_hash: Some(content_hash),
     };
     let book = {
         let conn = db::db();
@@ -1847,24 +2059,50 @@ fn index_state(conn: &rusqlite::Connection, book_id: i64) -> &'static str {
     if crate::search::is_building(book_id) {
         return "building";
     }
-    if search_repo::is_ready(conn, book_id) || search_repo::has_rows(conn, book_id) {
-        return "ready";
-    }
+    // A failed build is checked BEFORE has_rows: a build that indexed N of M
+    // pages and then failed left rows behind, and reporting those as "ready"
+    // made search silently miss the rest of the book forever (nothing ever
+    // retried it).
     if search_repo::is_failed(conn, book_id) {
         return "failed";
+    }
+    if search_repo::is_ready(conn, book_id) || search_repo::has_rows(conn, book_id) {
+        return "ready";
     }
     "missing"
 }
 
+/// Books whose failed index build has already been retried in this process.
+/// A corrupt document fails identically every time, so retrying it on every
+/// library refresh would just re-open the PDF forever; one automatic retry
+/// per app run still recovers from a transient failure (pdfium load, disk
+/// pressure) without a manual re-import.
+static INDEX_RETRIED: std::sync::Mutex<Vec<i64>> = std::sync::Mutex::new(Vec::new());
+
 /// Ensure [book_id]'s pages are indexed (3.5.1 pre-build): triggers a
-/// background build when the index is missing (builds run on an independent
-/// pdfium document, so they never disturb the reader). Books whose build
-/// failed (unreadable file) are not retried until re-imported. Returns
-/// nothing -- poll [search_index_status] for progress.
+/// background build when the index is missing, and retries a previously
+/// failed build once per process (see [INDEX_RETRIED]).
 pub async fn ensure_book_index(book_id: i64) {
     let conn = db::db();
-    if index_state(&conn, book_id) != "missing" {
+    let state = index_state(&conn, book_id);
+    if state == "building" || state == "ready" {
         return;
+    }
+    if state == "failed" {
+        let already = {
+            let mut retried = INDEX_RETRIED.lock().unwrap_or_else(|e| e.into_inner());
+            if retried.contains(&book_id) {
+                true
+            } else {
+                retried.push(book_id);
+                false
+            }
+        };
+        if already {
+            return;
+        }
+        // Clear the terminal marker so a successful build can be recorded.
+        let _ = search_repo::clear_markers(&conn, book_id);
     }
     drop(conn);
     crate::search::build_book_index(book_id);
@@ -2327,6 +2565,253 @@ pub fn delete_translation_glossary(id: i64) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Builds a one-page PDF on disk so the import path runs its real
+    /// pdfium metadata step. [marker] makes two files differ in content.
+    fn write_test_pdf(path: &std::path::Path, marker: &str) {
+        use pdfium_render::prelude::*;
+        let built = crate::pdf::with_pdfium_lock(|p| -> AppResult<()> {
+            let mut doc = p.create_new_pdf()?;
+            let font = doc.fonts_mut().helvetica();
+            {
+                let mut page = doc
+                    .pages_mut()
+                    .create_page_at_end(PdfPagePaperSize::a4())?;
+                // Never empty: an empty page also yields different bytes, but
+                // text makes the intent explicit and keeps the file valid.
+                page.objects_mut().create_text_object(
+                    PdfPoints::new(60.0),
+                    PdfPoints::new(760.0),
+                    marker,
+                    font,
+                    PdfPoints::new(14.0),
+                )?;
+            }
+            doc.save_to_file(path)?;
+            Ok(())
+        });
+        built.expect("build test pdf");
+    }
+
+    /// The same document imported from two different paths must collapse to
+    /// ONE library row. This is the duplicate-import regression: the file
+    /// picker reports the real path while ACTION_VIEW / ACTION_SEND deliver a
+    /// temporary copy, so path-only de-dup produced two identical books.
+    ///
+    /// NOTE: the DB handle is a process-global `OnceLock`, so tests in one
+    /// binary share whichever database initialized first. Assertions are
+    /// therefore scoped to this test's own content hash instead of global row
+    /// counts.
+    #[tokio::test]
+    async fn import_dedups_by_content_not_just_path() {
+        let tmp = std::env::temp_dir().join(format!(
+            "rbwa_import_dedup_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&tmp).unwrap();
+        // First test in this process pins the DB; later ones reuse it.
+        let _ = try_init_at(&tmp.join("rbwa.db"));
+
+        let first = tmp.join("book.pdf");
+        write_test_pdf(&first, "rbwa dedup fixture");
+        let hash = hash_file(&first).unwrap();
+        let rows_with_hash = |h: &str| -> i64 {
+            let conn = db::db();
+            conn.query_row(
+                "SELECT COUNT(*) FROM books WHERE content_hash = ?1",
+                rusqlite::params![h],
+                |r| r.get(0),
+            )
+            .unwrap()
+        };
+
+        let a = import_book_inner(first.to_str().unwrap()).await.unwrap();
+        assert!(a.error.is_none(), "{:?}", a.error);
+        let a_id = a.book.as_ref().unwrap().id;
+        assert_eq!(rows_with_hash(&hash), 1, "first import should insert once");
+
+        // Byte-identical copy at a DIFFERENT path (what a share sheet gives us).
+        let second = tmp.join("incoming_copy.pdf");
+        std::fs::copy(&first, &second).unwrap();
+        let b = import_book_inner(second.to_str().unwrap()).await.unwrap();
+        assert!(b.error.is_none(), "{:?}", b.error);
+        assert!(b.already_existed, "same content must be de-duplicated");
+        assert_eq!(b.book.as_ref().unwrap().id, a_id);
+        assert_eq!(rows_with_hash(&hash), 1, "duplicate import created a row");
+
+        // Re-importing the ORIGINAL path is still de-duplicated too.
+        let c = import_book_inner(first.to_str().unwrap()).await.unwrap();
+        assert!(c.already_existed);
+
+        // A genuinely different document is still imported.
+        let other = tmp.join("other.pdf");
+        write_test_pdf(&other, "a genuinely different document");
+        let other_hash = hash_file(&other).unwrap();
+        assert_ne!(other_hash, hash);
+        let d = import_book_inner(other.to_str().unwrap()).await.unwrap();
+        assert!(!d.already_existed, "a different document must import");
+        assert_eq!(rows_with_hash(&other_hash), 1);
+
+        pdf::close();
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// Libraries upgraded from a pre-v11 build can already contain duplicates.
+    /// The cleanup keeps the row the user has actually read (or the most
+    /// recently opened one) and deletes the rest, files included.
+    #[test]
+    fn dedupe_keeps_the_read_copy_and_deletes_the_duplicate() {
+        let tmp = std::env::temp_dir().join(format!(
+            "rbwa_dedupe_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&tmp).unwrap();
+        let _ = try_init_at(&tmp.join("rbwa.db"));
+
+        let hash = format!("dedupe-test-{}", std::process::id());
+        let stale_file = tmp.join("stale_copy.pdf");
+        std::fs::write(&stale_file, b"stale").unwrap();
+        let read_file = tmp.join("read_copy.pdf");
+        std::fs::write(&read_file, b"read").unwrap();
+
+        // The unique index (created at startup) makes duplicates impossible
+        // now -- drop it to simulate a pre-v11 library that still has them.
+        {
+            let conn = db::db();
+            conn.execute_batch("DROP INDEX IF EXISTS uq_books_content_hash;")
+                .unwrap();
+        }
+
+        // Two rows claiming the same content. The SECOND one has progress.
+        let (stale_id, read_id) = {
+            let conn = db::db();
+            conn.execute(
+                "INSERT INTO books (title, original_path, stored_path, file_type, content_hash) \
+                 VALUES ('dup-stale', ?1, ?1, 'pdf', ?3)",
+                rusqlite::params![
+                    stale_file.to_string_lossy(),
+                    "",
+                    hash
+                ],
+            )
+            .unwrap();
+            let stale = conn.last_insert_rowid();
+            conn.execute(
+                "INSERT INTO books (title, original_path, stored_path, file_type, content_hash, favorite) \
+                 VALUES ('dup-read', ?1, ?1, 'pdf', ?3, 1)",
+                rusqlite::params![read_file.to_string_lossy(), "", hash],
+            )
+            .unwrap();
+            let read = conn.last_insert_rowid();
+            conn.execute(
+                "INSERT INTO reading_progress (book_id, page, zoom, view_mode) \
+                 VALUES (?1, 12, 1.2, 'single')",
+                rusqlite::params![read],
+            )
+            .unwrap();
+            (stale, read)
+        };
+
+        let removed = dedupe_books_by_content_hash();
+        assert!(removed >= 1, "expected the duplicate to be removed");
+
+        let survivors: Vec<(i64, String)> = {
+            let conn = db::db();
+            let built = conn
+                .prepare("SELECT id, title FROM books WHERE content_hash = ?1")
+                .and_then(|mut stmt| {
+                    let iter = stmt.query_map(rusqlite::params![hash], |r| {
+                        Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
+                    })?;
+                    Ok(iter.flatten().collect::<Vec<(i64, String)>>())
+                });
+            built.unwrap_or_default()
+        };
+        assert_eq!(survivors.len(), 1, "exactly one row should remain: {survivors:?}");
+        assert_eq!(survivors[0].0, read_id, "the read copy must be kept");
+        assert_ne!(survivors[0].0, stale_id);
+
+        // The duplicate's stored file is gone; the keeper's is intact.
+        assert!(!stale_file.exists(), "stale file should be deleted");
+        assert!(read_file.exists(), "keeper file must survive");
+
+        // Progress survived the cleanup.
+        let page: i64 = {
+            let conn = db::db();
+            conn.query_row(
+                "SELECT page FROM reading_progress WHERE book_id = ?1",
+                rusqlite::params![read_id],
+                |r| r.get(0),
+            )
+            .unwrap()
+        };
+        assert_eq!(page, 12);
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// Rows imported before schema v11 have no hash; the startup backfill must
+    /// fill them so content de-duplication works on upgraded libraries.
+    #[test]
+    fn backfill_fills_missing_hashes() {
+        let tmp = std::env::temp_dir().join(format!(
+            "rbwa_hash_backfill_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&tmp).unwrap();
+        let _ = try_init_at(&tmp.join("rbwa.db"));
+
+        let file = tmp.join("legacy.pdf");
+        write_test_pdf(&file, "legacy row");
+        // Simulate a v10 row: present but without a content hash. The title is
+        // unique to this test so a shared DB cannot confuse the assertion.
+        let unique_title = format!("legacy-{}", std::process::id());
+        let book_id = {
+            let conn = db::db();
+            conn.execute(
+                "INSERT INTO books (title, original_path, stored_path, file_type) \
+                 VALUES (?2, ?1, ?1, 'pdf')",
+                rusqlite::params![file.to_string_lossy(), unique_title],
+            )
+            .unwrap();
+            conn.last_insert_rowid()
+        };
+        // This row starts without a hash.
+        {
+            let conn = db::db();
+            assert_eq!(book_repo::content_hash_of(&conn, book_id).unwrap(), None);
+        }
+
+        let filled = backfill_content_hashes();
+        assert!(filled >= 1, "backfill should have filled at least this row");
+
+        let hash = {
+            let conn = db::db();
+            book_repo::content_hash_of(&conn, book_id).unwrap()
+        }
+        .expect("hash should be filled now");
+        assert_eq!(hash.len(), 64, "expected a SHA-256 hex digest, got {hash}");
+        // And now the content check finds it.
+        let found = {
+            let conn = db::db();
+            book_repo::find_by_content_hash(&conn, &hash).unwrap()
+        };
+        assert_eq!(found.map(|b| b.id), Some(book_id));
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
 
     /// Translation must NOT be prepended with the role template: the default
     /// "general" template instructs the model to "解释术语、概念与难点",

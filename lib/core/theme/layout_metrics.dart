@@ -124,15 +124,24 @@ abstract final class Golden {
   /// Default nav rail width: 128 × φ ≈ 207, rounded to 208.
   static const double railDefaultWidth = 208;
 
-  /// Ideal card width: 114 × φ ≈ 184. Chosen so a card reads like a small
-  /// hardback on a tablet rather than a thumbnail.
-  static const double cardTargetWidth = 184;
+  /// Ideal card width. Tuned so a **landscape tablet** (the common 10-11"
+  /// case, ~889dp of shelf after the rail) lands on FIVE columns:
+  /// 889 = 5 × 161 + 4 × 21.
+  ///
+  /// At 184dp the solver picked 4 × 206dp there -- four oversized books where
+  /// five fit comfortably. 178dp keeps desktop at 5 columns too (1006dp ->
+  /// 5 × 184dp), so the change is specific to the case that needed it.
+  static const double cardTargetWidth = 178;
 
   /// Card width bounds. Rounding the column count alone can land on a card
   /// ~30% off target (e.g. 500dp available -> 2 x 240dp); these bounds close
   /// the loop so a shelf never shows billboard-sized covers or postage
-  /// stamps. ±17% around the target.
-  static const double minCardWidth = 152;
+  /// stamps.
+  ///
+  /// The floor is 140dp rather than 152: a 360dp phone leaves ~318dp of
+  /// shelf, where two columns means 148dp cards. Rejecting those forced a
+  /// single 318dp card, which is far worse than a slightly narrow one.
+  static const double minCardWidth = 140;
   static const double maxCardWidth = 216;
 
   /// Rail width for a given window: one φ⁴ subdivision of the width, held
@@ -146,9 +155,11 @@ abstract final class Golden {
   /// page padding).
   ///
   /// The column count is solved from [cardTargetWidth] rather than using a
-  /// max-extent delegate, which leaves a ragged last column. Because the
-  /// count is rounded, the card width drifts a little around the target
-  /// (roughly 150-180dp) instead of growing without bound on wide screens.
+  /// max-extent delegate, which leaves a ragged last column.
+  ///
+  /// The count is rounded to nearest, then corrected by the min/max guards
+  /// below. [cardTargetWidth] is tuned so a landscape tablet lands on five
+  /// columns (see its doc comment).
   static ({int columns, double cardWidth}) gridFor(double availableWidth) {
     if (availableWidth <= 0) {
       return (columns: 1, cardWidth: cardTargetWidth);

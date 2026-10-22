@@ -33,7 +33,11 @@
 /// 10: Android text-level translation -- `page_text_translation` caches one
 /// row per (book, page, block, target language) so the mobile bilingual view
 /// never pays twice for the same paragraph.
-pub const SCHEMA_VERSION: u32 = 10;
+/// 11: `books.content_hash` -- de-duplicate imports by FILE CONTENT, not just
+/// by original path. The same document reaches the app through several paths
+/// (file picker vs. a shared copy in the cache dir), so path-only de-dup let
+/// an identical book appear twice.
+pub const SCHEMA_VERSION: u32 = 11;
 
 /// Indexes for per-book AI conversation windows (v3, FEATURES 6.5.4).
 ///
@@ -43,6 +47,30 @@ pub const SCHEMA_VERSION: u32 = 10;
 /// it -- an index referencing a missing column would fail init. The unique
 /// partial index enforces one window per book at the DB level (null book_id =
 /// the no-book window, unlimited).
+/// Index for content-hash de-duplication (v11).
+///
+/// Like the AI window indexes this cannot live in `SCHEMA_SQL`: on a v10
+/// database the `content_hash` column only exists after the ALTER in the
+/// migration chain, and `execute_batch(SCHEMA_SQL)` runs before it.
+pub fn ensure_book_hash_index(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_books_content_hash ON books(content_hash);",
+    )
+}
+
+/// Unique (partial) index over the content hash (v11).
+///
+/// Created only AFTER the startup duplicate cleanup has run: the index turns
+/// "same content imported twice" from a bug into a database error. Partial
+/// (`WHERE content_hash IS NOT NULL`) because legacy rows whose file was lost
+/// keep a NULL hash and any number of them are legitimate.
+pub fn ensure_book_hash_unique_index(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
+    conn.execute_batch(
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_books_content_hash \
+         ON books(content_hash) WHERE content_hash IS NOT NULL AND content_hash != '';",
+    )
+}
+
 pub fn ensure_ai_window_indexes(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
         "CREATE INDEX IF NOT EXISTS idx_ai_threads_book ON ai_threads(book_id);
@@ -83,6 +111,7 @@ CREATE TABLE IF NOT EXISTS books (
     category_id   INTEGER,
     last_opened_at TEXT,                       -- ISO-8601, nullable until first open
     imported_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    content_hash  TEXT,                        -- SHA-256 of the file (v11, de-dup)
     FOREIGN KEY (category_id) REFERENCES categories(id)
         ON DELETE SET NULL                     -- deleting a category unclassifies books
 );

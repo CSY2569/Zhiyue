@@ -132,10 +132,36 @@ pub fn init_database_at(path: &Path) -> AppResult<PathBuf> {
     Ok(path.to_path_buf())
 }
 
+/// Whether [table] already has a column named [column].
+///
+/// Used to make the ALTER-based migrations idempotent: a database that was
+/// interrupted after an ALTER committed but before its version row was
+/// written (crash / OOM kill during an app update) would otherwise fail
+/// forever with "duplicate column name" and never open again.
+fn has_column(conn: &Connection, table: &str, column: &str) -> AppResult<bool> {
+    // `PRAGMA table_info` cannot take bound parameters; the table names here
+    // are all crate constants, never user input.
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let name: String = row.get(1)?;
+        if name.eq_ignore_ascii_case(column) {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 /// Migration gate: `SCHEMA_SQL` always reflects the latest schema (new
 /// databases create it directly), while older databases walk a version chain
 /// of ALTER statements here. Each migration runs exactly once, then the new
 /// version is recorded.
+///
+/// The whole chain runs in ONE transaction: an interrupted upgrade must not
+/// leave a half-applied schema (columns added but the version row missing),
+/// which would make every later start re-run a non-idempotent ALTER and fail.
+/// The individual ALTERs are additionally guarded by [has_column] so a
+/// database already stuck in that half-applied state heals on the next start.
 ///
 /// Chain:
 ///   1 -> 2: `annotations` gains the `text` column (M3: selected-text storage
@@ -145,6 +171,13 @@ pub fn init_database_at(path: &Path) -> AppResult<PathBuf> {
 ///           authorized by the project owner). The window indexes are created
 ///           afterwards -- the column only exists once the ALTER has run.
 fn migrate(conn: &Connection) -> AppResult<()> {
+    let tx = conn.unchecked_transaction()?;
+    migrate_body(&tx)?;
+    tx.commit()?;
+    Ok(())
+}
+
+fn migrate_body(conn: &Connection) -> AppResult<()> {
     // Record the current schema version after a successful migration.
     let record_version = |conn: &Connection| -> AppResult<()> {
         conn.execute(
@@ -171,30 +204,35 @@ fn migrate(conn: &Connection) -> AppResult<()> {
         }
         Some(1) => {
             tracing::info!("migrating schema 1 -> 2 (annotations.text)");
-            conn.execute_batch("ALTER TABLE annotations ADD COLUMN text TEXT;")?;
+            if !has_column(conn, "annotations", "text")? {
+                conn.execute_batch("ALTER TABLE annotations ADD COLUMN text TEXT;")?;
+            }
             record_version(conn)?;
         }
         Some(2) => {
             tracing::info!("migrating schema 2 -> 3 (per-book AI windows)");
-            conn.execute_batch(
-                "ALTER TABLE ai_threads ADD COLUMN book_id INTEGER; \
-                 DELETE FROM ai_messages; \
-                 DELETE FROM ai_threads;",
-            )?;
+            if !has_column(conn, "ai_threads", "book_id")? {
+                conn.execute_batch("ALTER TABLE ai_threads ADD COLUMN book_id INTEGER;")?;
+            }
+            conn.execute_batch("DELETE FROM ai_messages; DELETE FROM ai_threads;")?;
             record_version(conn)?;
         }
         Some(3) => {
             tracing::info!("migrating schema 3 -> 4 (ai_messages.image_path)");
-            conn.execute_batch("ALTER TABLE ai_messages ADD COLUMN image_path TEXT;")?;
+            if !has_column(conn, "ai_messages", "image_path")? {
+                conn.execute_batch("ALTER TABLE ai_messages ADD COLUMN image_path TEXT;")?;
+            }
             record_version(conn)?;
         }
         Some(4) => {
             tracing::info!(
                 "migrating schema 4 -> 5 (full-text search: original_text + FTS triggers)"
             );
+            if !has_column(conn, "page_text_index", "original_text")? {
+                conn.execute_batch("ALTER TABLE page_text_index ADD COLUMN original_text TEXT;")?;
+            }
             conn.execute_batch(
-                "ALTER TABLE page_text_index ADD COLUMN original_text TEXT;
-                 CREATE TRIGGER IF NOT EXISTS page_text_index_ai AFTER INSERT ON page_text_index BEGIN
+                "CREATE TRIGGER IF NOT EXISTS page_text_index_ai AFTER INSERT ON page_text_index BEGIN
                      INSERT INTO page_text_fts(rowid, raw_text) VALUES (new.rowid, new.raw_text);
                  END;
                  CREATE TRIGGER IF NOT EXISTS page_text_index_ad AFTER DELETE ON page_text_index BEGIN
@@ -211,7 +249,9 @@ fn migrate(conn: &Connection) -> AppResult<()> {
         }
         Some(5) => {
             tracing::info!("migrating schema 5 -> 6 (ai_messages.action_type)");
-            conn.execute_batch("ALTER TABLE ai_messages ADD COLUMN action_type TEXT;")?;
+            if !has_column(conn, "ai_messages", "action_type")? {
+                conn.execute_batch("ALTER TABLE ai_messages ADD COLUMN action_type TEXT;")?;
+            }
             record_version(conn)?;
         }
         Some(6) => {
@@ -235,9 +275,11 @@ fn migrate(conn: &Connection) -> AppResult<()> {
             // ('original' | 'translated'): the 对照 view's translated pane
             // gets the full mark set, and each pane renders only its own.
             tracing::info!("migrating schema 8 -> 9 (annotations.source)");
-            conn.execute_batch(
-                "ALTER TABLE annotations ADD COLUMN source TEXT NOT NULL DEFAULT 'original';",
-            )?;
+            if !has_column(conn, "annotations", "source")? {
+                conn.execute_batch(
+                    "ALTER TABLE annotations ADD COLUMN source TEXT NOT NULL DEFAULT 'original';",
+                )?;
+            }
             record_version(conn)?;
         }
         Some(9) => {
@@ -245,6 +287,12 @@ fn migrate(conn: &Connection) -> AppResult<()> {
             // above is idempotent and already created it on the old database,
             // so this branch just records the new version.
             tracing::info!("migrating schema 9 -> 10 (page_text_translation)");
+            record_version(conn)?;
+        }
+        Some(10) => {
+            // v11 adds the content hash used for import de-duplication.
+            tracing::info!("migrating schema 10 -> 11 (books.content_hash)");
+            conn.execute_batch("ALTER TABLE books ADD COLUMN content_hash TEXT;")?;
             record_version(conn)?;
         }
         Some(v) => {
@@ -259,6 +307,15 @@ fn migrate(conn: &Connection) -> AppResult<()> {
     // Per-book window indexes (v3). Must run after the ALTER above on old
     // databases; idempotent on fresh ones (SCHEMA_SQL creates the column).
     super::schema::ensure_ai_window_indexes(conn)?;
+    // Content-hash index (v11). Unlike the AI window columns, this column is
+    // brand new: a database mid-chain (the migration unit tests build v2/v4
+    // fixtures and only record ONE version) has not run the v10 -> v11 ALTER
+    // yet, so creating the index unconditionally would fail with
+    // "no such column". The index is created on the next open after the
+    // column exists.
+    if has_column(conn, "books", "content_hash")? {
+        super::schema::ensure_book_hash_index(conn)?;
+    }
     Ok(())
 }
 
@@ -335,6 +392,30 @@ mod tests {
             )
             .unwrap();
         assert_eq!(idx, 2);
+    }
+
+    #[test]
+    fn migrate_heals_a_half_applied_upgrade() {
+        // Simulates a crash between the ALTER and the version insert of an
+        // earlier upgrade: the column exists but the recorded version does
+        // not. Before the idempotent ALTERs this failed forever with
+        // "duplicate column name", bricking the database.
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(SCHEMA_SQL).unwrap();
+        conn.execute_batch(
+            "DELETE FROM schema_version;
+             INSERT INTO schema_version (version) VALUES (1);",
+        )
+        .unwrap();
+        // v1 -> v2's column is already there.
+        assert!(has_column(&conn, "annotations", "text").unwrap());
+
+        migrate(&conn).expect("a half-applied migration must heal");
+
+        let v: u32 = conn
+            .query_row("SELECT MAX(version) FROM schema_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(v, SCHEMA_VERSION);
     }
 
     #[test]
@@ -590,6 +671,54 @@ mod tests {
         )
         .unwrap();
         conn
+    }
+
+    /// A v10 database: latest table shapes minus the v11 content-hash column.
+    fn v10_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(SCHEMA_SQL).unwrap();
+        conn.execute_batch(
+            "ALTER TABLE books DROP COLUMN content_hash;
+             DELETE FROM schema_version;
+             INSERT INTO schema_version (version) VALUES (10);
+             INSERT INTO books (id, title, original_path, stored_path, file_type) \
+                 VALUES (1, 'b', '/o', '/s', 'pdf');",
+        )
+        .unwrap();
+        conn
+    }
+
+    #[test]
+    fn migrate_v10_to_v11_adds_content_hash() {
+        let conn = v10_db();
+        migrate(&conn).unwrap();
+
+        let v: u32 = conn
+            .query_row("SELECT MAX(version) FROM schema_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(v, SCHEMA_VERSION);
+
+        // Column added; the existing row survives with a NULL hash (the
+        // startup backfill fills it from the stored file).
+        let hash: Option<String> = conn
+            .query_row("SELECT content_hash FROM books WHERE id = 1", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(hash, None);
+
+        // The de-dup index exists, so lookups on big libraries stay cheap.
+        let indexes: Vec<String> = conn
+            .prepare("PRAGMA index_list(books)")
+            .unwrap()
+            .query_map([], |r| r.get::<_, String>(1))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert!(
+            indexes.contains(&"idx_books_content_hash".to_string()),
+            "{indexes:?}"
+        );
     }
 
     #[test]

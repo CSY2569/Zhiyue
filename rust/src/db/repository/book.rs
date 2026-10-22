@@ -41,6 +41,9 @@ pub struct NewBook {
     pub file_type: BookType,
     pub page_count: i64,
     pub cover_path: Option<String>,
+    /// SHA-256 of the imported file (schema v11). Used to recognise the same
+    /// document arriving through a different path.
+    pub content_hash: Option<String>,
 }
 
 /// List all books, most-recently-opened first (FEATURES 2.3).
@@ -77,6 +80,45 @@ pub fn find_by_original_path(conn: &Connection, path: &str) -> AppResult<Option<
     }
 }
 
+/// Look up a book by the SHA-256 of its file content.
+///
+/// This is the de-duplication key that survives the same document coming in
+/// from different paths: the file picker hands us the original location while
+/// ACTION_VIEW / ACTION_SEND hand us a temporary copy in the cache dir, so
+/// `original_path` alone let an identical book appear twice.
+pub fn find_by_content_hash(conn: &Connection, hash: &str) -> AppResult<Option<Book>> {
+    if hash.is_empty() {
+        return Ok(None);
+    }
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {SELECT_COLS} FROM books WHERE content_hash = ?1 LIMIT 1"
+    ))?;
+    let mut rows = stmt.query_map(params![hash], row_to_book)?;
+    match rows.next() {
+        Some(row) => Ok(Some(row?)),
+        None => Ok(None),
+    }
+}
+
+/// Column list with an index for the content hash.
+pub fn content_hash_of(conn: &Connection, id: i64) -> AppResult<Option<String>> {
+    let mut stmt = conn.prepare("SELECT content_hash FROM books WHERE id = ?1")?;
+    let mut rows = stmt.query_map(params![id], |row| row.get::<_, Option<String>>(0))?;
+    match rows.next() {
+        Some(row) => Ok(row?),
+        None => Ok(None),
+    }
+}
+
+/// Backfill a missing hash for an existing row (v10 databases).
+pub fn set_content_hash(conn: &Connection, id: i64, hash: &str) -> AppResult<()> {
+    conn.execute(
+        "UPDATE books SET content_hash = ?1 WHERE id = ?2",
+        params![hash, id],
+    )?;
+    Ok(())
+}
+
 /// Look up a book by its stored file path (the copy under the app data dir).
 /// Used to route `open_book` between the pdfium and image pipelines (M5).
 pub fn find_by_stored_path(conn: &Connection, path: &str) -> AppResult<Option<Book>> {
@@ -94,8 +136,9 @@ pub fn find_by_stored_path(conn: &Connection, path: &str) -> AppResult<Option<Bo
 /// `original_path` is not already present (call `find_by_original_path` first).
 pub fn insert(conn: &Connection, params: &NewBook) -> AppResult<Book> {
     conn.execute(
-        "INSERT INTO books (title, original_path, stored_path, file_type, page_count, cover_path) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        "INSERT INTO books \
+         (title, original_path, stored_path, file_type, page_count, cover_path, content_hash) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         rusqlite::params![
             params.title,
             params.original_path,
@@ -103,6 +146,7 @@ pub fn insert(conn: &Connection, params: &NewBook) -> AppResult<Book> {
             params.file_type.as_str(),
             params.page_count,
             params.cover_path,
+            params.content_hash,
         ],
     )?;
     let id = conn.last_insert_rowid();
