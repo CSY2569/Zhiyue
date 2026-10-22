@@ -7,14 +7,18 @@ import 'package:rbwa/core/widgets/toolbar_icon_button.dart';
 import 'package:rbwa/features/annotation/providers/image_mark_provider.dart';
 import 'package:rbwa/features/annotation/widgets/highlight_layer.dart'
     show parseHexColor;
-import 'package:rbwa/platform/platform_host.dart';
 
-/// Mark tools as a floating bar above the reading area (FEATURES 5.1-5.5):
-/// rendered by the reader page while a mark tool is armed. The toolbar keeps
-/// only the 批注 entry button, so the bar has room for the tool switcher,
-/// undo / redo (5.7) and the style controls (color / thickness / fill).
-class MarkToolBar extends ConsumerWidget {
-  const MarkToolBar({super.key});
+/// Inline annotation controls for the reader's top bar (FEATURES 5.1-5.5).
+///
+/// They used to live in a floating bar layered over the page (a second-level
+/// toolbar that appeared after pressing 批注). They are now shown directly in
+/// the middle of the reader toolbar, so the tools, undo / redo and the style
+/// controls sit in the same chrome row as every other reading action.
+///
+/// Returns [SizedBox.shrink] when no tool is armed -- the reader toolbar keeps
+/// its normal controls in that case.
+class MarkToolOptions extends ConsumerWidget {
+  const MarkToolOptions({super.key});
 
   static const List<String> _palette = [
     '#e53935', // red
@@ -35,103 +39,82 @@ class MarkToolBar extends ConsumerWidget {
 
     final notifier = ref.read(markToolProvider.notifier);
     final markNotifier = ref.read(imageMarkProvider.notifier);
-    final theme = Theme.of(context);
     final showStyle =
         tool == MarkTool.brush ||
         tool == MarkTool.shape ||
         tool == MarkTool.stamp;
 
-    // Phones: the single row is ~500dp wide and overflows a 360dp screen, so
-    // the tools wrap onto a second line (still inside the floating bar).
-    final compact =
-        PlatformHost.current.compactUi(MediaQuery.sizeOf(context).width);
-
-    final row = <Widget>[
-            ToolbarIconButton(
-              icon: LucideIcons.navigation,
-              tooltip: '选择/移动',
-              active: tool == MarkTool.select,
-              onTap: () => notifier.setTool(MarkTool.select),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ToolbarIconButton(
+          icon: LucideIcons.navigation,
+          tooltip: '选择/移动',
+          active: tool == MarkTool.select,
+          onTap: () => notifier.setTool(MarkTool.select),
+        ),
+        ToolbarIconButton(
+          icon: LucideIcons.brush,
+          tooltip: '画笔',
+          active: tool == MarkTool.brush,
+          onTap: () => notifier.setTool(MarkTool.brush),
+        ),
+        // Shape tool: a popup also picks the shape type (5.4).
+        _ShapeTool(active: tool == MarkTool.shape),
+        ToolbarIconButton(
+          icon: LucideIcons.stickyNote,
+          tooltip: '便签',
+          active: tool == MarkTool.sticky,
+          onTap: () => notifier.setTool(MarkTool.sticky),
+        ),
+        _StampTool(active: tool == MarkTool.stamp),
+        const VDivider(),
+        ToolbarIconButton(
+          icon: LucideIcons.undo,
+          tooltip: '撤销 (Ctrl+Z)',
+          enabled: markNotifier.canUndo,
+          onTap: markNotifier.canUndo ? () => markNotifier.undo() : null,
+        ),
+        ToolbarIconButton(
+          icon: LucideIcons.redo,
+          tooltip: '重做 (Ctrl+Shift+Z)',
+          enabled: markNotifier.canRedo,
+          onTap: markNotifier.canRedo ? () => markNotifier.redo() : null,
+        ),
+        if (showStyle) ...[
+          const VDivider(),
+          for (final c in _palette)
+            _ColorDot(
+              color: c,
+              selected: toolState.color == c,
+              onTap: () => notifier.setColor(c),
             ),
-            ToolbarIconButton(
-              icon: LucideIcons.brush,
-              tooltip: '画笔',
-              active: tool == MarkTool.brush,
-              onTap: () => notifier.setTool(MarkTool.brush),
+          SizedBox(
+            width: 96,
+            child: Slider(
+              value: toolState.strokeWidth.clamp(1, 12),
+              min: 1,
+              max: 12,
+              onChanged: notifier.setStrokeWidth,
             ),
-            // Shape tool: a popup also picks the shape type (5.4).
-            _ShapeTool(active: tool == MarkTool.shape),
-            ToolbarIconButton(
-              icon: LucideIcons.stickyNote,
-              tooltip: '便签',
-              active: tool == MarkTool.sticky,
-              onTap: () => notifier.setTool(MarkTool.sticky),
-            ),
-            _StampTool(active: tool == MarkTool.stamp),
-            const VDivider(),
-            ToolbarIconButton(
-              icon: LucideIcons.undo,
-              tooltip: '撤销 (Ctrl+Z)',
-              enabled: markNotifier.canUndo,
-              onTap: markNotifier.canUndo ? () => markNotifier.undo() : null,
-            ),
-            ToolbarIconButton(
-              icon: LucideIcons.redo,
-              tooltip: '重做 (Ctrl+Shift+Z)',
-              enabled: markNotifier.canRedo,
-              onTap: markNotifier.canRedo ? () => markNotifier.redo() : null,
-            ),
-            if (showStyle) ...[
-              const VDivider(),
-              for (final c in _palette)
-                _ColorDot(
-                  color: c,
-                  selected: toolState.color == c,
-                  onTap: () => notifier.setColor(c),
-                ),
-              SizedBox(
-                width: 120,
-                child: Slider(
-                  value: toolState.strokeWidth.clamp(1, 12),
-                  min: 1,
-                  max: 12,
-                  onChanged: notifier.setStrokeWidth,
-                ),
-              ),
-              ToolbarIconButton(
-                icon: toolState.fill ? LucideIcons.circle : LucideIcons.circle,
-                tooltip: toolState.fill ? '实心填充开' : '空心（无填充）',
-                active: toolState.fill,
-                onTap: notifier.toggleFill,
-              ),
-            ],
-            const VDivider(),
-            ToolbarIconButton(
-              icon: LucideIcons.check,
-              tooltip: '退出批注',
-              onTap: () => notifier.setTool(null),
-            ),
-      ];
-
-    return Material(
-      elevation: 2,
-      color: theme.colorScheme.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        child: compact
-            ? Wrap(
-                spacing: 0,
-                runSpacing: 0,
-                alignment: WrapAlignment.center,
-                children: row,
-              )
-            : Row(mainAxisSize: MainAxisSize.min, children: row),
-      ),
+          ),
+          ToolbarIconButton(
+            icon: LucideIcons.circle,
+            tooltip: toolState.fill ? '实心填充开' : '空心（无填充）',
+            active: toolState.fill,
+            onTap: notifier.toggleFill,
+          ),
+        ],
+        const VDivider(),
+        ToolbarIconButton(
+          icon: LucideIcons.check,
+          tooltip: '退出批注',
+          onTap: () => notifier.setTool(null),
+        ),
+      ],
     );
   }
 }
-
 
 class _ShapeTool extends ConsumerWidget {
   const _ShapeTool({required this.active});

@@ -348,7 +348,6 @@ class AiNotifier extends Notifier<AiState> {
     state = state.copyWith(
       activeThreadId: window.id,
       cardVisible: true,
-      cardPos: const Offset(80, 120),
       panelCleared: false,
       showingThreadList: false,
     );

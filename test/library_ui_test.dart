@@ -63,7 +63,7 @@ Widget _tile(Book book) => ProviderScope(
     );
 
 void main() {
-  testWidgets('filter row covers every view and syncs with the rail',
+  testWidgets('filter row offers the file-type axis and syncs with the view',
       (tester) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
@@ -81,13 +81,17 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    // The quick filters live in one pill row; the rail holds the rest.
-    for (final label in ['全部', '最近', 'PDF', '图片', '收藏']) {
+    // The top bar holds the file-type filter only; the rail holds the views.
+    for (final label in ['全部格式', 'PDF', '图片']) {
       expect(find.text(label), findsOneWidget, reason: label);
     }
+    for (final label in ['全部', '最近', '收藏']) {
+      expect(find.text(label), findsNothing, reason: label);
+    }
     await tester.tap(find.text('PDF'));
-    await tester.pump();
-    expect(container.read(libraryFilterProvider).view, LibraryView.pdf);
+    await tester.pumpAndSettle();
+    expect(container.read(libraryFilterProvider).type, LibraryType.pdf);
+    expect(container.read(libraryFilterProvider).view, LibraryView.all);
   });
 
   testWidgets('right-clicking a book card offers "移动到文件夹…"',

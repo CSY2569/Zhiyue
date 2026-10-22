@@ -77,6 +77,48 @@ void main() {
     expect(sizedBox.width, cardWidth);
   });
 
+  testWidgets('dragging the title bar keeps the pointer on the handle',
+      (tester) async {
+    final repo = FakeAiRepo();
+    await tester.pumpWidget(_scope(repo));
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(ResultCard)));
+    await container
+        .read(aiProvider.notifier)
+        .startAction(AiActionType.explain, 'q', bookId: null, bookTitle: null);
+    await tester.pumpAndSettle();
+
+    final handle = find.byKey(const Key('card-drag-handle'));
+    final before = tester.getTopLeft(handle);
+    final start = tester.getCenter(handle);
+
+    // A modest drag keeps the title bar exactly under the pointer.
+    var gesture = await tester.startGesture(start);
+    await gesture.moveBy(const Offset(60, 40));
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+    final moved = tester.getTopLeft(handle);
+    expect(moved.dx - before.dx, closeTo(60, 1));
+    expect(moved.dy - before.dy, closeTo(40, 1));
+
+    // Dragging past the edge clamps, and the stored position stays within
+    // the viewport (no silent out-of-range accumulation).
+    final cardPos = container.read(aiProvider).cardPos;
+    final size = container.read(panelLayoutProvider).cardSize;
+    final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
+    gesture = await tester.startGesture(tester.getCenter(handle));
+    await gesture.moveBy(const Offset(4000, 4000));
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+    final clamped = container.read(aiProvider).cardPos;
+    expect(clamped.dx, lessThanOrEqualTo(screen.width - size.width - 12 + 0.5));
+    expect(clamped.dy, lessThanOrEqualTo(screen.height - size.height - 12 + 0.5));
+    expect(clamped.dx, greaterThan(cardPos.dx));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('resize handle exists alongside the other resize handles',
       (tester) async {
     final repo = FakeAiRepo();

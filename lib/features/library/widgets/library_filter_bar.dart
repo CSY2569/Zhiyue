@@ -5,15 +5,26 @@ import 'package:rbwa/core/theme/layout_metrics.dart';
 import 'package:rbwa/features/library/models/library_filter.dart';
 import 'package:rbwa/features/library/providers/library_providers.dart';
 
-/// Horizontal segmented filter bar above the shelf (reference design's
-/// 「全部 / PDF / 笔记 / 文件夹」 pill row).
+/// File-type filter above the shelf (全部格式 / PDF / 图片).
 ///
-/// It complements the rail instead of duplicating it: the rail holds the
-/// long-lived navigation (folders, AI, settings), while this bar is the quick
-/// filter for the current list. The two stay in sync because both read
-/// [libraryFilterProvider].
+/// The bar is a *type* axis only. The rail owns the library *views*
+/// (所有文档 / 最近使用 / 我的收藏 / 文件夹), so the two no longer offer the
+/// same five entries -- that duplication also made one tap light up an entry
+/// in both places.
+///
+/// Exactly one item is selected at any time, drawn by a single sliding
+/// indicator. The previous implementation gave every item its own animated
+/// background; while the 160ms fade ran, the outgoing and incoming pills were
+/// both visibly tinted, so a tap looked like it had selected two neighbouring
+/// entries.
 class LibraryFilterBar extends ConsumerWidget {
   const LibraryFilterBar({super.key});
+
+  static const _items = [
+    (label: '全部格式', type: LibraryType.all),
+    (label: 'PDF', type: LibraryType.pdf),
+    (label: '图片', type: LibraryType.image),
+  ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -21,24 +32,7 @@ class LibraryFilterBar extends ConsumerWidget {
     final notifier = ref.read(libraryFilterProvider.notifier);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-
-    final items = <_FilterItem>[
-      _FilterItem('全部', filter.view == LibraryView.all, notifier.showAll),
-      _FilterItem('最近', filter.view == LibraryView.recent, notifier.showRecent),
-      _FilterItem('PDF', filter.view == LibraryView.pdf, notifier.showPdf),
-      _FilterItem('图片', filter.view == LibraryView.image, notifier.showImage),
-      _FilterItem(
-        '收藏',
-        filter.view == LibraryView.favorite,
-        notifier.showFavorites,
-      ),
-      if (filter.view == LibraryView.category && filter.categoryId != null)
-        _FilterItem(
-          '文件夹',
-          true,
-          () => notifier.setCategory(filter.categoryId),
-        ),
-    ];
+    final selected = _items.indexWhere((it) => it.type == filter.type);
 
     return Container(
       height: 44,
@@ -47,48 +41,59 @@ class LibraryFilterBar extends ConsumerWidget {
         color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Row(
-        children: [
-          for (final item in items)
-            Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: item.onTap,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  alignment: Alignment.center,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final slot = constraints.maxWidth / _items.length;
+          return Stack(
+            children: [
+              // One indicator slides between slots; nothing else is ever
+              // tinted, so two entries can never look selected together.
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                left: selected < 0 ? 0 : selected * slot,
+                top: 0,
+                bottom: 0,
+                width: slot,
+                child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color:
-                        item.selected ? scheme.surface : Colors.transparent,
+                    color: scheme.surface,
                     borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    item.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: item.selected
-                          ? scheme.onSurface
-                          : scheme.onSurfaceVariant,
-                      fontWeight:
-                          item.selected ? FontWeight.w600 : FontWeight.normal,
-                    ),
                   ),
                 ),
               ),
-            ),
-        ],
+              Row(
+                children: [
+                  for (final item in _items)
+                    Expanded(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => notifier.setType(item.type),
+                        child: Center(
+                          child: Text(
+                            item.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: item.type == filter.type
+                                  ? scheme.onSurface
+                                  : scheme.onSurfaceVariant,
+                              fontWeight: item.type == filter.type
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          );
+        },
       ),
     );
   }
-}
-
-class _FilterItem {
-  const _FilterItem(this.label, this.selected, this.onTap);
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
 }
 
 /// Row of the filter bar plus the result count, used by the shelf header.

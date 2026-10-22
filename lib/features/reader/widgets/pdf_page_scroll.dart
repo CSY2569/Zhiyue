@@ -145,6 +145,12 @@ class _PdfPageScrollState extends ConsumerState<PdfPageScroll> {
         if (bookChanged) {
           _aligned = false;
           _alignedPhysicalH = null;
+          // The next book's page size is unknown until its first bitmap
+          // lands; keeping the previous book's width would size the new
+          // placeholders wrong (visible as a sideways jump in the double
+          // modes when the new pages are not the same size). This listener
+          // runs outside build, so touching a provider is safe.
+          ref.read(pageWidthProvider.notifier).state = null;
           if (mounted) setState(() {});
           return;
         }
@@ -218,7 +224,15 @@ class _PdfPageScrollState extends ConsumerState<PdfPageScroll> {
   /// going to the latest one instead of stopping at the stale target.
   void _animateToPage(int page) {
     if (!_scrollController.hasClients) return;
-    final target = _offsetForPage(page, _currentStride())
+    final viewer = ref.read(viewerProvider);
+    // [_offsetForPage] takes one page's DISPLAY height and adds the gap
+    // itself. Passing the stride (height + gap) here added the gap a second
+    // time, so every flip landed 16dp past the page -- the reader drifted
+    // further off with each page turn (desktop double-scroll / double-page
+    // looked misaligned after a few flips).
+    final double physicalH =
+        _alignedPhysicalH ?? ref.read(pageHeightProvider);
+    final target = _offsetForPage(page, physicalH * viewer.zoom)
         .clamp(0.0, _scrollController.position.maxScrollExtent);
     _fromScroll = true;
     _scrollController
@@ -290,10 +304,15 @@ class _PdfPageScrollState extends ConsumerState<PdfPageScroll> {
       return const Center(child: Text('无页面'));
     }
 
-    // The placeholder height of not-yet-loaded pages: the locked alignment
-    // stride once known (so the SliverList geometry matches the scroll
-    // math), else the last reported page height.
+    // The placeholder height/width of not-yet-loaded pages: the locked
+    // alignment height once known (so the SliverList geometry matches the
+    // scroll math), else the last reported page size. The width matters most
+    // in the double modes: a zero-width placeholder makes a row collapse to
+    // just its gutter, and the row is then re-centred when the bitmaps
+    // arrive -- the visible "double-scroll jumps sideways" defect.
     final placeholderPageH = _currentStride() - kPageGap;
+    final placeholderPageW =
+        (ref.read(pageWidthProvider) ?? 0) * state.zoom;
 
     switch (state.mode) {
       case ViewMode.single:
@@ -304,6 +323,7 @@ class _PdfPageScrollState extends ConsumerState<PdfPageScroll> {
           zoom: state.zoom,
           dpiScale: devicePixelRatio,
           placeholderHeight: placeholderPageH,
+          placeholderWidth: placeholderPageW,
         );
       case ViewMode.doubleScroll:
         return _DoubleScroll(
@@ -313,6 +333,7 @@ class _PdfPageScrollState extends ConsumerState<PdfPageScroll> {
           zoom: state.zoom,
           dpiScale: devicePixelRatio,
           placeholderHeight: placeholderPageH,
+          placeholderWidth: placeholderPageW,
         );
       case ViewMode.doublePage:
         return _DoublePageFlip(
@@ -320,6 +341,8 @@ class _PdfPageScrollState extends ConsumerState<PdfPageScroll> {
           bookId: state.book?.id ?? 0,
           zoom: state.zoom,
           dpiScale: devicePixelRatio,
+          placeholderHeight: placeholderPageH,
+          placeholderWidth: placeholderPageW,
         );
     }
   }
@@ -355,6 +378,12 @@ double _pageStride(double pageH) => pageH + kPageGap;
 /// nudges don't make the alignment stride stale.
 final pageHeightProvider = StateProvider<double>((ref) => 800.0 / 1.2);
 
+/// Physical width (pt, zoom-independent) of one page, reported next to
+/// [pageHeightProvider]. Placeholders in the double modes need it: a page
+/// placeholder without width collapses the spread row to its gutter until the
+/// bitmap lands, and the row then jumps sideways when it is re-centred.
+final pageWidthProvider = StateProvider<double?>((ref) => null);
+
 /// Single-page continuous scroll (FEATURES 3.1.1).
 ///
 /// Each page is centered in the viewport at its physical size × zoom; when
@@ -368,6 +397,7 @@ class _SingleScroll extends ConsumerWidget {
     required this.zoom,
     required this.dpiScale,
     required this.placeholderHeight,
+    required this.placeholderWidth,
   });
 
   final ScrollController scrollController;
@@ -376,6 +406,7 @@ class _SingleScroll extends ConsumerWidget {
   final double zoom;
   final double dpiScale;
   final double placeholderHeight;
+  final double placeholderWidth;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -417,8 +448,11 @@ class _SingleScroll extends ConsumerWidget {
                   zoom: zoom,
                   dpiScale: dpiScale,
                   placeholderHeight: pageH,
+                  placeholderWidth: placeholderWidth,
                   onPageHeightKnown: (h) =>
                       ref.read(pageHeightProvider.notifier).state = h,
+                  onPageWidthKnown: (w) =>
+                      ref.read(pageWidthProvider.notifier).state = w,
                 ),
               ),
             ),
@@ -441,6 +475,7 @@ class _DoubleScroll extends ConsumerWidget {
     required this.zoom,
     required this.dpiScale,
     required this.placeholderHeight,
+    required this.placeholderWidth,
   });
 
   final ScrollController scrollController;
@@ -449,6 +484,7 @@ class _DoubleScroll extends ConsumerWidget {
   final double zoom;
   final double dpiScale;
   final double placeholderHeight;
+  final double placeholderWidth;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -479,8 +515,11 @@ class _DoubleScroll extends ConsumerWidget {
                   zoom: zoom,
                   dpiScale: dpiScale,
                   placeholderHeight: pageH,
+                  placeholderWidth: placeholderWidth,
                   onPageHeightKnown: (h) =>
                       ref.read(pageHeightProvider.notifier).state = h,
+                  onPageWidthKnown: (w) =>
+                      ref.read(pageWidthProvider.notifier).state = w,
                 ),
                 const SizedBox(width: kGutter),
                 if (rightPage < pageCount)
@@ -491,8 +530,11 @@ class _DoubleScroll extends ConsumerWidget {
                     zoom: zoom,
                     dpiScale: dpiScale,
                     placeholderHeight: pageH,
+                    placeholderWidth: placeholderWidth,
                     onPageHeightKnown: (h) =>
                         ref.read(pageHeightProvider.notifier).state = h,
+                    onPageWidthKnown: (w) =>
+                        ref.read(pageWidthProvider.notifier).state = w,
                   ),
               ],
             ),
@@ -573,9 +615,24 @@ class _RowScrollState extends State<_RowScroll> {
             key: _childKey,
             // Canvas at least as wide as the viewport so the centered row
             // stays centered when it fits, and can scroll when it overflows.
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minWidth: viewportWidth),
-              child: Center(child: widget.child),
+            //
+            // [SizeChangedLayoutNotifier] catches the row growing from the
+            // placeholder width to the real spread width when the bitmaps
+            // land. That growth does not rebuild this widget (the `_PageItem`
+            // setState is internal), so `didUpdateWidget` alone never fired
+            // and the row stayed anchored at its old 0 offset -- the spread
+            // looked shifted to the left until the next zoom / mode change.
+            child: NotificationListener<SizeChangedLayoutNotification>(
+              onNotification: (_) {
+                _scheduleCenter();
+                return true;
+              },
+              child: SizeChangedLayoutNotifier(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: viewportWidth),
+                  child: Center(child: widget.child),
+                ),
+              ),
             ),
           ),
         );
@@ -602,12 +659,16 @@ class _DoublePageFlip extends ConsumerStatefulWidget {
     required this.bookId,
     required this.zoom,
     required this.dpiScale,
+    required this.placeholderHeight,
+    required this.placeholderWidth,
   });
 
   final int pageCount;
   final int bookId;
   final double zoom;
   final double dpiScale;
+  final double placeholderHeight;
+  final double placeholderWidth;
 
   @override
   ConsumerState<_DoublePageFlip> createState() => _DoublePageFlipState();
@@ -735,6 +796,12 @@ class _DoublePageFlipState extends ConsumerState<_DoublePageFlip> {
                       page: leftPage,
                       zoom: widget.zoom,
                       dpiScale: widget.dpiScale,
+                      placeholderHeight: widget.placeholderHeight,
+                      placeholderWidth: widget.placeholderWidth,
+                      onPageHeightKnown: (h) =>
+                          ref.read(pageHeightProvider.notifier).state = h,
+                      onPageWidthKnown: (w) =>
+                          ref.read(pageWidthProvider.notifier).state = w,
                     ),
                     const SizedBox(width: kGutter),
                     if (rightPage < widget.pageCount)
@@ -744,6 +811,12 @@ class _DoublePageFlipState extends ConsumerState<_DoublePageFlip> {
                         page: rightPage,
                         zoom: widget.zoom,
                         dpiScale: widget.dpiScale,
+                        placeholderHeight: widget.placeholderHeight,
+                        placeholderWidth: widget.placeholderWidth,
+                        onPageHeightKnown: (h) =>
+                            ref.read(pageHeightProvider.notifier).state = h,
+                        onPageWidthKnown: (w) =>
+                            ref.read(pageWidthProvider.notifier).state = w,
                       ),
                   ],
                 ),
@@ -768,7 +841,9 @@ class _PageItem extends ConsumerStatefulWidget {
     required this.zoom,
     required this.dpiScale,
     this.placeholderHeight = 0,
+    this.placeholderWidth = 0,
     this.onPageHeightKnown,
+    this.onPageWidthKnown,
   });
 
   final BitmapCache cache;
@@ -777,14 +852,22 @@ class _PageItem extends ConsumerStatefulWidget {
   final double zoom;
   final double dpiScale;
 
-  /// Height used by the loading placeholder, so items keep a stable height
-  /// (matching the real page height once known) and the scroll offset ↔ page
-  /// mapping stays exact.
+  /// Display height used by the loading placeholder, so items keep a stable
+  /// height (matching the real page height once known) and the scroll offset ↔
+  /// page mapping stays exact.
   final double placeholderHeight;
+
+  /// Display width used by the loading placeholder. The double modes need it:
+  /// a zero-width placeholder collapses the spread row to its gutter and the
+  /// row jumps sideways when the bitmaps arrive.
+  final double placeholderWidth;
 
   /// Reports the page's display height (logical px) *after* the bitmap loads
   /// (async -- never invoked during build, so it is safe to touch providers).
   final void Function(double height)? onPageHeightKnown;
+
+  /// Reports the page's display width, same timing as [onPageHeightKnown].
+  final void Function(double width)? onPageWidthKnown;
 
   @override
   ConsumerState<_PageItem> createState() => _PageItemState();
@@ -793,6 +876,7 @@ class _PageItem extends ConsumerStatefulWidget {
 class _PageItemState extends ConsumerState<_PageItem> {
   ui.Image? _image;
   double? _lastReportedHeight;
+  double? _lastReportedWidth;
 
   /// The zoom actually used to render `_image` (quantized to a cache tier).
   /// Used to recover the page's physical size; kept with the image so a stale
@@ -861,6 +945,15 @@ class _PageItemState extends ConsumerState<_PageItem> {
         widget.onPageHeightKnown!(physicalH);
       }
     }
+    // The physical width feeds the placeholder width of not-yet-loaded pages
+    // in the double modes (a zero-width placeholder shifts the spread row).
+    if (widget.onPageWidthKnown != null && img != null) {
+      final physicalW = img.width / (renderZoom * widget.dpiScale);
+      if (physicalW != _lastReportedWidth) {
+        _lastReportedWidth = physicalW;
+        widget.onPageWidthKnown!(physicalW);
+      }
+    }
   }
 
   /// Stage-2 sharpen: when the display needs more pixels than the current
@@ -900,14 +993,20 @@ class _PageItemState extends ConsumerState<_PageItem> {
   @override
   Widget build(BuildContext context) {
     if (_image == null) {
-      // Placeholder sized to the page's expected height (the measured page
-      // height once known, else an A4-ratio estimate) so the scroll layout
-      // stays stable while rendering.
+      // Placeholder sized to the page's expected size (the measured page size
+      // once known, else an A4-ratio estimate) so the layout stays stable
+      // while rendering. The width is not optional in the double modes: a
+      // zero-width placeholder collapses the spread row to its gutter, and
+      // the row then jumps sideways once the bitmaps arrive.
       final estWidth = MediaQuery.sizeOf(context).width * widget.zoom;
+      final pw = widget.placeholderWidth > 0
+          ? widget.placeholderWidth
+          : estWidth * 0.707;
       final ph = widget.placeholderHeight > 0
           ? widget.placeholderHeight
-          : estWidth * 1.414;
+          : pw * 1.414;
       return SizedBox(
+        width: pw,
         height: ph,
         child: const _PagePlaceholder(),
       );

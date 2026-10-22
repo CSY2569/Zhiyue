@@ -52,40 +52,45 @@ class _FakeBooksNotifier extends LibraryBooksNotifier {
 
 
 void main() {
-  test('书库入口互斥：PDF/图片/收藏/分类各自独立，不叠加', () {
+  test('视图与文件类型是两条独立的轴，各自互斥', () {
     final n = LibraryFilterNotifier();
     n.setCategory(3);
     expect(n.state.view, LibraryView.category);
     expect(n.state.categoryId, 3);
 
-    // Clicking PDF resets the category -- every PDF, not the category's.
-    n.showPdf();
-    expect(n.state.view, LibraryView.pdf);
-    expect(n.state.categoryId, isNull);
+    // The top bar's type filter does not disturb the rail's view.
+    n.setType(LibraryType.pdf);
+    expect(n.state.type, LibraryType.pdf);
+    expect(n.state.view, LibraryView.category);
+    expect(n.state.categoryId, 3);
 
-    n.showImage();
-    expect(n.state.view, LibraryView.image);
+    n.setType(LibraryType.image);
+    expect(n.state.type, LibraryType.image);
 
+    // Rail switches keep the type.
     n.showFavorites();
     expect(n.state.view, LibraryView.favorite);
+    expect(n.state.type, LibraryType.image);
 
     n.setCategory(7);
     expect(n.state.view, LibraryView.category);
     expect(n.state.categoryId, 7);
     n.showAll();
     expect(n.state.view, LibraryView.all);
+    expect(n.state.categoryId, isNull);
+    expect(n.state.type, LibraryType.image);
 
-    // Search is the only stacking filter: it survives view switches.
+    // Search stacks on top of both.
     n.setSearchQuery('rust');
     expect(n.state.isClear, isFalse);
     n.showAll();
     expect(n.state.searchQuery, 'rust');
-    n.showAll();
     n.setSearchQuery('');
+    n.setType(LibraryType.all);
     expect(n.state.isClear, isTrue);
   });
 
-  test('filteredBooksProvider 应用唯一的视图', () async {
+  test('filteredBooksProvider 同时应用视图与文件类型', () async {
     final container = ProviderContainer(
       overrides: [libraryBooksProvider.overrideWith(_FakeBooksNotifier.new)],
     );
@@ -97,19 +102,25 @@ void main() {
     expect(container.read(filteredBooksProvider), hasLength(3));
 
     // PDF: both PDFs, regardless of category / favorite.
-    n.showPdf();
+    n.setType(LibraryType.pdf);
     expect(
       container.read(filteredBooksProvider).map((b) => b.title).toList(),
       ['Rust 实战', '收藏的 PDF'],
     );
 
     // 图片: the image only.
-    n.showImage();
+    n.setType(LibraryType.image);
     expect(container.read(filteredBooksProvider).single.title, '封面图');
 
-    // 收藏: the favorite only.
+    // 收藏: the favorite only (type reset to every type).
+    n.setType(LibraryType.all);
     n.showFavorites();
     expect(container.read(filteredBooksProvider).single.title, '收藏的 PDF');
+
+    // 收藏 + 图片: the two axes combine (the favorite is a PDF).
+    n.setType(LibraryType.image);
+    expect(container.read(filteredBooksProvider), isEmpty);
+    n.setType(LibraryType.all);
 
     // 分类 1: its books only (the favorite in category 2 is excluded).
     n.setCategory(1);
@@ -145,16 +156,16 @@ void main() {
     expect(find.text('我的收藏'), findsOneWidget);
     expect(find.text('AI 对话'), findsOneWidget);
     expect(find.text('小说'), findsNothing);
+    // The rail no longer repeats the top bar's type filters, and the settings
+    // entry lives only in the library header (no duplicated navigation).
+    expect(find.text('PDF'), findsNothing);
+    expect(find.text('图片'), findsNothing);
+    expect(find.text('设置'), findsNothing);
 
     // Views are mutually exclusive.
     await tester.tap(find.text('最近使用'));
     await tester.pump();
     expect(container.read(libraryFilterProvider).view, LibraryView.recent);
-
-    await tester.tap(find.text('PDF'));
-    await tester.pump();
-    expect(container.read(libraryFilterProvider).view, LibraryView.pdf);
-    expect(container.read(libraryFilterProvider).categoryId, isNull);
 
     await tester.tap(find.text('我的收藏'));
     await tester.pump();

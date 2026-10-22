@@ -264,44 +264,44 @@ final libraryFilterProvider =
 class LibraryFilterNotifier extends StateNotifier<LibraryFilter> {
   LibraryFilterNotifier() : super(const LibraryFilter());
 
-  void setSearchQuery(String q) => state = state.copyWith(searchQuery: q);
+  void setSearchQuery(String q) => _replace(searchQuery: q);
 
-  /// 全部: no view filter (search still applies).
-  void showAll() => state = LibraryFilter(searchQuery: state.searchQuery);
+  /// Rebuilds the filter, keeping the axes the caller does not change.
+  void _replace({
+    String? searchQuery,
+    LibraryView? view,
+    int? categoryId,
+    bool clearCategory = false,
+    LibraryType? type,
+  }) {
+    state = LibraryFilter(
+      searchQuery: searchQuery ?? state.searchQuery,
+      view: view ?? state.view,
+      categoryId: clearCategory ? null : (categoryId ?? state.categoryId),
+      type: type ?? state.type,
+    );
+  }
+
+  /// 全部: no view filter (search / type still apply).
+  void showAll() => _replace(view: LibraryView.all, clearCategory: true);
 
   /// 最近使用: books with a saved open timestamp (the list is already
   /// ordered most-recent-first by the repository).
-  void showRecent() => state = LibraryFilter(
-        searchQuery: state.searchQuery,
-        view: LibraryView.recent,
-      );
+  void showRecent() =>
+      _replace(view: LibraryView.recent, clearCategory: true);
 
-  /// PDF: every PDF in the library, regardless of category / favorites.
-  void showPdf() => state = LibraryFilter(
-        searchQuery: state.searchQuery,
-        view: LibraryView.pdf,
-      );
-
-  /// 图片: every image book, regardless of category / favorites.
-  void showImage() => state = LibraryFilter(
-        searchQuery: state.searchQuery,
-        view: LibraryView.image,
-      );
-
-  /// 收藏: every favorite, regardless of category / type.
-  void showFavorites() => state = LibraryFilter(
-        searchQuery: state.searchQuery,
-        view: LibraryView.favorite,
-      );
+  /// 收藏: every favorite, whatever its type or folder.
+  void showFavorites() =>
+      _replace(view: LibraryView.favorite, clearCategory: true);
 
   /// Select a category (the only active view). `null` falls back to 全部.
-  void setCategory(int? categoryId) => state = categoryId == null
-      ? LibraryFilter(searchQuery: state.searchQuery)
-      : LibraryFilter(
-          searchQuery: state.searchQuery,
-          view: LibraryView.category,
-          categoryId: categoryId,
-        );
+  void setCategory(int? categoryId) => categoryId == null
+      ? showAll()
+      : _replace(view: LibraryView.category, categoryId: categoryId);
+
+  /// File-type filter (the shelf's top bar). Independent of the rail's view,
+  /// so 「收藏 + PDF」 works.
+  void setType(LibraryType type) => _replace(type: type);
 }
 
 /// Derived provider: the book list after applying the current filter
@@ -326,17 +326,21 @@ final filteredBooksProvider = Provider<List<Book>>((ref) {
     if (query.isNotEmpty && !b.title.toLowerCase().contains(query)) {
       return false;
     }
-    // Exactly one primary view is active at a time (mutually exclusive rail
-    // entries); search is the only stacking filter.
-    return switch (filter.view) {
+    // Two independent axes: the rail's view (one at a time) and the top
+    // bar's file type. Search stacks on top of both.
+    final matchesView = switch (filter.view) {
       LibraryView.all => true,
       // Recently opened: anything with a saved open timestamp. The list is
       // already ordered most-recent-first by the repository.
       LibraryView.recent => b.lastOpenedAt != null,
-      LibraryView.pdf => b.fileType == BookType.pdf,
-      LibraryView.image => b.fileType == BookType.image,
       LibraryView.favorite => b.favorite,
       LibraryView.category => b.categoryId == filter.categoryId,
     };
+    final matchesType = switch (filter.type) {
+      LibraryType.all => true,
+      LibraryType.pdf => b.fileType == BookType.pdf,
+      LibraryType.image => b.fileType == BookType.image,
+    };
+    return matchesView && matchesType;
   }).toList();
 });
