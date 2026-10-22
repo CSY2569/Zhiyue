@@ -89,8 +89,9 @@
 
 **交付**
 
-- `android/` 工程：`flutter create --platforms=android --org io.github.csy2569 .` 生成后按需裁剪。
-  - 建议 `applicationId = io.github.csy2569.zhiyue`（可改；一旦发布不要再改，否则升级会变成新应用）。
+- `android/` 工程：`flutter create --platforms=android --org work.csywxk .` 生成后按需裁剪。
+  - `applicationId = work.csywxk.icefish_zhiyue`（2026-10-22 定稿；一旦发布不要再改，
+    否则升级会变成新应用）。
   - 运行后检查 `pubspec.yaml` / `README.md` / `linux/` 未被 `flutter create` 改写，只保留新增的 `android/`。
 - Gradle ↔ Rust：`cargo-ndk` 构建 `aarch64-linux-android` / `x86_64-linux-android`，产物进 `src/main/jniLibs/<abi>/librbwa_core.so`。
 - 原生库：
