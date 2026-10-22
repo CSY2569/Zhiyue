@@ -2,7 +2,7 @@ name: rbwa
 description: "Read Book With AI - native AI-integrated local document reader"
 publish_to: 'none'
 
-version: 1.7.0+12
+version: 1.9.1+15
 
 environment:
   sdk: ^3.12.2
