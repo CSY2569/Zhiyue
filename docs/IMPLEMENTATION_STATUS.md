@@ -1065,6 +1065,41 @@ clippy -D warnings 0。release 桌面版实机复测：启动正常、快速连�
 测试全绿、analyze 0；离屏渲染确认 1080×2340 下卡片为悬浮面板形态；
 release APK 1.9.0 构建通过、16KB 对齐通过。
 
+### 3.37 悬浮卡可拖动 + 选区工具条恢复悬浮（2026-10-22，1.9.1）
+
+**① AI 回复卡无法拖动**
+- 根因一：手机分支把 `onPanUpdate` 写成了 `compact ? null : ...`，手机直接
+  禁用了拖动。
+- 根因二：`moveCard(delta)` 是在 `state.cardPos` 上累加，而手机首次渲染用的是
+  计算出的**居中坐标**；`cardPos` 还停在桌面默认 (80,120)，第一个 delta 会
+  从那个陈旧值算起，卡片会瞬移。
+- 修复：拖动在所有平台启用；`onPanStart` 先把卡片**当前真实左上角**写回
+  `cardPos`（新增 `setCardPosition`），再让后续 delta 做相对累加。标题栏
+  加 `Key('card-drag-handle')` 便于测试与定位。
+
+**② 选区工具条恢复悬浮**
+- 之前 phone 走 `_dockedBar`：贴底、通栏、4×2 网格。用户要求恢复悬浮。
+- 现在**始终悬浮**，按可用宽度选布局：
+  - 手机 / 窄窗：4×2 紧凑网格（图标在上、标签在下，单元最小宽 62dp、
+    高 56dp，`IntrinsicWidth` 让最宽的列决定列宽，避免「下划线」被裁）；
+  - 平板 / 桌面：单行带标签按钮的 `Wrap`（800dp 分屏时自动换行）。
+- 拖动：手势挂在整条工具条上，`onPanStart` 用 `GlobalKey` 读工具条真实屏幕
+  坐标并 seed 到 `toolbarPos`，首个 delta 不会跳。
+- 样式统一到主界面：18dp 圆角 + 面板底色 + 发丝描边 + 柔和投影
+  （`Material` 承接 `InkWell` 的水波纹，视觉由 shape/border 决定）。
+
+**③ 修过程中发现的两个真 bug**
+- `CustomSingleChildLayout` 的 `getConstraintsForChild` 返回 `constraints
+  .loosen()`，子级拿到**无限宽**约束，`Row` 直接撑到 79 万像素并报
+  「RenderFlex overflowed by 799208 pixels」。改为 `BoxConstraints
+  .loose(screen)`，并给工具条加 `IntrinsicWidth`。
+- 换成 `DecoratedBox` 面板后 `InkWell` 失去 Material 祖先，运行时
+  `debugCheckHasMaterial` 断言失败。改回 `Material` 承载外观。
+
+**验证**：新增「拖动标题栏使卡片位移且仍在视口内」测试；改写手机工具条测试为
+「悬浮、不通栏、8 个动作齐全」；Flutter **327** 测试全绿、analyze 0；
+release APK 1.9.1 构建通过、16KB 对齐通过。
+
 ## 4. 后续开发方向
 
 ### 4.1 近期（补齐规格 P2 缺口）
