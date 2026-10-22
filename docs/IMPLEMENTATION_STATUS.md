@@ -495,7 +495,7 @@ Flutter 201 测试（新增宽度分档单测）+ analyze 0；mock 端到端 6.4
 Android 走独立的平台能力层与文本翻译模块。
 
 **构建链（A0）**
-- 新增 `android/` 工程（applicationId `io.github.csy2569.zhiyue`，minSdk 26 /
+- 新增 `android/` 工程（applicationId `work.csywxk.icefish_zhiyue`，minSdk 26 /
   targetSdk 35 / **仅 arm64-v8a**）。
 - `cargo-ndk` 交叉编译 `librbwa_core.so`；pdfium 用 bblanchon `chromium/8111`
   Android arm64（`scripts/fetch_pdfium_android.sh`）。
@@ -1099,6 +1099,35 @@ release APK 1.9.0 构建通过、16KB 对齐通过。
 **验证**：新增「拖动标题栏使卡片位移且仍在视口内」测试；改写手机工具条测试为
 「悬浮、不通栏、8 个动作齐全」；Flutter **327** 测试全绿、analyze 0；
 release APK 1.9.1 构建通过、16KB 对齐通过。
+
+### 3.38 包名、应用名、版本号与图标定稿（2026-10-22，1.0.0）
+
+发布前的一次标识统一：
+
+- **包名**：`io.github.csy2569.zhiyue` → **`work.csywxk.icefish_zhiyue`**。
+  同步修改 `namespace`、`applicationId` 与 4 个 Kotlin 源文件的 `package`，
+  目录随之迁移到 `android/app/src/main/kotlin/work/csywxk/icefish_zhiyue/`。
+  新包名与作者已有的 `work.csywxk.icefish_note` 同属一个命名空间。
+- **应用名**：Android 的 `android:label` 原本已是「智阅」，无需改动
+  （`flutter build` 会把它写进 `application-label`）。
+- **版本号**：重置为 **1.0.0 (versionCode 1)**，作为首个正式发布版本。
+- **图标**：换成新版方形图标（文档 + AI 星芒 + 对话气泡）。生成三套：
+  - legacy `mipmap-*/ic_launcher.png`（48/72/96/144/192），
+  - adaptive `mipmap-anydpi-v26/ic_launcher.xml` + 前景层
+    `ic_launcher_foreground.png`（108/162/216/324/432，内容占 66% 安全区），
+  - 背景色 `@color/ic_launcher_background` = `#FDFDFF`（取自图标自带底板），
+    并带 Android 13+ 的 `<monochrome>` 主题图标声明。
+  同时把 `assets/ZhiYue.png` 与 `packaging/icon/zhiyue.png` 更新为同一张
+  512px 版本，Linux 打包使用同一素材。
+
+**验证**：`aapt2 dump badging` 确认 `package=work.csywxk.icefish_zhiyue`、
+`versionName=1.0.0 versionCode=1`、`application-label='智阅'`、
+`application-icon-*` 指向 adaptive XML；Flutter 327 测试全绿、analyze 0；
+真机安装（`pm install`）并截图确认图标在桌面与 Dock 显示正常、遮罩裁切无溢出；
+release APK 269MB、16KB 对齐通过。
+
+**注意**：包名变更意味着这是**新应用**，无法覆盖安装旧版本（`io.github.csy2569.zhiyue`），
+旧应用的数据也不会自动迁移。设备上已手动卸载旧包。
 
 ## 4. 后续开发方向
 
