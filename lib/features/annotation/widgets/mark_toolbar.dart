@@ -8,17 +8,30 @@ import 'package:rbwa/features/annotation/providers/image_mark_provider.dart';
 import 'package:rbwa/features/annotation/widgets/highlight_layer.dart'
     show parseHexColor;
 
-/// Inline annotation controls for the reader's top bar (FEATURES 5.1-5.5).
+/// Inline annotation controls for the reader's chrome (FEATURES 5.1-5.5).
 ///
 /// They used to live in a floating bar layered over the page (a second-level
 /// toolbar that appeared after pressing 批注). They are now shown directly in
-/// the middle of the reader toolbar, so the tools, undo / redo and the style
-/// controls sit in the same chrome row as every other reading action.
+/// the reading chrome itself: the middle of the desktop toolbar, or a
+/// scrollable row inside the phone's bottom bar.
 ///
-/// Returns [SizedBox.shrink] when no tool is armed -- the reader toolbar keeps
-/// its normal controls in that case.
+/// Returns [SizedBox.shrink] when no tool is armed -- the caller keeps its
+/// normal controls in that case.
 class MarkToolOptions extends ConsumerWidget {
-  const MarkToolOptions({super.key});
+  const MarkToolOptions({
+    super.key,
+    this.showExit = true,
+    this.compact = false,
+  });
+
+  /// Whether to render the trailing 「退出批注」 button. Callers that pin their
+  /// own exit control (the phone bottom bar keeps it outside the scroll area
+  /// so it is always reachable) pass `false`.
+  final bool showExit;
+
+  /// Tighter spacing for touch chrome: smaller slider and no divider margins,
+  /// so more of the row fits before it has to scroll.
+  final bool compact;
 
   static const List<String> _palette = [
     '#e53935', // red
@@ -30,6 +43,7 @@ class MarkToolOptions extends ConsumerWidget {
     '#5d4037', // brown
     '#212121', // black
   ];
+
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -68,7 +82,7 @@ class MarkToolOptions extends ConsumerWidget {
           onTap: () => notifier.setTool(MarkTool.sticky),
         ),
         _StampTool(active: tool == MarkTool.stamp),
-        const VDivider(),
+        if (!compact) const VDivider(),
         ToolbarIconButton(
           icon: LucideIcons.undo,
           tooltip: '撤销 (Ctrl+Z)',
@@ -82,7 +96,7 @@ class MarkToolOptions extends ConsumerWidget {
           onTap: markNotifier.canRedo ? () => markNotifier.redo() : null,
         ),
         if (showStyle) ...[
-          const VDivider(),
+          if (!compact) const VDivider(),
           for (final c in _palette)
             _ColorDot(
               color: c,
@@ -90,7 +104,7 @@ class MarkToolOptions extends ConsumerWidget {
               onTap: () => notifier.setColor(c),
             ),
           SizedBox(
-            width: 96,
+            width: compact ? 72 : 96,
             child: Slider(
               value: toolState.strokeWidth.clamp(1, 12),
               min: 1,
@@ -105,12 +119,14 @@ class MarkToolOptions extends ConsumerWidget {
             onTap: notifier.toggleFill,
           ),
         ],
-        const VDivider(),
-        ToolbarIconButton(
-          icon: LucideIcons.check,
-          tooltip: '退出批注',
-          onTap: () => notifier.setTool(null),
-        ),
+        if (showExit) ...[
+          if (!compact) const VDivider(),
+          ToolbarIconButton(
+            icon: LucideIcons.check,
+            tooltip: '退出批注',
+            onTap: () => notifier.setTool(null),
+          ),
+        ],
       ],
     );
   }
