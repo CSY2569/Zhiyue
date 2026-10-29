@@ -5,6 +5,8 @@ import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:rbwa/core/theme/layout_metrics.dart';
+import 'package:rbwa/core/theme/reading_theme.dart';
+import 'package:rbwa/core/theme/reading_theme_controller.dart';
 import 'package:rbwa/core/theme/theme_controller.dart';
 import 'package:rbwa/core/widgets/confirm_dialog.dart';
 import 'package:rbwa/core/widgets/empty_state.dart';
@@ -61,7 +63,7 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
             filteredCount: shownBooks.length,
             onOpenDrawer:
                 mobile ? () => _scaffoldKey.currentState?.openDrawer() : null,
-            onToggleTheme: () => _toggleTheme(ref),
+            onToggleTheme: () => _toggleTheme(context, ref),
             onOpenSettings: () => context.push('/settings'),
           ),
           // Segmented filter row (the reference design's pill bar).
@@ -105,10 +107,22 @@ class _LibraryPageState extends ConsumerState<LibraryPage> {
     return scaffold;
   }
 
-  void _toggleTheme(WidgetRef ref) {
-    final notifier = ref.read(themeControllerProvider.notifier);
-    final current = ref.read(themeControllerProvider);
-    notifier.set(current == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark);
+  /// Light <-> dark switch for the shelf header.
+  ///
+  /// Acts on the reading-theme choice (the same setting the settings page
+  /// owns) so it works for every selection, not just 「跟随亮度」: the old
+  /// implementation flipped the legacy [ThemeMode], which only participates
+  /// while the choice is `auto`.
+  void _toggleTheme(BuildContext context, WidgetRef ref) {
+    final choice = ref.read(readingThemeControllerProvider);
+    final effective = resolveReadingTheme(
+      choice,
+      ref.read(themeControllerProvider),
+      MediaQuery.platformBrightnessOf(context),
+    );
+    ref
+        .read(readingThemeControllerProvider.notifier)
+        .set(toggledReadingTheme(effective));
   }
 
   /// Guards against a double tap pushing two reader routes (a `push` no

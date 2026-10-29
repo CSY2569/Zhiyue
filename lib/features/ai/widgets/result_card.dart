@@ -129,11 +129,15 @@ class ResultCard extends ConsumerWidget {
   /// Writes the card's current top-left into the shared position before the
   /// first drag delta.
   ///
-  /// Phones render the card centred while `cardPos` still holds the desktop
-  /// default (80,120); without seeding, the first drag update would move from
-  /// that default and the card would jump.
+  /// The position must be the one the card is ACTUALLY drawn at: on a phone a
+  /// new card is centred while `cardPos` still holds the desktop default, and
+  /// on desktop the stored position can be clamped into the viewport. Seeding
+  /// anything else made the first pan jump the card to that other spot, which
+  /// is the "card teleports and the pointer no longer sits on its title bar"
+  /// bug.
   void _beginDrag(BuildContext context, WidgetRef ref) {
     final screen = MediaQuery.sizeOf(context);
+    final state = ref.read(aiProvider);
     final persisted = ref.read(panelLayoutProvider).cardSize;
     final compact = PlatformHost.current.compactUi(screen.width);
     final cardSize = _effectiveSize(persisted, screen, compact);
@@ -146,14 +150,34 @@ class ResultCard extends ConsumerWidget {
       ((screen.height - cardSize.height) / 2 - keyboard / 2)
           .clamp(12.0, maxTop),
     );
+    // The build draws a default-positioned card centred on compact layouts;
+    // everywhere else it draws `cardPos` (clamped). Seed that exact point.
+    final shown = (compact && state.cardPos == _defaultCardPos)
+        ? centred
+        : state.cardPos;
     final current = Offset(
-      centred.dx.clamp(12.0, maxLeft),
-      centred.dy.clamp(12.0, maxTop),
+      shown.dx.clamp(12.0, maxLeft),
+      shown.dy.clamp(12.0, maxTop),
     );
-    // Seed unconditionally: a new AI action resets `cardPos` to the desktop
-    // default, and this drag is about to move the card from where the user
-    // actually sees it.
     ref.read(aiProvider.notifier).setCardPosition(current);
+  }
+
+  /// Moves the card by [delta], clamped to the viewport so the stored
+  /// position always equals the drawn one (no dead zone at the edges).
+  void _dragCard(BuildContext context, WidgetRef ref, Offset delta) {
+    final screen = MediaQuery.sizeOf(context);
+    final persisted = ref.read(panelLayoutProvider).cardSize;
+    final compact = PlatformHost.current.compactUi(screen.width);
+    final cardSize = _effectiveSize(persisted, screen, compact);
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    final maxLeft = (screen.width - cardSize.width - 12).clamp(12.0, double.infinity);
+    final maxTop =
+        (screen.height - cardSize.height - 12 - keyboard).clamp(12.0, double.infinity);
+    final next = ref.read(aiProvider).cardPos + delta;
+    ref.read(aiProvider.notifier).setCardPosition(Offset(
+          next.dx.clamp(12.0, maxLeft),
+          next.dy.clamp(12.0, maxTop),
+        ));
   }
 
   /// Card size for the current viewport.
@@ -197,8 +221,12 @@ class ResultCard extends ConsumerWidget {
               // with that origin -- otherwise the first delta would apply to
               // the stale desktop default and teleport the card.
               onPanStart: (_) => _beginDrag(context, ref),
-              onPanUpdate: (d) =>
-                  ref.read(aiProvider.notifier).moveCard(d.delta),
+              // Clamp every step to the viewport: the build already clamps
+              // the drawn position, so a drag past the edge used to keep
+              // accumulating out-of-range coordinates in `cardPos` -- the
+              // card stayed pinned while the pointer moved on, and the title
+              // bar no longer sat under the cursor.
+              onPanUpdate: (d) => _dragCard(context, ref, d.delta),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(
                   Golden.s13,

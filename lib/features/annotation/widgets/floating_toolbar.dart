@@ -97,13 +97,12 @@ class _FloatingToolbarState extends ConsumerState<FloatingToolbar> {
               // fills the overlay, so size assertions need the bar's box.
               behavior: HitTestBehavior.translucent,
               onPanStart: (_) => _seedDragOrigin(),
-              onPanUpdate: (d) {
-                final live = ref.read(selectionProvider).toolbarPos;
-                if (live == null) return;
-                ref
-                    .read(selectionProvider.notifier)
-                    .moveToolbar(live + d.delta);
-              },
+              // Clamp to the viewport as the delegate does. Storing raw
+              // accumulated coordinates made the bar stick at the edge while
+              // the pointer kept moving (the "top edge no longer matches the
+              // cursor" complaint); the stored position now always equals the
+              // drawn one.
+              onPanUpdate: (d) => _dragTo(screen, d.delta),
               child: compact
                   ? _compactSurface(theme, actions)
                   : _rowSurface(theme, actions),
@@ -123,6 +122,22 @@ class _FloatingToolbarState extends ConsumerState<FloatingToolbar> {
     ref
         .read(selectionProvider.notifier)
         .moveToolbar(box.localToGlobal(Offset.zero));
+  }
+
+  /// Applies a drag step, clamped exactly like [_ToolbarLayout] so the stored
+  /// position never drifts away from what is on screen.
+  void _dragTo(Size screen, Offset delta) {
+    final live = ref.read(selectionProvider).toolbarPos;
+    if (live == null) return;
+    final box = _surfaceKey.currentContext?.findRenderObject() as RenderBox?;
+    final bar = box?.size ?? Size.zero;
+    final maxLeft = screen.width - bar.width - 8;
+    final maxTop = screen.height - bar.height - 8;
+    final next = live + delta;
+    ref.read(selectionProvider.notifier).moveToolbar(Offset(
+          maxLeft < 8 ? 8.0 : next.dx.clamp(8.0, maxLeft),
+          maxTop < 8 ? 8.0 : next.dy.clamp(8.0, maxTop),
+        ));
   }
 
   /// Panel-styled container shared by both layouts (18dp radius, overlay
@@ -168,17 +183,21 @@ class _FloatingToolbarState extends ConsumerState<FloatingToolbar> {
     );
   }
 
-  /// Tablet / desktop layout: labelled buttons in one row when they fit,
-  /// wrapping to a second row when the window is narrow (a split view can be
-  /// 800dp, where eight labelled buttons do not fit on one line).
+  /// Tablet / desktop layout: all eight labelled buttons on ONE row.
+  ///
+  /// This used to be a [Wrap]: `Wrap`'s max intrinsic width ignores its
+  /// `spacing`, so `IntrinsicWidth` handed it a width 2dp short of the real
+  /// row and the last button (笔记) wrapped onto a second line -- the "two-row
+  /// toolbar" desktop regression. A [Row] measures exactly, and desktop
+  /// windows are at least 960dp wide, where the ~560dp bar always fits.
   Widget _rowSurface(ThemeData theme, List<Widget> actions) {
     return _panel(
       context,
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-        child: Wrap(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           spacing: 2,
-          runSpacing: 2,
           children: actions,
         ),
       ),

@@ -122,7 +122,8 @@ void main() {
         ),
       ));
       await tester.pumpAndSettle();
-      for (final label in ['全部', '最近', 'PDF', '图片', '收藏']) {
+      // The top bar is the file-type axis; the view axis lives in the rail.
+      for (final label in ['全部格式', 'PDF', '图片']) {
         expect(find.text(label), findsOneWidget, reason: label);
       }
       expect(tester.takeException(), isNull);

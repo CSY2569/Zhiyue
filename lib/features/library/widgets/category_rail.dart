@@ -87,44 +87,65 @@ class _Segmented extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final entries = _labels.entries.toList();
+    final selected = entries.indexWhere((e) => e.key == value);
     return Container(
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest.withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Row(
-        children: [
-          for (final entry in _labels.entries)
-            Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onChanged(entry.key),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  padding: const EdgeInsets.symmetric(vertical: 7),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // One sliding indicator, like the shelf's type bar: per-item
+          // animated backgrounds left two entries tinted mid-transition, so
+          // a single tap looked like it had selected two tabs.
+          final slot = constraints.maxWidth / entries.length;
+          return Stack(
+            children: [
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 160),
+                curve: Curves.easeOutCubic,
+                left: selected < 0 ? 0 : selected * slot,
+                top: 0,
+                bottom: 0,
+                width: slot,
+                child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: entry.key == value
-                        ? scheme.surface
-                        : Colors.transparent,
+                    color: scheme.surface,
                     borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    entry.value,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: entry.key == value
-                          ? scheme.onSurface
-                          : scheme.onSurfaceVariant,
-                      fontWeight: entry.key == value
-                          ? FontWeight.w600
-                          : FontWeight.normal,
-                    ),
                   ),
                 ),
               ),
-            ),
-        ],
+              Row(
+                children: [
+                  for (final entry in entries)
+                    Expanded(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => onChanged(entry.key),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 7),
+                          child: Text(
+                            entry.value,
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: entry.key == value
+                                  ? scheme.onSurface
+                                  : scheme.onSurfaceVariant,
+                              fontWeight: entry.key == value
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -165,18 +186,6 @@ class _NavList extends ConsumerWidget {
           selected: filter.view == LibraryView.favorite,
           onTap: () => ref.read(libraryFilterProvider.notifier).showFavorites(),
         ),
-        _RailItem(
-          icon: LucideIcons.fileText,
-          label: 'PDF',
-          selected: filter.view == LibraryView.pdf,
-          onTap: () => ref.read(libraryFilterProvider.notifier).showPdf(),
-        ),
-        _RailItem(
-          icon: LucideIcons.image,
-          label: '图片',
-          selected: filter.view == LibraryView.image,
-          onTap: () => ref.read(libraryFilterProvider.notifier).showImage(),
-        ),
         Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: Golden.s13,
@@ -198,12 +207,6 @@ class _NavList extends ConsumerWidget {
           label: '全文搜索',
           selected: false,
           onTap: () => context.push('/search'),
-        ),
-        _RailItem(
-          icon: LucideIcons.settings,
-          label: '设置',
-          selected: false,
-          onTap: () => context.push('/settings'),
         ),
       ],
     );

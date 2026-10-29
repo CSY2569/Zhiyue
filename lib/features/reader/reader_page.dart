@@ -18,7 +18,6 @@ import 'package:rbwa/features/annotation/export_actions.dart';
 import 'package:rbwa/features/annotation/providers/image_mark_provider.dart';
 import 'package:rbwa/features/annotation/providers/selection_provider.dart';
 import 'package:rbwa/features/annotation/widgets/floating_toolbar.dart';
-import 'package:rbwa/features/annotation/widgets/mark_toolbar.dart';
 import 'package:rbwa/features/annotation/widgets/note_composer.dart';
 import 'package:rbwa/features/annotation/widgets/note_popup.dart';
 import 'package:rbwa/features/bilingual/providers/page_translation_provider.dart';
@@ -466,14 +465,8 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               // app-level Overlay so they are never clipped). The scan prompt
               // (FEATURES 7.1.2) lives inside each page instead: it anchors to
               // the page's top-left corner and scrolls with it.
-              // Mark tool bar (FEATURES §5): floats above the reading area
-              // while a mark tool is armed.
-              Positioned(
-                top: 8,
-                left: 0,
-                right: 0,
-                child: Center(child: MarkToolBar()),
-              ),
+              // The annotation tools are NOT here: they render inline in the
+              // reader toolbar's middle section (MarkToolOptions).
               OverlayPortal(
                 controller: _toolbarController,
                 overlayChildBuilder: (_) =>

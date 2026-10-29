@@ -25,6 +25,18 @@ ReadingTheme resolveReadingTheme(
   return dark ? ReadingTheme.night : ReadingTheme.paper;
 }
 
+/// The light <-> dark counterpart of a concrete theme, used by the library's
+/// 「切换主题」 toggle.
+///
+/// The toggle must act on the SAME setting the settings page owns
+/// ([ReadingTheme]); it used to flip the legacy [ThemeMode] instead, which
+/// [resolveReadingTheme] ignores whenever an explicit theme is selected --
+/// so the button silently did nothing except under 「跟随亮度」. Auto keeps
+/// following the system until the user asks for the opposite brightness;
+/// from then on the explicit counterpart is stored.
+ReadingTheme toggledReadingTheme(ReadingTheme effective) =>
+    effective == ReadingTheme.night ? ReadingTheme.paper : ReadingTheme.night;
+
 /// Colors and bitmap filters for one reading theme. Delivered as a
 /// [ThemeExtension] so every widget under the reader route can read it via
 /// `Theme.of(context).extension<ReadingPalette>()`.

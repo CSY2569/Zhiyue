@@ -7,6 +7,8 @@ import 'package:rbwa/core/widgets/toolbar_icon_button.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
 import 'package:rbwa/features/annotation/providers/image_mark_provider.dart'
     show MarkTool, markToolProvider;
+import 'package:rbwa/features/annotation/widgets/mark_toolbar.dart'
+    show MarkToolOptions;
 import 'package:rbwa/features/bilingual/providers/page_translation_provider.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
 import 'package:rbwa/features/screenshot/screenshot_provider.dart';
@@ -17,8 +19,13 @@ import 'package:rbwa/src/rust/models/progress.dart';
 /// Left to right: sidebar toggles (thumbnails / outline / annotations), the
 /// view-mode selector (single / double-scroll / double-page in one popup),
 /// zoom controls, page navigation, then the free screenshot button and the
-/// AI panel toggle. All actions delegate to the [ViewerNotifier] /
-/// [AiNotifier] / [ScreenshotNotifier].
+/// AI panel toggle.
+///
+/// When a mark tool is armed (批注), the middle section shows the annotation
+/// tools inline -- tool switcher, undo / redo and the style controls -- in
+/// place of the mode / zoom / paging group, instead of opening a second
+/// floating toolbar over the page. All actions delegate to the
+/// [ViewerNotifier] / [AiNotifier] / [ScreenshotNotifier] / mark providers.
 class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
   const ReaderToolbar({super.key});
 
@@ -30,6 +37,9 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
     final state = ref.watch(viewerProvider);
     final notifier = ref.read(viewerProvider.notifier);
     final theme = Theme.of(context);
+    final markActive = ref.watch(
+      markToolProvider.select((s) => s.tool != null),
+    );
 
     return Container(
       height: 48,
@@ -72,62 +82,72 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
             onTap: () => ref.read(translationPaneProvider.notifier).toggle(),
           ),
           const VDivider(),
-          // View mode selector (3.1): one popup for the three modes.
-          const _ModeSelector(),
-          const VDivider(),
-          // Zoom (3.2.1)
-          IconButton(
-            icon: const Icon(LucideIcons.zoomOut, size: 20),
-            tooltip: '缩小',
-            onPressed: notifier.zoomOut,
+          // Middle: normal reading controls, or the annotation tools while a
+          // mark tool is armed (FEATURES §5: 批注 is not a second-level bar).
+          Expanded(
+            child: markActive
+                ? _inlineMarkOptions()
+                : Row(
+                    children: [
+                      // View mode selector (3.1): one popup for the three
+                      // modes.
+                      const _ModeSelector(),
+                      const VDivider(),
+                      // Zoom (3.2.1)
+                      IconButton(
+                        icon: const Icon(LucideIcons.zoomOut, size: 20),
+                        tooltip: '缩小',
+                        onPressed: notifier.zoomOut,
+                      ),
+                      SizedBox(
+                        width: 40,
+                        child: Text(
+                          '${(state.zoom * 100).round()}%',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(LucideIcons.zoomIn, size: 20),
+                        tooltip: '放大',
+                        onPressed: notifier.zoomIn,
+                      ),
+                      IconButton(
+                        icon: const Icon(LucideIcons.rotateCcw, size: 20),
+                        tooltip: '恢复缩放',
+                        onPressed: notifier.resetZoom,
+                      ),
+                      const VDivider(),
+                      // Paging (3.3.1)
+                      IconButton(
+                        icon: const Icon(LucideIcons.chevronLeft, size: 20),
+                        tooltip: '上一页',
+                        onPressed:
+                            state.currentPage > 1 ? notifier.prevPage : null,
+                      ),
+                      GestureDetector(
+                        onTap: () => _showPageJumpDialog(context, ref),
+                        child: Text(
+                          '${state.currentPage} / ${state.pageCount}',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(LucideIcons.chevronRight, size: 20),
+                        tooltip: '下一页',
+                        onPressed: state.currentPage < state.pageCount
+                            ? notifier.nextPage
+                            : null,
+                      ),
+                    ],
+                  ),
           ),
-          SizedBox(
-            width: 40,
-            child: Text(
-              '${(state.zoom * 100).round()}%',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall,
-            ),
-          ),
-          IconButton(
-            icon: const Icon(LucideIcons.zoomIn, size: 20),
-            tooltip: '放大',
-            onPressed: notifier.zoomIn,
-          ),
-          IconButton(
-            icon: const Icon(LucideIcons.rotateCcw, size: 20),
-            tooltip: '恢复缩放',
-            onPressed: notifier.resetZoom,
-          ),
-          const VDivider(),
-          // Paging (3.3.1)
-          IconButton(
-            icon: const Icon(LucideIcons.chevronLeft, size: 20),
-            tooltip: '上一页',
-            onPressed: state.currentPage > 1 ? notifier.prevPage : null,
-          ),
-          GestureDetector(
-            onTap: () => _showPageJumpDialog(context, ref),
-            child: Text(
-              '${state.currentPage} / ${state.pageCount}',
-              style: theme.textTheme.bodySmall,
-            ),
-          ),
-          IconButton(
-            icon: const Icon(LucideIcons.chevronRight, size: 20),
-            tooltip: '下一页',
-            onPressed: state.currentPage < state.pageCount
-                ? notifier.nextPage
-                : null,
-          ),
-          const Spacer(),
-          // 批注入口 (FEATURES §5): toggles the mark tools; the tool bar
-          // itself floats above the reading area (MarkToolBar) so it has
-          // room for the tools + style controls.
+          // 批注入口 (FEATURES §5): arms the annotation tools. The tools
+          // themselves render in the middle of this bar (MarkToolOptions).
           ToolbarIconButton(
             icon: LucideIcons.brush,
             tooltip: '批注',
-            active: ref.watch(markToolProvider.select((s) => s.tool != null)),
+            active: markActive,
             onTap: () {
               final armed = ref.read(markToolProvider).tool != null;
               ref
@@ -160,6 +180,20 @@ class ReaderToolbar extends ConsumerWidget implements PreferredSizeWidget {
             onTap: () => ref.read(aiProvider.notifier).togglePanel(),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Centres the inline annotation controls in the toolbar's middle section;
+  /// a narrow window scrolls them horizontally instead of overflowing.
+  Widget _inlineMarkOptions() {
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minWidth: constraints.maxWidth),
+          child: const Center(child: MarkToolOptions()),
+        ),
       ),
     );
   }

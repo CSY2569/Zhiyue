@@ -34,7 +34,7 @@ void main() {
     expect(filtered.child, isA<RawImage>());
   });
 
-  testWidgets('paper theme still wraps with its multiply tint',
+  testWidgets('light themes tint the image paint instead of adding a layer',
       (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -42,7 +42,12 @@ void main() {
         home: Scaffold(body: ThemedPageImage(image: whiteImage)),
       ),
     );
-    expect(find.byType(ColorFiltered), findsOneWidget);
+    // No ColorFiltered: in a spread (two pages side by side) a colour-filter
+    // layer per page made the first page render blank.
+    expect(find.byType(ColorFiltered), findsNothing);
+    final raw = tester.widget<RawImage>(find.byType(RawImage));
+    expect(raw.color, ReadingPalette.paper.pageTint);
+    expect(raw.colorBlendMode, BlendMode.multiply);
   });
 
   testWidgets('falls back to paper when no palette is in scope',
@@ -50,7 +55,8 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: Scaffold(body: ThemedPageImage(image: whiteImage))),
     );
-    // No crash without a ReadingPalette extension; filter still applies.
-    expect(find.byType(ColorFiltered), findsOneWidget);
+    // No crash without a ReadingPalette extension; the tint still applies.
+    expect(find.byType(RawImage), findsOneWidget);
+    expect(find.byType(ColorFiltered), findsNothing);
   });
 }
