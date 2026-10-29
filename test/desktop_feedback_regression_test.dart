@@ -61,6 +61,57 @@ void main() {
           reason: 'one row expected, got $tops');
       expect(tester.takeException(), isNull);
     });
+
+    for (final width in [360.0, 412.0, 600.0]) {
+      testWidgets('touch layout at $width keeps one row of eight icons',
+          (tester) async {
+        tester.view.physicalSize = Size(width, 800);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+        await tester.pumpWidget(UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: const Scaffold(body: FloatingToolbar()),
+          ),
+        ));
+        container.read(selectionProvider.notifier).commitSelection(
+              Selection(
+                page: 0,
+                anchorIndex: 0,
+                currentIndex: 2,
+                text: 'hello world',
+                lineRects: const [NormRect(x: 0.1, y: 0.1, w: 0.5, h: 0.03)],
+              ),
+              const Rect.fromLTWH(40, 200, 120, 18),
+            );
+        await tester.pump();
+
+        final surface = find.byKey(const Key('selection-toolbar-surface'));
+        final size = tester.getSize(surface);
+        // One row: the bar is a thin strip, not the old 4×2 block (~124dp).
+        expect(size.height, lessThan(70),
+            reason: 'one-row toolbar expected, got $size');
+        // All eight actions present, laid out side by side inside the bar.
+        final icons = find.descendant(
+          of: surface,
+          matching: find.byType(Icon),
+        );
+        expect(icons.evaluate().length, 8);
+        final tops = <int>{
+          for (var i = 0; i < icons.evaluate().length; i++)
+            tester.getCenter(icons.at(i)).dy.round(),
+        };
+        expect(tops, hasLength(1), reason: 'icons must share one row');
+        // And the bar never exceeds the viewport it floats in.
+        expect(size.width, lessThanOrEqualTo(width));
+        expect(tester.takeException(), isNull);
+      });
+    }
   });
 
   group('书架顶部筛选栏', () {

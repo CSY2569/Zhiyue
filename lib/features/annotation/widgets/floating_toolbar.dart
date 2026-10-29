@@ -52,15 +52,22 @@ class _FloatingToolbarState extends ConsumerState<FloatingToolbar> {
   /// Identifies the bar so a drag can start from its real screen position.
   final GlobalKey _surfaceKey = GlobalKey();
 
-  /// Compact (phone) grid metrics: 4 columns × 2 rows.
+  /// Touch layout metrics: a single row of icon-only cells.
   ///
-  /// The cell is a MINIMUM, not a fixed box: 「下划线」and 「删除线」 are three
-  /// CJK glyphs (~36dp at labelSmall) and their cell would overflow at 60dp.
-  /// `IntrinsicWidth` around the bar lets the widest cell in each column
-  /// decide the column width, so labels never clip.
-  static const double _cellMinW = 62;
-  static const double _cellH = 56;
-  static const double _gridPad = 6;
+  /// The cell width is derived from the viewport (`_compactCellWidth`) so all
+  /// eight actions always fit on one line without clipping. Labels move into
+  /// tooltips: the bar floats over the selected text, so eight labelled
+  /// buttons (~560dp) would either wrap into the two rows this replaced or
+  /// force a horizontal scroll that fights the drag gesture.
+  static const double _cellMinW = 40;
+  static const double _cellMaxW = 52;
+  static const double _cellH = 44;
+  static const double _gridPad = 4;
+
+  double _compactCellWidth(double viewport, int count) {
+    final fit = (viewport - _gridPad * 2) / count;
+    return fit.clamp(_cellMinW, _cellMaxW);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -75,12 +82,28 @@ class _FloatingToolbarState extends ConsumerState<FloatingToolbar> {
     // a half-width tablet split still cannot fit eight labelled buttons.
     final width = MediaQuery.sizeOf(context).width;
     final compact = PlatformHost.current.compactUi(width);
-    final actions = _actions(context, sel, vertical: compact);
+    final actions = _actions(context, sel, iconOnly: compact);
     final theme = Theme.of(context);
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final screen = Size(constraints.maxWidth, constraints.maxHeight);
+        final surface = GestureDetector(
+          key: _surfaceKey,
+          // Stable handle for layout tests: `FloatingToolbar` itself
+          // fills the overlay, so size assertions need the bar's box.
+          behavior: HitTestBehavior.translucent,
+          onPanStart: (_) => _seedDragOrigin(),
+          // Clamp to the viewport as the delegate does. Storing raw
+          // accumulated coordinates made the bar stick at the edge while
+          // the pointer kept moving (the "top edge no longer matches the
+          // cursor" complaint); the stored position now always equals the
+          // drawn one.
+          onPanUpdate: (d) => _dragTo(screen, d.delta),
+          child: compact
+              ? _compactSurface(theme, actions, screen.width)
+              : _rowSurface(theme, actions),
+        );
         return CustomSingleChildLayout(
           delegate: _ToolbarLayout(
             anchor: anchor,
@@ -89,25 +112,10 @@ class _FloatingToolbarState extends ConsumerState<FloatingToolbar> {
           ),
           // `CustomSingleChildLayout` hands the child LOOSE constraints, so a
           // Row/Column here would size to infinity. IntrinsicWidth makes the
-          // bar report its natural width; the delegate then positions it.
-          child: IntrinsicWidth(
-            child: GestureDetector(
-              key: _surfaceKey,
-              // Stable handle for layout tests: `FloatingToolbar` itself
-              // fills the overlay, so size assertions need the bar's box.
-              behavior: HitTestBehavior.translucent,
-              onPanStart: (_) => _seedDragOrigin(),
-              // Clamp to the viewport as the delegate does. Storing raw
-              // accumulated coordinates made the bar stick at the edge while
-              // the pointer kept moving (the "top edge no longer matches the
-              // cursor" complaint); the stored position now always equals the
-              // drawn one.
-              onPanUpdate: (d) => _dragTo(screen, d.delta),
-              child: compact
-                  ? _compactSurface(theme, actions)
-                  : _rowSurface(theme, actions),
-            ),
-          ),
+          // labelled desktop bar report its natural width; the touch bar has
+          // an explicit width, so wrapping it would only add a second measure
+          // pass.
+          child: compact ? surface : IntrinsicWidth(child: surface),
         );
       },
     );
@@ -159,25 +167,28 @@ class _FloatingToolbarState extends ConsumerState<FloatingToolbar> {
     );
   }
 
-  /// Phone layout: a clean 4×2 grid of icon-over-label cells.
-  Widget _compactSurface(ThemeData theme, List<Widget> actions) {
-    Widget row(int start) => Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (var i = start; i < start + 4 && i < actions.length; i++)
-              ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: _cellMinW),
-                child: SizedBox(height: _cellH, child: actions[i]),
-              ),
-          ],
-        );
+  /// Touch layout: all eight actions on ONE row of icon-only cells.
+  ///
+  /// Single row on purpose (the previous 4×2 grid was the "two rows" the user
+  /// rejected). Labels live in tooltips: a labelled row needs ~560dp, which
+  /// does not fit a phone, and a horizontally scrolling bar would fight the
+  /// drag gesture that moves the toolbar.
+  Widget _compactSurface(ThemeData theme, List<Widget> actions, double viewport) {
+    final cellW = _compactCellWidth(viewport, actions.length);
     return _panel(
       context,
       Padding(
         padding: const EdgeInsets.all(_gridPad),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [row(0), row(4)],
+        child: SizedBox(
+          height: _cellH,
+          width: cellW * actions.length,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final action in actions)
+                SizedBox(width: cellW, child: action),
+            ],
+          ),
         ),
       ),
     );
@@ -208,55 +219,56 @@ class _FloatingToolbarState extends ConsumerState<FloatingToolbar> {
   List<Widget> _actions(
     BuildContext context,
     Selection sel, {
-    required bool vertical,
+    required bool iconOnly,
   }) =>
       [
         _ToolButton(
           icon: LucideIcons.languages,
           label: '翻译',
           onTap: () => _aiAction(context, AiActionType.translate),
-          vertical: vertical,
+          iconOnly: iconOnly,
         ),
         _ToolButton(
           icon: LucideIcons.lightbulb,
           label: '解释',
           onTap: () => _aiAction(context, AiActionType.explain),
-          vertical: vertical,
+          iconOnly: iconOnly,
         ),
         _ToolButton(
           icon: LucideIcons.search,
           label: '搜索',
           onTap: () => _aiAction(context, AiActionType.search),
-          vertical: vertical,
+          iconOnly: iconOnly,
         ),
         _ToolButton(
           icon: LucideIcons.copy,
           label: '复制',
           onTap: () => _copy(context, sel.text),
+          iconOnly: iconOnly,
         ),
         _ToolButton(
           icon: LucideIcons.highlighter,
           label: '高亮',
           onTap: () => _mark(context, TextAnnotationKind.highlight),
-          vertical: vertical,
+          iconOnly: iconOnly,
         ),
         _ToolButton(
           icon: LucideIcons.underline,
           label: '下划线',
           onTap: () => _mark(context, TextAnnotationKind.underline),
-          vertical: vertical,
+          iconOnly: iconOnly,
         ),
         _ToolButton(
           icon: LucideIcons.strikethrough,
           label: '删除线',
           onTap: () => _mark(context, TextAnnotationKind.strikethrough),
-          vertical: vertical,
+          iconOnly: iconOnly,
         ),
         _ToolButton(
           icon: LucideIcons.filePlus2,
           label: '笔记',
           onTap: () => _openComposer(context),
-          vertical: vertical,
+          iconOnly: iconOnly,
         ),
       ];
 
@@ -373,67 +385,60 @@ class _ToolbarLayout extends SingleChildLayoutDelegate {
       oldDelegate.pos != pos;
 }
 
-/// Compact icon + label button for the toolbar.
+/// One action button for the floating toolbar.
 ///
-/// [vertical] selects the phone grid form (icon above label, filling its
-/// fixed cell) instead of the desktop row form (icon beside label). Both keep
-/// the tap target at the full cell size.
+/// [iconOnly] is the touch form: just the glyph, centred in its cell, with the
+/// label exposed as a tooltip (long-press on touch). The desktop form shows
+/// the label beside the icon.
 class _ToolButton extends StatelessWidget {
   const _ToolButton({
     required this.icon,
     required this.label,
     required this.onTap,
-    this.vertical = false,
+    this.iconOnly = false,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  final bool vertical;
+  final bool iconOnly;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final content = vertical
-        ? Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 20, color: theme.colorScheme.onSurfaceVariant),
-              const SizedBox(height: 3),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurface,
-                ),
-              ),
-            ],
-          )
-        : Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 20, color: theme.colorScheme.onSurfaceVariant),
-              const SizedBox(width: 5),
-              Text(
-                label,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurface,
-                ),
-              ),
-            ],
-          );
-
+    final glyph = Icon(
+      icon,
+      size: 20,
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    if (iconOnly) {
+      return Tooltip(
+        message: label,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(Golden.radiusSmall),
+          child: Center(child: glyph),
+        ),
+      );
+    }
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(Golden.radiusSmall),
       child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: vertical ? 5 : 9,
-          vertical: vertical ? 4 : 7,
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            glyph,
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+          ],
         ),
-        child: content,
       ),
     );
   }
