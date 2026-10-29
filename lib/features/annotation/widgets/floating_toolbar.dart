@@ -59,13 +59,17 @@ class _FloatingToolbarState extends ConsumerState<FloatingToolbar> {
   /// tooltips: the bar floats over the selected text, so eight labelled
   /// buttons (~560dp) would either wrap into the two rows this replaced or
   /// force a horizontal scroll that fights the drag gesture.
-  static const double _cellMinW = 40;
-  static const double _cellMaxW = 52;
+  static const double _cellMinW = 36;
+  static const double _cellMaxW = 48;
   static const double _cellH = 44;
   static const double _gridPad = 4;
 
+  /// Horizontal breathing room kept on both sides so the floating bar never
+  /// reads as a full-width docked bar (it must stay visibly floating).
+  static const double _viewportInset = 8;
+
   double _compactCellWidth(double viewport, int count) {
-    final fit = (viewport - _gridPad * 2) / count;
+    final fit = (viewport - _viewportInset * 2 - _gridPad * 2) / count;
     return fit.clamp(_cellMinW, _cellMaxW);
   }
 
