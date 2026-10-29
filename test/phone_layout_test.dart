@@ -8,7 +8,10 @@ import 'package:rbwa/data/repositories/text_translation_repository.dart';
 import 'package:rbwa/features/ai/providers/ai_config_provider.dart';
 import 'package:rbwa/features/annotation/providers/selection_provider.dart';
 import 'package:rbwa/features/annotation/models/selection.dart';
+import 'package:rbwa/features/annotation/providers/image_mark_provider.dart'
+    show MarkTool, markToolProvider;
 import 'package:rbwa/features/annotation/widgets/floating_toolbar.dart';
+import 'package:rbwa/features/reader/widgets/phone_reader_chrome.dart';
 import 'package:rbwa/features/library/library_page.dart';
 import 'package:rbwa/features/library/providers/library_providers.dart';
 import 'package:rbwa/features/library/widgets/book_tile.dart';
@@ -139,9 +142,10 @@ void main() {
       if (tester.takeException() case final e?) {
         fail('selection toolbar threw on a phone: $e');
       }
-      // All eight actions are present (the phone grid is 4x2).
+      // All eight actions are present. The touch form is icon-only (labels
+      // live in tooltips) so the eight fit on ONE row.
       for (final label in ['翻译', '解释', '搜索', '复制', '高亮', '下划线', '删除线', '笔记']) {
-        expect(find.text(label), findsOneWidget);
+        expect(find.byTooltip(label), findsOneWidget, reason: label);
       }
       // It FLOATS: it must not span the full phone width nor touch the bottom
       // edge (that was the old docked bar).
@@ -149,7 +153,8 @@ void main() {
         find.byKey(const Key('selection-toolbar-surface')),
       );
       expect(bar.width, lessThan(360));
-      expect(bar.height, lessThan(200));
+      // One row, not the old 4x2 grid (which measured ~124dp tall).
+      expect(bar.height, lessThan(70));
     });
 
     testWidgets('tablet-sized library grid lays out without overflow',
@@ -179,6 +184,56 @@ void main() {
       expect(find.byType(CategoryRail), findsOneWidget);
       expect(find.text('我的书库'), findsOneWidget);
       expect(find.byType(BookTile), findsWidgets);
+    });
+
+    testWidgets('批注 tools render inline in the phone top bar', (tester) async {
+      _usePhoneSurface(tester);
+      late ProviderContainer container;
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          seededViewer(ViewerState(
+            book: testBook(pageCount: 30),
+            pageCount: 30,
+            currentPage: 5,
+            zoom: 1.0,
+            loading: false,
+          )),
+        ],
+        child: Builder(
+          builder: (context) {
+            container = ProviderScope.containerOf(context);
+            return MaterialApp(
+              theme: AppTheme.light(),
+              home: Scaffold(
+                body: PhoneReaderTopBar(onShowMore: () {}),
+              ),
+            );
+          },
+        ),
+      ));
+      await tester.pump();
+
+      // Idle chrome: book title + page indicator, no annotation tools.
+      expect(find.textContaining('5 / 30'), findsOneWidget);
+      expect(find.byTooltip('画笔'), findsNothing);
+
+      container.read(markToolProvider.notifier).setTool(MarkTool.select);
+      await tester.pump();
+
+      // Armed: the tools take over the middle section of the SAME bar; the
+      // exit button stays reachable outside the scrolling tool row.
+      expect(find.byTooltip('选择/移动'), findsOneWidget);
+      expect(find.byTooltip('画笔'), findsOneWidget);
+      expect(find.byTooltip('退出批注'), findsOneWidget);
+      expect(find.textContaining('5 / 30'), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      // Tapping the pinned exit disarms and restores the title / page row.
+      await tester.tap(find.byTooltip('退出批注'));
+      await tester.pump();
+      expect(container.read(markToolProvider).tool, isNull);
+      expect(find.textContaining('5 / 30'), findsOneWidget);
+      expect(find.byTooltip('画笔'), findsNothing);
     });
 
     testWidgets('settings control rows stay full width', (tester) async {

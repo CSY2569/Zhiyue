@@ -9,6 +9,8 @@ import 'package:rbwa/core/widgets/app_overlay.dart';
 import 'package:rbwa/features/ai/providers/ai_provider.dart';
 import 'package:rbwa/features/annotation/providers/image_mark_provider.dart'
     show MarkTool, markToolProvider;
+import 'package:rbwa/features/annotation/widgets/mark_toolbar.dart'
+    show MarkToolOptions;
 import 'package:rbwa/features/bilingual/providers/page_translation_provider.dart';
 import 'package:rbwa/features/reader/providers/viewer_provider.dart';
 import 'package:rbwa/features/screenshot/screenshot_provider.dart';
@@ -33,6 +35,13 @@ import 'package:rbwa/src/rust/models/progress.dart';
 ///
 /// Everything in the sheet delegates to the same providers as the desktop
 /// toolbar, so behavior stays identical across platforms.
+///
+/// While a mark tool is armed the top bar's middle section swaps the title
+/// and page indicator for the annotation tools -- the same inline
+/// [MarkToolOptions] the desktop toolbar uses -- so 批注 is not a second
+/// floating bar over the page. The tool row scrolls horizontally (a phone
+/// cannot fit the whole palette) and the exit button stays pinned outside the
+/// scroll area so it is always reachable.
 class PhoneReaderTopBar extends ConsumerWidget {
   const PhoneReaderTopBar({super.key, required this.onShowMore});
 
@@ -42,6 +51,7 @@ class PhoneReaderTopBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(viewerProvider);
     final theme = Theme.of(context);
+    final markArmed = ref.watch(markToolProvider.select((s) => s.tool != null));
     return Material(
       color: theme.colorScheme.surface.withValues(alpha: 0.92),
       elevation: 1,
@@ -56,29 +66,45 @@ class PhoneReaderTopBar extends ConsumerWidget {
                 icon: const Icon(LucideIcons.arrowLeft, size: 24),
                 onPressed: () => navigateBack(GoRouter.of(context)),
               ),
-              Expanded(
-                child: Text(
-                  state.book?.title ?? '阅读器',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall,
-                ),
-              ),
-              // Page indicator doubles as the jump entry (48dp target).
-              InkWell(
-                onTap: () => showPhonePageJump(context, ref),
-                borderRadius: BorderRadius.circular(6),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 12,
+              if (markArmed) ...[
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child:
+                        const MarkToolOptions(compact: true, showExit: false),
                   ),
+                ),
+                IconButton(
+                  tooltip: '退出批注',
+                  icon: const Icon(LucideIcons.check, size: 24),
+                  onPressed: () =>
+                      ref.read(markToolProvider.notifier).setTool(null),
+                ),
+              ] else ...[
+                Expanded(
                   child: Text(
-                    '${state.currentPage} / ${state.pageCount}',
-                    style: theme.textTheme.labelMedium,
+                    state.book?.title ?? '阅读器',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall,
                   ),
                 ),
-              ),
+                // Page indicator doubles as the jump entry (48dp target).
+                InkWell(
+                  onTap: () => showPhonePageJump(context, ref),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 12,
+                    ),
+                    child: Text(
+                      '${state.currentPage} / ${state.pageCount}',
+                      style: theme.textTheme.labelMedium,
+                    ),
+                  ),
+                ),
+              ],
               IconButton(
                 tooltip: '更多',
                 icon: const Icon(LucideIcons.moreHorizontal, size: 24),
