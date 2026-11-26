@@ -99,8 +99,8 @@ LibraryPage (UI)
 ## 5. 后续里程碑接入点
 
 > 注：本节为立项时的原始接入计划（2026-08）；M1–M7 均已实施，现状以
-> [`IMPLEMENTATION_STATUS.md`](IMPLEMENTATION_STATUS.md) 与
-> [`bilingual_workflow.html`](bilingual_workflow.html) 为准。
+> [`archive/IMPLEMENTATION_STATUS.md`](archive/IMPLEMENTATION_STATUS.md) 与
+> [`archive/bilingual_workflow.html`](archive/bilingual_workflow.html) 为准。
 
 实现新功能时，按以下位置填入代码：
 

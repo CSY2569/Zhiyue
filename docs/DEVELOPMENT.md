@@ -1,8 +1,9 @@
-# 二次开发交接指南（智阅 / RBWA）
+# 开发指南（智阅 / RBWA）
 
-> 本文档由一次全仓只读勘察生成，面向接手二次开发的工程师。
-> 所有路径锚点均经实际读取核验；标注「待核」的是勘察中未能实证的推断。
-> 生成时点：分支 `main` @ `30a66a0`（工作树有未提交改动，见 §12）。
+> 面向接手开发的工程师：怎么把环境跑起来、代码往哪儿改、哪些坑会咬人。
+> 功能边界见 [`PRODUCT.md`](PRODUCT.md)，分层与 FFI 约定见 [`ARCHITECTURE.md`](ARCHITECTURE.md)，
+> 命令与表结构分别见 [`FFI_API.md`](FFI_API.md) 与 [`DATA_MODEL.md`](DATA_MODEL.md)。
+> 文中的路径锚点与实测数字均核对过代码；基准 `main` @ 2026-11-26。
 
 ---
 
@@ -113,33 +114,20 @@ rust/src/*              核心：全部重活与持久化
 
 ## 6. FFI 面与「新增一个命令」
 
-`rust/src/api.rs` 实测：**81 个 `pub fn`，其中 19 个 `async`，0 个返回 `Result`**，4 个用 `StreamSink` 做流式（`stream_chat`:1661、`stream_vision_png`:1719、`install_engine`:2180、`translate_book`:2239）。
+命令全表（81 个，按功能分组）、错误与并发约定、以及「新增一个命令」的完整五步，
+见 [`FFI_API.md`](FFI_API.md)。这里只留两条最容易踩的：
 
-命令按里程碑分节：初始化/设置 7、书库 14、阅读器/PDF 8、文本标注 8、图像标注 4、AI 10、OCR 4、搜索 3、对照阅读 1、翻译引擎 11、文本级双语 11。
-
-### 端到端步骤
-1. 类型 → `rust/src/models/<domain>.rs`，并在 `models/mod.rs` 注册（plain struct/enum）。
-2. 命令 → `api.rs` 对应节内加 `pub (async) fn`，遵守三条既有模式：
-   - **不外抛错误**：返回带 `pub error: Option<String>` 的结构体（`InitResult` `api.rs:43` 为范式，同模式 10 处）；集合类失败返回空 vec。
-   - **阻塞重活必须 `spawn_blocking`**（现存 3 处：`api.rs:1060`、`api.rs:2327`、`translate/job.rs:150`），否则占死 FRB 的 async worker。
-   - **feature 门控成对写** `#[cfg(feature="x")]` + `#[cfg(not(feature="x"))]` 桩（范式 `translate_book` `api.rs:2239`）。
-3. 实现 → 落到 `pdf`/`ocr`/`ai`/`search`/`translate`/`db::repository`，`api.rs` 只做参数转换与错误字符串化。
-4. 生成 → `flutter_rust_bridge_codegen generate`（配置 `flutter_rust_bridge.yaml:8-11`）。
-5. Dart → `lib/data/repositories/<x>_repository.dart`：`import 'package:rbwa/src/rust/api.dart' as rust;` 后直调。
-
-> ⚠️ 改了 `api.rs` 却不跑 codegen，运行期会因 `rustContentHash` 不匹配失败（当前值 `507000550`，见 `lib/src/rust/frb_generated.dart:74`）。
+- 跨边界**只在 `rust/src/api.rs`**；改完必须跑 `flutter_rust_bridge_codegen generate`，
+  否则运行期因 `rustContentHash` 不匹配失败（当前值 `507000550`，`lib/src/rust/frb_generated.dart:74`）。
+- 阻塞重活必须 `spawn_blocking`，否则占死 FRB 的 async worker（现有 3 处：`api.rs:1060`、`api.rs:2327`、`translate/job.rs:150`）。
 
 ---
 
 ## 7. 数据库
 
-`SCHEMA_VERSION = 11`（`rust/src/db/schema.rs:40`）。13 张实体表 + 1 张 FTS5 虚表：
-
-`categories` · `books`（`original_path` UNIQUE 去重，v11 加 `content_hash`）· `reading_progress` · `annotations` · `image_annotations` · `page_ocr_cache`（PK book_id,page,ocr_mode）· `page_text_index` · `page_text_fts`（FTS5 external-content + 触发器同步）· `ai_threads` · `ai_messages` · `translation_glossary` · `page_text_translation` · `settings`（API key 唯一落点）· `schema_version`。
-
-**迁移机制**：`connection.rs:173` 的 `migrate` 在一个 `unchecked_transaction` 内按 `SELECT MAX(version)` 逐版本 `match` ALTER（v1→v11 共 10 步，`:205-292`）；每步配 `has_column`（`:141`）保证幂等，半提交的库能自愈。版本不匹配只 warn 不迁移（`:302-307`）。
-
-PRAGMA：WAL + `foreign_keys` + `synchronous=NORMAL`（`schema.rs:337-341`）。
+表结构、ER 关系、索引与触发器、迁移链、以及 **`ai_config` 的全字段说明**，见 [`DATA_MODEL.md`](DATA_MODEL.md)。
+只有一条要在这里强调：当前 `SCHEMA_VERSION = 11`（`rust/src/db/schema.rs:40`），
+加表/加列必须同步 bump 并在 `connection.rs` 的迁移链里加一步。
 
 ---
 
@@ -189,19 +177,10 @@ flutter_rust_bridge **2.12.0** 出现在：`pubspec.yaml:15`、`rust/Cargo.toml:
 
 ---
 
-## 9. 平台拆分（main / android）
+## 9. 平台与分支
 
-两条长期分支共享 `lib/` 与 `rust/`，**唯一差异文件是 `lib/platform/current.dart`**（选平台 host）；`android` 分支多出 78 个文件。
-
-- 所有平台差异走 `PlatformHost` 抽象（`lib/platform/platform_host.dart:50-135`）：`touch`、`phoneLayout(w)`、`compactUi(w)`、`needsModelInstall`、`prepareWindow`、`initCore`、`attachLifecycle`、`ensureModels`、`wrapApp`、`takeIncomingFiles`、`translatedPane`、`readerBars`、`wrapReadingSurface`、`readerEntered/Exited`、`handleReaderKey`。
-- **禁止**在新代码里写 `Platform.isAndroid`（`platform_host.dart:42-45` 明令）；纯尺寸判断用 `isCompactWidth(width)`（`core/layout_breakpoints.dart:10`）。`test/platform_boundary_test.dart` 会拦截越界引用。
-- 注意抽象层**反向依赖 features**：`platform_host.dart:6-7` import 了 `features/bilingual/.../translated_pane.dart` 与 `features/reader/.../reader_toolbar.dart`，因为「对照右栏」「阅读器工具条」被写成了接口方法。
-
-### 同步规则（有陷阱）
-```bash
-git checkout android && bash scripts/sync-from-main.sh main
-```
-**不要直接 `git merge main`**：`main` 上不存在 Android 专属文件，git 会**静默删除**它们，分支随即失去构建 APK 的能力。脚本的做法是 `merge --no-commit` 后按 `.platform/android-owned.txt` 从合并前提交逐行 `git checkout` 恢复。新增 Android 专属文件必须同步更新该清单（36 行），否则下次同步会静默删掉它。
+三平台两条分支的映射、`PlatformHost` 抽象、同步脚本的陷阱、Windows 待办，见 [`PLATFORMS.md`](PLATFORMS.md)。
+一条硬规则：**新代码禁止写 `Platform.isAndroid`**，平台差异一律加到 `PlatformHost` 并给共享默认实现。
 
 ---
 
@@ -227,44 +206,18 @@ git checkout android && bash scripts/sync-from-main.sh main
 
 ---
 
-## 12. 当前工作树状态（交接必读）
+## 12. 当前状态
 
-`git status` **不干净**：3 个文件有未提交改动，是一处**进行中的 AI 识图路由修复**（+158 / −17）：
+工作树干净。2026-11-26 已完成：识图路由修复落地、文档与代码对齐、CI 建立、文档结构重建。
 
-- `rust/src/ai/mod.rs`：新增 `vision_model()` / `vision_route()` / `non_blank()`，统一决定识图请求实际使用的 `(base_url, api_key, model)`。规则是：通用模型声明支持图片时，独立的识图覆盖配置**全部失效**（避免历史遗留的 base_url/key 把识图请求劫持到旧 provider）；纯文本通用模型才用覆盖项，空串回退。
-- `rust/src/api.rs`：新增 `ensure_vision_api_key()`，把空 key 校验从硬编码 `config.api_key` 改为跟随 `vision_route()`，`stream_vision_png` 改用之。
-- `rust/src/ai/openai.rs`：`AiClient` 实现接入新路由 + 新增 4 个单测（`vision_route_prefers_general_config_when_model_supports_vision` 等）。
-
-**判断**：改动内聚、有测试、未见半成品痕迹，是一个可完成的修复。`stream_vision_png` 签名未变，因此**不需要重跑 codegen**。
-
-**已实测（2026-11-26）**：该改动在树上的状态下 `cargo test` 为 148 通过 / 0 失败 / 12 忽略，其中包含它新增的 4 个识图路由单测。即**这份未提交改动是绿的**，可作为基线继续开发。
+后续建议见 §15。
 
 ---
 
-## 13. 文档现状：不一致清单与修复状态
+## 13. 历史文档口径的修正记录
 
-`docs/` 有 250 KB 存量文档，多处曾滞后于代码。下表 12 项已于 2026-11-26 全部处理完毕：§1–§3、§5、§7、§9、§11 为机械修正；§4、§6、§8、§10 按项目方的裁决处理。
-
-**2026-11-26 的裁决（记录在案）**：目标平台确认为 **Windows / Linux / Android 三个**（Windows runner 尚未创建）；翻译粒度**以代码为准**，只保留整本粒度；版本号保留历史标签、另加口径说明；`BILINGUAL_READING_PLAN.md` **整篇降级为历史归档**；`IMPLEMENTATION_STATUS.md` 文首**新增按子系统索引表**、日志本身不动。
-
-| # | 问题 | 状态 |
-|---|---|---|
-| 1 | README 声称本分支是 `feat/retain-engine`，该分支已不存在 | ✅ 已改为 `main`（另修 `DIAGRAMS.md:3` 同源表述） |
-| 2 | 死链：`docs/ANDROID_V1_PLAN.md`、`ANDROID_PACKAGES.md` 在 main 上不存在 | ✅ 已改为「见 android 分支」的纯文本引用 |
-| 3 | schema 版本过期：文档写 v9，实际 11（`schema.rs:40`） | ✅ `DIAGRAMS.md` 5 处 + `FEATURES.md:230` 已改 v11 |
-| 4 | 目标平台自相矛盾：「Linux 桌面唯一」的表述与 Android 线冲突 | ✅ 已确认为**三个目标平台**（Windows / Linux / Android）；改了 `IMPLEMENTATION_STATUS.md` 概况、`FEATURES.md` 10.6、`README.md` 目标平台与分支表，并注明 Windows runner 尚未创建 |
-| 5 | 测试规模数字互不相同（Rust 130/144，Flutter 202/323/326/327） | ✅ 汇总行统一为实测值（Rust 148/12、Flutter 见最新章节）；各章历史快照保留为历史记录 |
-| 6 | 翻译能力口径冲突：表格称「整本/随进度/手动」三种已完成，正文称后两种待后续 | ✅ 已按代码定案：引擎 v1 只做整本粒度、语言固定简体中文（`translate/job.rs:19`）；`TranslationMode` 另两值仅存于数据结构与 DB 兼容层 |
-| 7 | 跨分支引用未标注：`:1195` 引「3.40」，本分支无该节 | ✅ 已加「对应改动在 android 分支」 |
-| 8 | 版本号体系冲突：章节标题写 1.8.0/1.9.x，`pubspec` 为 1.0.0 | ✅ 保留历史标签，在 `IMPLEMENTATION_STATUS.md` §1 新增「版本号口径」一条，说明那些是开发期内部里程碑标签、不是发布版本 |
-| 9 | `DEPENDENCIES.md` 列了已弃用的 `freezed` / `async-openai` / `super_clipboard` | ✅ 已按 `pubspec.yaml` 实际依赖重写，弃用项标明 |
-| 10 | `BILINGUAL_READING_PLAN.md` 自述「已实施完毕」又「自研管线已移除」，指向 3 个已删文件 | ✅ 整篇降级为**历史归档**，H1 即带「⚠️ 历史归档，不是实现依据」，逐项列出已失效内容并指向现行文档；伴读 `bilingual_workflow.html` 的三种模式表述同步改正 |
-| 11 | `TECH_ROADMAP.md` 选型表以 async-openai 为 AI 客户端 | ✅ 已改为手写 reqwest SSE，保留旧方案作为「已弃用」记录 |
-| 12 | `IMPLEMENTATION_STATUS.md` 96% 篇幅是按日期追加的日志（§3.1–§3.39），无按子系统索引 | ✅ 文首新增 **§0「按子系统索引」**（12 个子系统 → 代码位置 + 相关章节行号），日志本身一字未动 |
-
-**可信度排序建议**：代码 > `IMPLEMENTATION_STATUS.md` §3 各篇（描述具体缺陷与根因，信息量最高）> `README.md` > 其余文档。`FEATURES.md` 是需求规格而非实现状态（`:5` 明言），不要当完成度清单读。
-
----
+2026-11-26 统一修正过一批与代码不符的表述（分支名、schema 版本、依赖清单、测试数字、翻译粒度）。
+明细见 [`archive/README.md`](archive/README.md)，**日常不需要读**——只在怀疑某份历史文档口径时才去查。
 
 ## 14. 架构层面的真实风险（按影响排序）
 

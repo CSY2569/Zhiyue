@@ -15,8 +15,8 @@
 >
 > **当前实现请看**：
 > - [`IMPLEMENTATION_STATUS.md`](IMPLEMENTATION_STATUS.md) §3.16–§3.18（弃自研管线 → 换 RetainPDF 的全过程）、§3.2（M7 原始上线）
-> - [`FEATURES.md`](FEATURES.md) §7.4（现行需求与能力边界）
-> - [`DEVELOPMENT_GUIDE.md`](DEVELOPMENT_GUIDE.md) §14（翻译子系统的外部契约风险）
+> - [`FEATURES.md`](../FEATURES.md) §7.4（现行需求与能力边界）
+> - [`DEVELOPMENT_GUIDE.md`](../DEVELOPMENT.md) §14（翻译子系统的外部契约风险）
 >
 > **保留本文的唯一目的**：设计取舍与踩坑记录的历史参考——段落聚类、断字还原、噪声剔除、
 > 公式识别、版式保留这些决策的由来仍在这里。

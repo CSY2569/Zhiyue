@@ -2,10 +2,10 @@
 
 > 文档版本：v2.1（2026-08-06）
 > **历史文档**：立项时的技术路线规划；M1–M7 均已实施，部分选型已变化
-> （如 async-openai → 手写 reqwest SSE）。现状以 [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) 与 [ARCHITECTURE.md](ARCHITECTURE.md) 为准。
+> （如 async-openai → 手写 reqwest SSE）。现状以 [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) 与 [ARCHITECTURE.md](../ARCHITECTURE.md) 为准。
 >
 > **路线决策**：Flutter Desktop（UI）+ Rust 核心层，**完全重做、零参考**——不迁移、不阅读、不参考现有 Tauri/WebView 代码。
-> 目标：实现 [docs/FEATURES.md](FEATURES.md) 中全部任务需求（含书籍分类、**本地 OCR 精准优先**）；在满足功能的前提下**占用最小化、性能最大化**。
+> 目标：实现 [docs/FEATURES.md](../FEATURES.md) 中全部任务需求（含书籍分类、**本地 OCR 精准优先**）；在满足功能的前提下**占用最小化、性能最大化**。
 > 依据边界：需求与规格只以 FEATURES.md 为准；技术参数（如 OCR 预处理）以官方模型文档与公开规范为准。
 
 ---

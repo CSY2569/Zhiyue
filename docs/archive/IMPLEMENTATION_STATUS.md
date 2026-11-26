@@ -1,7 +1,7 @@
 # RBWA 实施状态与后续开发方向
 
 > 文档版本：v1.0（2026-08-08）
-> 配套文档：[FEATURES.md](FEATURES.md)（需求规格）· [TECH_ROADMAP.md](TECH_ROADMAP.md)（技术路线）· [ARCHITECTURE.md](ARCHITECTURE.md)（架构）
+> 配套文档：[FEATURES.md](../FEATURES.md)（需求规格）· [TECH_ROADMAP.md](TECH_ROADMAP.md)（技术路线）· [ARCHITECTURE.md](../ARCHITECTURE.md)（架构）
 
 ## 0. 按子系统索引（先看这里）
 
@@ -23,7 +23,7 @@
 | 移动端（`android` 分支专属） | `android/`、`lib/platform/android/` | §3.23 Android v1 :492 · §3.24 返回手势 :551 · §3.25 刷新率 :578 · §3.26–3.28 触屏 P0/P1/P2 :617–:698 |
 | 打包 / 工具链 / 分支同步 | `scripts/`、`packaging/`、`.platform/` | §3.38 版本号定位 :1103 |
 
-> 交接级总览（分层、FFI 边界、扩展点、构建陷阱）见 [`DEVELOPMENT_GUIDE.md`](DEVELOPMENT_GUIDE.md)。
+> 交接级总览（分层、FFI 边界、扩展点、构建陷阱）见 [`DEVELOPMENT_GUIDE.md`](../DEVELOPMENT.md)。
 
 ## 1. 项目概况
 
@@ -318,7 +318,7 @@
 - **真实安装冒烟**（本机，镜像配置）：**热装 18s / 冷装 103s，实占约 1.5GB**（venv 1.2GB + 资产 337MB）；跑通 `--skip-translation` 排版管线（零 API）：用户书库论文 mono/dual PDF 产出，**页数严格 1:1**、矢量文本可提取、dual 同页左右并排
 - 冒烟暴露并修复四个真实缺陷（均有回归测试）：GitHub release 资产源在本机被完全阻断（改用 PyPI simple 索引，uv wheel 内含二进制）；镜像相对链接 `../../packages/...` 未消解且选中了最旧的 0.0.5；无 User-Agent 被清华镜像 403；`uv venv` 以尚不存在的目录为 cwd 导致 ENOENT
 - 足迹治理：uv 以 `--no-cache` 运行且 `UV_PYTHON_INSTALL_DIR`/`UV_CACHE_DIR` 内收进引擎目录（首测曾在用户 `~/.cache/uv` 留下 9.7GB）；步骤失败附可操作的镜像提示（已验证南大 python-build-standalone 镜像与清华 PyPI 镜像）
-- 许可：新增 [`docs/THIRD_PARTY.md`](THIRD_PARTY.md)，登记 BabelDOC（AGPL-3.0，独立进程集成，不链接）
+- 许可：新增 [`docs/THIRD_PARTY.md`](../THIRD_PARTY.md)，登记 BabelDOC（AGPL-3.0，独立进程集成，不链接）
 
 **当前状态**：对照阅读显示引擎引导占位（未安装）或等待接入（已安装）；侧车任务/分块渲染/译文回填是下一阶段。
 
@@ -639,7 +639,7 @@ Flutter 243 测试全绿、analyze 0；release APK 1.0.1 构建通过、16KB 对
 
 ### 3.26 Android 触屏 P0：手机布局与触控修复（2026-10-20，1.2.0）
 
-按 [`ANDROID_TOUCH_OPTIMIZATION_PLAN.md`](ANDROID_TOUCH_OPTIMIZATION_PLAN.md) 的 P0 实施。
+按 `ANDROID_TOUCH_OPTIMIZATION_PLAN.md`（android 分支） 的 P0 实施。
 
 **① 选区工具条崩溃（P0 最高优先级）**
 - 根因：`FloatingToolbar` 按 `_estWidth = 760` 估算定位，

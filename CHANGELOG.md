@@ -1,7 +1,7 @@
 # 更新日志
 
 本文件记录每个版本的变更。发布说明同步到 GitHub Releases。
-分支职责见 [docs/BRANCHING.md](docs/BRANCHING.md)：`main` 为 Linux / Windows
+分支职责见 [docs/PLATFORMS.md](docs/PLATFORMS.md)：`main` 为 Linux / Windows
 桌面线，`android` 为 Android 线；共享改动先落 `main` 再同步。
 
 ---

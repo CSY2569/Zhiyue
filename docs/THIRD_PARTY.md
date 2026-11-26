@@ -1,7 +1,7 @@
 # 第三方组件与许可
 
 本文件登记随包分发与按需下载的第三方组件及其许可，供分发合规审阅。
-（开发工具链依赖见 [`DEPENDENCIES.md`](DEPENDENCIES.md)。）
+（开发工具链依赖见 [`archive/DEPENDENCIES.md`](archive/DEPENDENCIES.md)。）
 
 ## 1. 随应用分发的组件
 

@@ -2,11 +2,11 @@
 
 原生 AI 集成的本地阅读器：阅读 PDF（文字版 / 扫描版）与图片文件，选中文字即可翻译、解释、搜索；支持文本层与图像层标记；内置完全离线的本地 OCR 与多模态识图。
 
-> **当前阶段：M0–M7 全部核心功能已完成。** 书库管理、PDF 管线、选区与文本层标记、AI 对话与识图、整页 OCR 与图像层标记、全文搜索、对照阅读（双语翻译）均已实现，另有 OCR 精度增强（7.1.x 系列）。详见 [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md)。
+> **当前阶段：M0–M7 全部核心功能已完成。** 书库管理、PDF 管线、选区与文本层标记、AI 对话与识图、整页 OCR 与图像层标记、全文搜索、对照阅读（双语翻译）均已实现，另有 OCR 精度增强（7.1.x 系列）。详见 [`docs/PRODUCT.md`](docs/PRODUCT.md)（功能现状）。
 >
 > 本分支（`main`）已将对照阅读的翻译引擎整体替换为**内置的 RetainPDF 管线**
 > （MIT，随包分发，Typst 重排；登记见 [`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md) §2，
-> 实施记录见 `IMPLEMENTATION_STATUS.md` §3.18）。
+> 实施记录见 [`docs/archive/IMPLEMENTATION_STATUS.md`](docs/archive/IMPLEMENTATION_STATUS.md) §3.18）。
 
 ## 架构
 
@@ -30,15 +30,15 @@
 - **AI 侧**：OpenAI 兼容协议（BYOK，可配 DeepSeek / Kimi / 通义等），流式对话（Markdown + LaTeX 渲染）+ 自由截图多模态识图。
 - **目标平台**（三条线，共用同一套 `lib/` + `rust/`）：
   - **Windows 桌面**：目标平台之一。runner 尚未创建（`windows/` 目录待补，暂未产出构建产物），桌面功能与 Linux 线共享；
-  - **Linux 桌面**（Arch / Debian / Ubuntu / Fedora 等，详见 [`docs/LINUX_PACKAGES.md`](docs/LINUX_PACKAGES.md)）；
+  - **Linux 桌面**（Arch / Debian / Ubuntu / Fedora 等，打包与依赖细节见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)）；
   - **Android arm64**（v1：阅读 + 本地 OCR + 划词 AI + 文本级对照，规划与包依赖见 android 分支的 `docs/ANDROID_V1_PLAN.md` 与 `docs/ANDROID_PACKAGES.md`）。桌面端的 RetainPDF 版式重排引擎不上移动端。
 - **零参考**：完全重写，不迁移任何旧代码。
 
-详见 [`docs/FEATURES.md`](docs/FEATURES.md)（需求）、[`docs/TECH_ROADMAP.md`](docs/TECH_ROADMAP.md)（技术路线）与 [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md)（实施状态）。
+详见 [`docs/README.md`](docs/README.md)（文档导航）、[`docs/PRODUCT.md`](docs/PRODUCT.md)（功能现状）与 [`docs/FEATURES.md`](docs/FEATURES.md)（需求规格）。
 
 ## 分支策略
 
-三个目标平台映射到两条长期分支——Windows 与 Linux 桌面共用 `main`，Android 独占 `android`（详见 [`docs/BRANCHING.md`](docs/BRANCHING.md)）：
+三个目标平台映射到两条长期分支——Windows 与 Linux 桌面共用 `main`，Android 独占 `android`（详见 [`docs/PLATFORMS.md`](docs/PLATFORMS.md)）：
 
 | 分支 | 职责 | 构建产物 |
 |---|---|---|
@@ -52,14 +52,17 @@
 
 ```
 ZhiYue/
-├── docs/                 # 需求与技术文档
-│   ├── FEATURES.md               # 需求规格
-│   ├── TECH_ROADMAP.md           # 技术路线
-│   ├── IMPLEMENTATION_STATUS.md  # 实施状态与后续开发方向
-│   ├── ARCHITECTURE.md           # 架构设计
-│   ├── DEPENDENCIES.md           # 工具链依赖说明
-│   ├── LINUX_PACKAGES.md         # Linux 分发包（deb/rpm/AppImage）
-│   └── FLUTTER_UI_MIGRATION.md   # Flutter UI 迁移说明
+├── docs/                 # 文档（活文档 + 归档，见 docs/README.md）
+│   ├── README.md                 # 文档导航（从这里开始）
+│   ├── PRODUCT.md                # 功能现状（按实际实现整理）
+│   ├── ARCHITECTURE.md           # 分层与 FFI 边界
+│   ├── DATA_MODEL.md             # 数据库表结构 + ai_config 全字段
+│   ├── FFI_API.md                # 81 个 FFI 命令参考
+│   ├── PLATFORMS.md              # 三平台两条分支 + PlatformHost
+│   ├── DEVELOPMENT.md            # 构建 / 测试 / 打包 / 扩展点 / 风险
+│   ├── FEATURES.md               # 需求规格（130 条，不是现状）
+│   ├── THIRD_PARTY.md            # 第三方组件与许可证
+│   └── archive/                  # 历史文档（不再维护）
 ├── scripts/              # 构建与安装脚本
 │   ├── setup.sh                  # 工具链安装（pacman 依赖 / FRB codegen）
 │   ├── fetch_pdfium.sh           # 获取 pdfium 动态库（构建前置）
@@ -116,7 +119,7 @@ ZhiYue/
 sudo bash scripts/setup.sh
 ```
 
-脚本会安装 cmake / ninja 等系统依赖（pacman）与 `flutter_rust_bridge_codegen`。Flutter SDK 需自行安装（脚本会检测并提示；默认路径 `~/develop/flutter`，解压后把 `bin` 加入 PATH）。详见 [`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md)。
+脚本会安装 cmake / ninja 等系统依赖（pacman）与 `flutter_rust_bridge_codegen`。Flutter SDK 需自行安装（脚本会检测并提示；默认路径 `~/develop/flutter`，解压后把 `bin` 加入 PATH）。详见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)。
 
 ### 2. 构建与运行
 
@@ -161,7 +164,7 @@ flutter test
 bash scripts/build_packages.sh
 ```
 
-安装与使用方式见 [`docs/LINUX_PACKAGES.md`](docs/LINUX_PACKAGES.md)。
+安装与使用方式见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)。
 
 ### 5. 验证功能
 
@@ -188,7 +191,7 @@ bash scripts/build_packages.sh
 | M6 全文搜索 | FTS5 + jieba / 后台预构建 + 增量索引 / 失败终态标记 / 全局搜索跳转 / 页内高亮 | ✅ 完成 |
 | 7.1.x OCR 精度 | 预处理增强 / 90° 自适应矫正 / 180° cls 矫正 / 置信度展示 / 手动修正 | ✅ 完成 |
 
-各里程碑的详细实施记录见 [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md)。
+各里程碑的详细实施记录见 [`docs/archive/IMPLEMENTATION_STATUS.md`](docs/archive/IMPLEMENTATION_STATUS.md)。
 
 ## 许可证
 
