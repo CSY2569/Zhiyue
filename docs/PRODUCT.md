@@ -166,7 +166,7 @@
 | Rust 单元测试 | 148 通过 / 0 失败 / 12 忽略 |
 | Flutter 静态检查 | 零问题 |
 | Flutter 测试 | 326 通过 / 0 失败 |
-| CI | `.github/workflows/ci.yml`（2026-11-26 新增，尚未在 GitHub 实跑） |
+| CI | `.github/workflows/ci.yml`：**首次实跑通过**（2026-11-26，run #1，两条 job 全绿，总耗时 4.8 min） |
 
 **性能与占用**（历史上测于 release 构建，未随代码变动重新基线化，仅供参考）
 

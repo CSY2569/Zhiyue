@@ -39,7 +39,7 @@
 | ID | 任务 | 优先级 | 规模 | 依赖 |
 |---|---|---|---|---|
 | T1 | Windows runner 落地 | ~~P0~~ **完成** | L | ✅ 2026-11-26 实机验证通过 |
-| T2 | CI 在 GitHub 实跑并固化为门禁 | P0 | S | — |
+| T2 | CI 在 GitHub 实跑并固化为门禁 | ~~P0~~ **完成** | S | ✅ run #1 全绿（4.8 min） |
 | T3 | 目录 / 书签编辑（旁路存储） | P1 | M | schema v12 + codegen |
 | T4 | AI 上下文管理（窗口大小 + 清空会话） | P1 | S | — |
 | T5 | 图片阅读器全流程一致性 | P1 | M | — |
@@ -91,7 +91,15 @@
 
 ---
 
-### T2 · CI 实跑并固化（P0 · S）
+### T2 · CI 实跑并固化（P0 · S）—— **✅ 已完成 2026-11-26**
+
+> **结果**：推送后 Actions 首次运行即全绿（run #1，commit `5dbaeb0`，总耗时 4.8 min）。
+> 两条 job 的每一步都通过，包括容易出问题的三处：`Install Flutter`（钉 3.47.3）、
+> `Fetch pdfium`（runner 能直连 GitHub Releases）、`Build Rust core for the FFI smoke tests`
+> （必须单独 cargo build --release，因为 FRB 加载器读 `rust/target/release/`，而
+> `flutter build` 走 CMake 的 `rust_target`）。
+> 耗时：Flutter job 4.7 min（含 cargo release 编译），Rust job 1.9 min。
+> 后续可选：加 `cargo fmt --check` 与 `clippy -D warnings`。
 
 **为什么**：`.github/workflows/ci.yml` 已提交，但**从未在 GitHub 上真跑过**——本地每条命令都绿，Actions 环境未验证。
 
@@ -249,7 +257,7 @@
 ## 5. 建议的执行顺序
 
 ```
-P0   T2 CI 实跑（先确保门禁可信，后续所有任务都靠它）
+P0   T2 CI 实跑 ✅（门禁已可信，后续任务都靠它把关）
      T1 Windows runner（可与 T2 并行，但需要 Windows 环境）
 
 P1   D2 extract_text 阻塞（顺手清掉再动 AI）
