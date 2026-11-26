@@ -40,7 +40,7 @@
 |---|---|---|---|---|
 | T1 | Windows runner 落地 | ~~P0~~ **完成** | L | ✅ 2026-11-26 实机验证通过 |
 | T2 | CI 在 GitHub 实跑并固化为门禁 | ~~P0~~ **完成** | S | ✅ run #1 全绿（4.8 min） |
-| T3 | 目录 / 书签编辑（旁路存储） | P1 | M | schema v12 + codegen |
+| T3 | 目录 / 书签编辑（旁路存储） | P1 **后端完成** | M | schema v12 已落地；UI 待做（需先给 OutlineEntry 加 key） |
 | T4 | AI 上下文管理（窗口大小 + 清空会话） | ~~P1~~ **完成** | S | ✅ 2026-11-26 |
 | T5 | 图片阅读器全流程一致性 | P1 | M | — |
 | T6 | 双页模式跨页选区与标注边界 | ~~P1~~ **完成** | M | ✅ 2026-11-26（越界冻结） |
@@ -109,7 +109,17 @@
 
 ---
 
-### T3 · 目录 / 书签编辑（P1 · M）
+### T3 · 目录 / 书签编辑（P1 · M）—— **后端完成，UI 待做（2026-11-26）**
+
+> **已完成**：schema v12（`book_outline_overrides` 表 + 迁移分支）、
+> `pdf/outline_edit.rs` 纯函数合并层（9 条单测）、仓储 `db/repository/outline.rs`、
+> 三个命令 `save_outline_override` / `delete_outline_override` / `reset_outline`，
+> `get_outline` 返回合并后的树。cargo test 158 + 2 全绿。
+>
+> **UI 待做的前置**：`OutlineEntry` 目前只有 title / page / children，**没有 key**。
+> 而编辑必须按 key 定位节点，且 key 编的是**原始文档位置**——合并后的位置会因重排
+> 而变化，UI 不能自己按下标反推。所以下一步要先给 `OutlineEntry` 加 `key: String`
+> 字段（需再跑一次 codegen），UI 才能安全地发起编辑。
 
 **为什么**：目录当前只读，是最常见的用户诉求之一。
 
