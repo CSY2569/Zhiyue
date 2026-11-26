@@ -38,10 +38,6 @@ fn index_of(overrides: &[OutlineOverride]) -> std::collections::HashMap<&str, &O
     overrides.iter().map(|o| (o.entry_key.as_str(), o)).collect()
 }
 
-fn sort_key(order_index: Option<i64>, position: usize) -> (i64, usize) {
-    (order_index.unwrap_or(i64::MAX), position)
-}
-
 /// Merge [overrides] over [base].
 ///
 /// - `title` replaces the node's text (when present).
