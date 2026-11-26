@@ -14,6 +14,7 @@
 | [`FFI_API.md`](FFI_API.md) | 81 个 FFI 命令的分组参考 + 「新增一个命令」五步 | 开发 |
 | [`PLATFORMS.md`](PLATFORMS.md) | 三平台两条分支、`PlatformHost` 抽象、同步陷阱、Windows 待办 | 开发 / 发布 |
 | [`DEVELOPMENT.md`](DEVELOPMENT.md) | 构建、测试、打包、扩展点速查、架构风险排序 | 开发 |
+| [`ROADMAP.md`](ROADMAP.md) | **执行规划**：缺口清单、方案、验收标准与优先级（待审核） | 决策者 / 开发 |
 | [`FEATURES.md`](FEATURES.md) | **需求规格**（130 条，P0/P1/P2）——是「应该有什么」，不是「现在有什么」 | 产品 |
 | [`THIRD_PARTY.md`](THIRD_PARTY.md) | 第三方组件与许可证义务（GPL-3.0 / AGPL 隔离约定） | 法务 / 发布 |
 
