@@ -46,6 +46,35 @@ class ReaderRepository {
   Future<rust.OutlineResult> getOutline(int bookId) =>
       rust.getOutline(bookId: bookId);
 
+  /// Save one user edit of the outline: rename ([title]), hide ([hidden]),
+  /// reorder ([orderIndex]), retarget ([page]), or add a bookmark by passing a
+  /// `bm:` [entryKey] (optionally under [parentKey]). Omitted arguments keep
+  /// the document's own value.
+  Future<int> saveOutlineOverride({
+    required int bookId,
+    required String entryKey,
+    String? parentKey,
+    String? title,
+    int? page,
+    int? orderIndex,
+    bool hidden = false,
+  }) => rust.saveOutlineOverride(
+    bookId: bookId,
+    entryKey: entryKey,
+    parentKey: parentKey,
+    title: title,
+    page: page,
+    orderIndex: orderIndex,
+    hidden: hidden,
+  );
+
+  /// Drop one edit, restoring the document's own value for that node.
+  Future<int> deleteOutlineOverride(int bookId, String entryKey) =>
+      rust.deleteOutlineOverride(bookId: bookId, entryKey: entryKey);
+
+  /// Drop every edit for the book (恢复原始目录).
+  Future<int> resetOutline(int bookId) => rust.resetOutline(bookId: bookId);
+
   /// Load the saved reading position for a book.
   Future<ReadingProgress?> getProgress(int bookId) =>
       rust.getProgress(bookId: bookId);

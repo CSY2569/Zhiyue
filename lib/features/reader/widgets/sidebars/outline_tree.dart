@@ -4,6 +4,8 @@ import 'package:lucide_flutter/lucide_flutter.dart';
 
 import 'package:rbwa/core/widgets/empty_state.dart';
 import 'package:rbwa/core/widgets/loading_state.dart';
+import 'package:rbwa/core/widgets/text_input_dialog.dart';
+import 'package:rbwa/platform/platform_host.dart';
 import 'package:rbwa/data/repositories/reader_repository.dart';
 import 'package:rbwa/features/reader/providers/outline_settings.dart';
 import 'package:rbwa/features/reader/providers/panel_layout.dart';
@@ -28,6 +30,7 @@ class _OutlineTreeState extends ConsumerState<OutlineTree> {
   List<OutlineEntry>? _entries;
   String? _error;
   bool _loading = true;
+  int _bookId = 0;
 
   @override
   void initState() {
@@ -38,8 +41,9 @@ class _OutlineTreeState extends ConsumerState<OutlineTree> {
   Future<void> _load() async {
     final state = ref.read(viewerProvider);
     final repo = ref.read(readerRepositoryProvider);
+    _bookId = state.book?.id ?? 0;
     try {
-      final result = await repo.getOutline(state.book?.id ?? 0);
+      final result = await repo.getOutline(_bookId);
       if (mounted) {
         setState(() {
           _entries = result.entries;
@@ -55,6 +59,57 @@ class _OutlineTreeState extends ConsumerState<OutlineTree> {
         });
       }
     }
+  }
+
+  /// Rename / hide / bookmark actions for one node.
+  ///
+  /// Edits go through the override table, so the PDF file itself never changes
+  /// -- the merged tree is rebuilt from the document outline plus these rows.
+  Future<void> _editNode(OutlineEntry entry, _OutlineAction action) async {
+    final repo = ref.read(readerRepositoryProvider);
+    switch (action) {
+      case _OutlineAction.rename:
+        final title = await showTextInputDialog(
+          context,
+          title: '重命名目录项',
+          initial: entry.title,
+          label: '标题',
+        );
+        if (title == null || title.isEmpty) return;
+        await repo.saveOutlineOverride(
+          bookId: _bookId,
+          entryKey: entry.key,
+          title: title,
+        );
+      case _OutlineAction.hide:
+        await repo.saveOutlineOverride(
+          bookId: _bookId,
+          entryKey: entry.key,
+          hidden: true,
+        );
+      case _OutlineAction.bookmark:
+        // A bookmark is a NEW node (bm: key) parented to this entry, aimed at
+        // the page the user is currently reading.
+        final page = ref.read(viewerProvider).currentPage;
+        final title = await showTextInputDialog(
+          context,
+          title: '添加书签',
+          initial: '第 $page 页',
+          label: '书签名称',
+        );
+        if (title == null || title.isEmpty) return;
+        await repo.saveOutlineOverride(
+          bookId: _bookId,
+          entryKey: 'bm:${DateTime.now().microsecondsSinceEpoch}',
+          parentKey: entry.key,
+          title: title,
+          page: page - 1, // Flutter is 1-based, the outline is 0-based
+        );
+      case _OutlineAction.reset:
+        await repo.resetOutline(_bookId);
+    }
+    if (!mounted) return;
+    await _load();
   }
 
   @override
@@ -91,9 +146,40 @@ class _OutlineTreeState extends ConsumerState<OutlineTree> {
     // 设置 → 阅读器: whether every level starts expanded. Toggling it re-keys
     // the list below so the nodes pick up the new default immediately.
     final expandAll = ref.watch(outlineExpandAllProvider);
-    return ListView(
-      key: ValueKey(expandAll),
-      padding: const EdgeInsets.symmetric(vertical: 8),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 12, right: 4, top: 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text('目录', style: theme.textTheme.labelMedium),
+              ),
+              PopupMenuButton<_OutlineAction>(
+                tooltip: '目录选项',
+                icon: const Icon(LucideIcons.ellipsisVertical, size: 20),
+                onSelected: (action) {
+                  // Reset applies to the whole book, not to one node.
+                  final first = _entries?.isNotEmpty == true
+                      ? _entries!.first
+                      : null;
+                  if (first != null) _editNode(first, action);
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: _OutlineAction.reset,
+                    child: Text('恢复原始目录'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: ListView(
+            key: ValueKey(expandAll),
+            padding: const EdgeInsets.symmetric(vertical: 8),
       children: entries
           .map(
             (e) => _OutlineNode(
@@ -101,9 +187,13 @@ class _OutlineTreeState extends ConsumerState<OutlineTree> {
               depth: 0,
               defaultExpanded: expandAll,
               onJump: (page) => widget.onJump(page),
+              onAction: _editNode,
             ),
           )
-          .toList(),
+              .toList(),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -115,10 +205,14 @@ class _OutlineNode extends StatefulWidget {
     required this.depth,
     required this.defaultExpanded,
     required this.onJump,
+    required this.onAction,
   });
 
   final OutlineEntry entry;
   final int depth;
+
+  /// Context-menu actions (rename / hide / add bookmark) for this node.
+  final void Function(OutlineEntry entry, _OutlineAction action) onAction;
 
   /// Whether this node's children start expanded (设置 → 阅读器, inherited by
   /// every descendant so "expand all" reaches the whole tree).
@@ -138,6 +232,25 @@ class _OutlineNodeState extends State<_OutlineNode> {
     _expanded = widget.defaultExpanded;
   }
 
+  /// Right-click (desktop) or long-press (touch) menu for this node.
+  Future<void> _showMenu(Offset globalPosition) async {
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox?;
+    if (overlay == null) return;
+    final selected = await showMenu<_OutlineAction>(
+      context: context,
+      position: RelativeRect.fromRect(
+        globalPosition & const Size(1, 1),
+        Offset.zero & overlay.size,
+      ),
+      items: const [
+        PopupMenuItem(value: _OutlineAction.rename, child: Text('重命名')),
+        PopupMenuItem(value: _OutlineAction.bookmark, child: Text('在此添加书签')),
+        PopupMenuItem(value: _OutlineAction.hide, child: Text('隐藏此项')),
+      ],
+    );
+    if (selected != null) widget.onAction(widget.entry, selected);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -149,6 +262,17 @@ class _OutlineNodeState extends State<_OutlineNode> {
       children: [
         InkWell(
           onTap: page >= 0 ? () => widget.onJump(page) : null,
+          onSecondaryTapDown: (d) => _showMenu(d.globalPosition),
+          // Touch has no right-click; long-press opens the same menu. Desktop
+          // keeps long-press free so it can still drag-select text elsewhere.
+          onLongPress: PlatformHost.current.touch
+              ? () {
+                  final box = context.findRenderObject() as RenderBox?;
+                  if (box != null) {
+                    _showMenu(box.localToGlobal(box.size.center(Offset.zero)));
+                  }
+                }
+              : null,
           child: Padding(
             padding: EdgeInsets.only(
               left: 16.0 + widget.depth * 16,
@@ -198,9 +322,12 @@ class _OutlineNodeState extends State<_OutlineNode> {
               depth: widget.depth + 1,
               defaultExpanded: widget.defaultExpanded,
               onJump: widget.onJump,
+              onAction: widget.onAction,
             ),
           ),
       ],
     );
   }
 }
+/// What the outline context menu can do to a node.
+enum _OutlineAction { rename, hide, bookmark, reset }

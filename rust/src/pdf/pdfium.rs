@@ -344,8 +344,16 @@ pub fn outline() -> AppResult<Vec<OutlineEntry>> {
         // each section once at the top level and once under its parent.
         if let Some(root) = doc.bookmarks().root() {
             let mut current = root;
+            let mut index = 0usize;
             loop {
-                out.push(bookmark_to_entry(&current));
+                // Keys address nodes by their position in the DOCUMENT, which is
+                // what the overrides table stores; the merged view may reorder
+                // or hide nodes, so positions there are not stable.
+                out.push(bookmark_to_entry(
+                    &current,
+                    crate::pdf::outline_edit::top_key(index),
+                ));
+                index += 1;
                 match current.next_sibling() {
                     Some(sibling) => current = sibling,
                     None => break,
@@ -356,7 +364,7 @@ pub fn outline() -> AppResult<Vec<OutlineEntry>> {
     })
 }
 
-fn bookmark_to_entry(bm: &PdfBookmark<'_>) -> OutlineEntry {
+fn bookmark_to_entry(bm: &PdfBookmark<'_>, key: String) -> OutlineEntry {
     let title = bm.title().unwrap_or_default();
     let page = bm
         .destination()
@@ -366,8 +374,13 @@ fn bookmark_to_entry(bm: &PdfBookmark<'_>) -> OutlineEntry {
     let mut children = Vec::new();
     if let Some(child) = bm.first_child() {
         let mut sibling = child;
+        let mut index = 0usize;
         loop {
-            children.push(bookmark_to_entry(&sibling));
+            children.push(bookmark_to_entry(
+                &sibling,
+                crate::pdf::outline_edit::child_key(&key, index),
+            ));
+            index += 1;
             match sibling.next_sibling() {
                 Some(next) => sibling = next,
                 None => break,
@@ -375,6 +388,7 @@ fn bookmark_to_entry(bm: &PdfBookmark<'_>) -> OutlineEntry {
         }
     }
     OutlineEntry {
+        key,
         title,
         page,
         children,

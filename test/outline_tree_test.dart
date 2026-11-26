@@ -16,11 +16,12 @@ import 'helpers/widget_harness.dart';
 /// the child rows are rendered by default.
 const _outline = [
   OutlineEntry(
+    key: 'pdf:0',
     title: 'Chapter 1',
     page: 0,
     children: [
-      OutlineEntry(title: 'Section 1.1', page: 0, children: []),
-      OutlineEntry(title: 'Section 1.2', page: 0, children: []),
+      OutlineEntry(key: 'pdf:0.0', title: 'Section 1.1', page: 0, children: []),
+      OutlineEntry(key: 'pdf:0.1', title: 'Section 1.2', page: 0, children: []),
     ],
   ),
 ];

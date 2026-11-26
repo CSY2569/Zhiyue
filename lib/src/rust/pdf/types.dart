@@ -48,24 +48,32 @@ class CharBox {
 /// `Clone` is needed by the outline merge, which copies a subtree when a user
 /// bookmark has to be re-parented.
 class OutlineEntry {
+  /// Stable address of this node: `pdf:0.1.2` (sibling-index path through
+  /// the document's own outline) or `bm:<n>` for a bookmark the user added.
+  /// The UI needs it to say *which* node an edit applies to -- positions in
+  /// the merged tree shift as soon as anything is reordered or hidden.
+  final String key;
   final String title;
   final PlatformInt64 page;
   final List<OutlineEntry> children;
 
   const OutlineEntry({
+    required this.key,
     required this.title,
     required this.page,
     required this.children,
   });
 
   @override
-  int get hashCode => title.hashCode ^ page.hashCode ^ children.hashCode;
+  int get hashCode =>
+      key.hashCode ^ title.hashCode ^ page.hashCode ^ children.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is OutlineEntry &&
           runtimeType == other.runtimeType &&
+          key == other.key &&
           title == other.title &&
           page == other.page &&
           children == other.children;

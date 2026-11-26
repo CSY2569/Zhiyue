@@ -70,7 +70,7 @@ pub fn merge(base: Vec<OutlineEntry>, overrides: &[OutlineOverride]) -> Vec<Outl
         }
     }
     let mut used: std::collections::HashSet<String> = std::collections::HashSet::new();
-    let mut merged = build_level(base, None, &top, &at_level, &by_key, &mut used);
+    let mut merged = build_level(base, &top, &at_level, &by_key, &mut used);
     // Bookmarks whose parent was hidden or is gone.
     for (key, list) in at_level.iter() {
         if !used.contains(key) {
@@ -84,6 +84,7 @@ pub fn merge(base: Vec<OutlineEntry>, overrides: &[OutlineOverride]) -> Vec<Outl
 
 fn bookmark_node(o: &OutlineOverride) -> OutlineEntry {
     OutlineEntry {
+        key: o.entry_key.clone(),
         title: o.title.clone().unwrap_or_else(|| "书签".to_string()),
         page: o.page.unwrap_or(-1),
         children: Vec::new(),
@@ -92,7 +93,6 @@ fn bookmark_node(o: &OutlineOverride) -> OutlineEntry {
 
 fn build_level(
     nodes: Vec<OutlineEntry>,
-    parent: Option<&str>,
     extra: &[&OutlineOverride],
     at_level: &std::collections::HashMap<String, Vec<&OutlineOverride>>,
     by_key: &std::collections::HashMap<&str, &OutlineOverride>,
@@ -102,11 +102,10 @@ fn build_level(
     // nodes without an explicit order_index, and pushes added bookmarks after
     // them.
     let mut items: Vec<(i64, usize, OutlineEntry)> = Vec::new();
-    for (i, node) in nodes.into_iter().enumerate() {
-        let key = match parent {
-            None => top_key(i),
-            Some(p) => child_key(p, i),
-        };
+    for node in nodes.into_iter() {
+        // The key travels with the entry (assigned while walking the document),
+        // so hidden or reordered siblings never shift anyone else's address.
+        let key = node.key.clone();
         let ov = by_key.get(key.as_str()).copied();
         if ov.map(|o| o.hidden).unwrap_or(false) {
             continue;
@@ -119,19 +118,13 @@ fn build_level(
             .and_then(|o| o.title.clone())
             .unwrap_or(node.title);
         let page = ov.and_then(|o| o.page).unwrap_or(node.page);
-        let children = build_level(
-            node.children,
-            Some(&key),
-            children_extra,
-            at_level,
-            by_key,
-            used,
-        );
+        let children = build_level(node.children, children_extra, at_level, by_key, used);
         let order = ov.and_then(|o| o.order_index).unwrap_or(i64::MAX);
         items.push((
             order,
             items.len(),
             OutlineEntry {
+                key,
                 title,
                 page,
                 children,
@@ -153,8 +146,10 @@ fn build_level(
 mod tests {
     use super::*;
 
-    fn entry(title: &str, page: i64, children: Vec<OutlineEntry>) -> OutlineEntry {
+    /// Mirrors what the pdfium walk produces: keys are sibling-index paths.
+    fn entry(key: &str, title: &str, page: i64, children: Vec<OutlineEntry>) -> OutlineEntry {
         OutlineEntry {
+            key: key.into(),
             title: title.into(),
             page,
             children,
@@ -175,11 +170,15 @@ mod tests {
     fn base() -> Vec<OutlineEntry> {
         vec![
             entry(
+                "pdf:0",
                 "第一章",
                 0,
-                vec![entry("1.1 小节", 1, vec![]), entry("1.2 小节", 2, vec![])],
+                vec![
+                    entry("pdf:0.0", "1.1 小节", 1, vec![]),
+                    entry("pdf:0.1", "1.2 小节", 2, vec![]),
+                ],
             ),
-            entry("第二章", 3, vec![]),
+            entry("pdf:1", "第二章", 3, vec![]),
         ]
     }
 

@@ -35,6 +35,11 @@ pub struct CharBox {
 /// bookmark has to be re-parented.
 #[derive(Clone)]
 pub struct OutlineEntry {
+    /// Stable address of this node: `pdf:0.1.2` (sibling-index path through
+    /// the document's own outline) or `bm:<n>` for a bookmark the user added.
+    /// The UI needs it to say *which* node an edit applies to -- positions in
+    /// the merged tree shift as soon as anything is reordered or hidden.
+    pub key: String,
     pub title: String,
     pub page: i64,
     pub children: Vec<OutlineEntry>,

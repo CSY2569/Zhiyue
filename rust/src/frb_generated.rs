@@ -4275,10 +4275,12 @@ impl SseDecode for Option<Vec<u8>> {
 impl SseDecode for crate::pdf::types::OutlineEntry {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_key = <String>::sse_decode(deserializer);
         let mut var_title = <String>::sse_decode(deserializer);
         let mut var_page = <i64>::sse_decode(deserializer);
         let mut var_children = <Vec<crate::pdf::types::OutlineEntry>>::sse_decode(deserializer);
         return crate::pdf::types::OutlineEntry {
+            key: var_key,
             title: var_title,
             page: var_page,
             children: var_children,
@@ -5519,6 +5521,7 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::OpenBookResult> for crate::ap
 impl flutter_rust_bridge::IntoDart for crate::pdf::types::OutlineEntry {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
+            self.key.into_into_dart().into_dart(),
             self.title.into_into_dart().into_dart(),
             self.page.into_into_dart().into_dart(),
             self.children.into_into_dart().into_dart(),
@@ -6802,6 +6805,7 @@ impl SseEncode for Option<Vec<u8>> {
 impl SseEncode for crate::pdf::types::OutlineEntry {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.key, serializer);
         <String>::sse_encode(self.title, serializer);
         <i64>::sse_encode(self.page, serializer);
         <Vec<crate::pdf::types::OutlineEntry>>::sse_encode(self.children, serializer);
