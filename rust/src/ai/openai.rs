@@ -22,7 +22,7 @@ use futures_core::Stream;
 use futures_util::StreamExt;
 use serde_json::{json, Value};
 
-use crate::ai::{AiClient, ChunkStream};
+use crate::ai::{vision_route, AiClient, ChunkStream};
 use crate::error::{AppError, AppResult};
 use crate::models::ai::{AiConfig, AiMessage, AiRole};
 
@@ -218,15 +218,6 @@ fn vision_messages(prompt: &str, png: &[u8]) -> Value {
     ])
 }
 
-/// Effective vision model: the dedicated vision model wins, else the text
-/// model (FEATURES 6.1.2: vision falls back to the main config when empty).
-fn vision_model(config: &AiConfig) -> &str {
-    if config.vision_model.trim().is_empty() {
-        &config.text_model
-    } else {
-        &config.vision_model
-    }
-}
 /// Run a streaming chat request with plain reqwest. On non-2xx the full
 /// provider error body is surfaced. SSE chunks are parsed into text chunks.
 async fn stream_request(
@@ -688,16 +679,14 @@ impl AiClient for OpenAiClient {
     ) -> impl Future<Output = AppResult<ChunkStream>> + Send {
         async move {
             let http = Self::http_client()?;
-            let base_url = config
-                .vision_base_url
-                .as_deref()
-                .unwrap_or(&config.base_url);
-            let api_key = config.vision_api_key.as_deref().unwrap_or(&config.api_key);
+            // One routing decision for base URL / key / model: a multimodal
+            // general model never falls back to a separate vision config.
+            let (base_url, api_key, model) = vision_route(config);
             let messages = vision_messages(prompt, png);
             let url = Self::endpoint(base_url);
             // Vision stays on the minimal body: no temperature / reasoning.
             let extras = RequestExtras::default();
-            stream_request(http, url, api_key, vision_model(config), messages, &extras).await
+            stream_request(http, url, api_key, model, messages, &extras).await
         }
     }
 }
@@ -705,6 +694,7 @@ impl AiClient for OpenAiClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ai::vision_model;
     use crate::test_http::{mock_server, read_request};
     // The fallback test below routes per-request responses itself and needs
     // the raw socket pieces.
@@ -1260,6 +1250,110 @@ data: {"type":"message_stop"}
             ..Default::default()
         };
         assert_eq!(vision_model(&cfg2), "  vision-m  ");
+    }
+
+    #[test]
+    fn vision_route_prefers_general_config_when_model_supports_vision() {
+        // Image-capable general model + stale independent-vision overrides:
+        // the overrides must be inert (regression: they used to hijack 识图
+        // to the previous provider's endpoint).
+        let cfg = AiConfig {
+            base_url: "https://general.example/v1".into(),
+            api_key: "main-key".into(),
+            text_model: "text-m".into(),
+            vision_model: "stale-model".into(),
+            vision_base_url: Some("https://stale.example/api/plan/v3".into()),
+            vision_api_key: Some("stale-key".into()),
+            model_supports_vision: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            vision_route(&cfg),
+            ("https://general.example/v1", "main-key", "text-m")
+        );
+    }
+
+    #[test]
+    fn vision_route_uses_overrides_when_model_is_text_only() {
+        let cfg = AiConfig {
+            base_url: "https://general.example/v1".into(),
+            api_key: "main-key".into(),
+            text_model: "text-m".into(),
+            vision_model: "vision-m".into(),
+            vision_base_url: Some("https://vision.example/v1".into()),
+            vision_api_key: Some("vision-key".into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            vision_route(&cfg),
+            ("https://vision.example/v1", "vision-key", "vision-m")
+        );
+    }
+
+    #[test]
+    fn vision_route_ignores_blank_overrides() {
+        // Older builds could persist `Some("")` / whitespace: it must not
+        // shadow the general channel.
+        let cfg = AiConfig {
+            base_url: "https://general.example/v1".into(),
+            api_key: "main-key".into(),
+            text_model: "text-m".into(),
+            vision_model: "   ".into(),
+            vision_base_url: Some("  ".into()),
+            vision_api_key: Some(String::new()),
+            ..Default::default()
+        };
+        assert_eq!(
+            vision_route(&cfg),
+            ("https://general.example/v1", "main-key", "text-m")
+        );
+    }
+
+    #[tokio::test]
+    async fn stream_vision_ignores_stale_override_when_multimodal() {
+        // The request must reach the general endpoint only; the stale vision
+        // endpoint must never be called (Ark answered 404 UnsupportedModel
+        // when it was).
+        let events = r#"data: {"id":"c","object":"chat.completion.chunk","created":1,"model":"m","choices":[{"delta":{"content":"ok"},"index":0}]}
+
+data: [DONE]
+
+"#;
+        let (general_base, mut general_rx) = mock_responses_server(events, "200 OK").await;
+        let (stale_base, mut stale_rx) = mock_responses_server(events, "200 OK").await;
+        let cfg = AiConfig {
+            api_key: "main-key".into(),
+            base_url: general_base,
+            text_model: "text-m".into(),
+            vision_model: "stale-model".into(),
+            vision_base_url: Some(stale_base),
+            vision_api_key: Some("stale-key".into()),
+            model_supports_vision: true,
+            ..Default::default()
+        };
+        let client = OpenAiClient;
+        let mut stream = client.stream_vision(&cfg, &[7u8], "p").await.unwrap();
+        while let Some(chunk) = stream.next().await {
+            chunk.unwrap();
+        }
+
+        let req = general_rx.recv().await.unwrap();
+        assert!(
+            req.starts_with("POST /v1/chat/completions HTTP/1.1"),
+            "{req}"
+        );
+        assert!(
+            req_lower(&req).contains("authorization: bearer main-key"),
+            "{req}"
+        );
+        assert!(req.contains("\"model\":\"text-m\""), "{req}");
+
+        assert!(
+            tokio::time::timeout(Duration::from_millis(300), stale_rx.recv())
+                .await
+                .is_err(),
+            "stale vision endpoint was called"
+        );
     }
 
     #[tokio::test]

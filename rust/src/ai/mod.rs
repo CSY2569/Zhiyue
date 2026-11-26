@@ -38,6 +38,40 @@ pub use web_search::deepseek_search;
 /// A streamed text chunk from the model (FEATURES 6.3.1).
 pub type ChunkStream = Pin<Box<dyn Stream<Item = AppResult<String>> + Send>>;
 
+/// Effective vision model: the dedicated vision model wins, else the text
+/// model (FEATURES 6.1.2: vision falls back to the main config when empty).
+pub(crate) fn vision_model(config: &AiConfig) -> &str {
+    if config.vision_model.trim().is_empty() {
+        &config.text_model
+    } else {
+        &config.vision_model
+    }
+}
+
+/// Effective `(base_url, api_key, model)` for a vision request (6.1.2).
+///
+/// When the general model declares image support (`model_supports_vision`,
+/// 设置 → 模型能力 → 图片) every independent-vision override is inert: the
+/// request follows the general channel, exactly like the settings page shows
+/// it. Historical leftovers in the config must not hijack the request (a
+/// stale base URL / key used to send 识图 to the previous provider).
+///
+/// A text-only general model still uses the overrides; blank ones
+/// (`Some("")` / whitespace, possible from older builds) fall back.
+pub(crate) fn vision_route(config: &AiConfig) -> (&str, &str, &str) {
+    if config.model_supports_vision {
+        return (&config.base_url, &config.api_key, &config.text_model);
+    }
+    let base = non_blank(config.vision_base_url.as_deref()).unwrap_or(&config.base_url);
+    let key = non_blank(config.vision_api_key.as_deref()).unwrap_or(&config.api_key);
+    (base, key, vision_model(config))
+}
+
+/// `Some(value)` only when [value] is not blank.
+fn non_blank(value: Option<&str>) -> Option<&str> {
+    value.filter(|v| !v.trim().is_empty())
+}
+
 /// The AI client contract.
 ///
 /// Methods return `impl Future + Send` (RPITIT) so callers can run them on

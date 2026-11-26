@@ -1587,6 +1587,19 @@ fn ensure_api_key(config: &AiConfig, sink: &StreamSink<String>) -> bool {
     }
 }
 
+/// Vision guard: the key actually used may come from the independent vision
+/// config when the general model is text-only, so the check follows the same
+/// routing as the request itself ([`ai::vision_route`]) instead of hard-coding
+/// `config.api_key`.
+fn ensure_vision_api_key(config: &AiConfig, sink: &StreamSink<String>) -> bool {
+    if ai::vision_route(config).1.trim().is_empty() {
+        let _ = sink.add_error(NO_API_KEY_MSG.to_string());
+        true
+    } else {
+        false
+    }
+}
+
 /// A synthetic system message carrying the composed system prompt (never
 /// persisted -- id/thread are placeholders).
 fn system_message(content: String) -> AiMessage {
@@ -1705,7 +1718,7 @@ pub async fn stream_chat(
 /// composited layer), so what the model sees is exactly what was selected.
 pub async fn stream_vision_png(png: Vec<u8>, sink: StreamSink<String>) {
     let config = get_ai_config();
-    if ensure_api_key(&config, &sink) {
+    if ensure_vision_api_key(&config, &sink) {
         return;
     }
     if png.is_empty() {
