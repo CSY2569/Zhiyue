@@ -10,12 +10,13 @@
 include: package:flutter_lints/flutter.yaml
 
 analyzer:
-  # Generated artifacts (build outputs, the Linux CMake runner) are not Dart
+  # Generated artifacts (build outputs, the platform runners) are not Dart
   # sources; keep them out of analysis.
   exclude:
     - build/**
     - linux/**
     - android/**
+    - windows/**
 
 linter:
   # The lint rules applied to this project can be customized in the
