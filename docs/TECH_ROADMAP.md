@@ -24,7 +24,7 @@
 ┌───────────────────┴────────────────────────────┐
 │ Rust 核心层（无 UI，全部重活）                    │
 │  PDF（pdfium-render）   OCR（rapidocr-core）     │
-│  AI（async-openai）     SQLite + FTS5 + jieba   │
+│  AI（reqwest 手写）     SQLite + FTS5 + jieba   │
 │  数据模型 / 命令接口（FRB 导出）                 │
 └────────────────────────────────────────────────┘
 ```
@@ -60,7 +60,7 @@
 | 后端形态 | 纯 lib crate + **flutter_rust_bridge v2** | 无框架；FRB 生成类型安全绑定与流式回调 |
 | PDF 渲染/文本 | **pdfium-render** | 渲染位图 + 文本提取 + **字符盒坐标**（选区/文本层标记数据基础） |
 | OCR | **rapidocr-core**（RapidAI 官方） | 开箱 det/cls/rec 完整管线 + 后处理 + 取消令牌（基于 ort）；**默认高精度模式（PP-OCRv4 server 版 det/rec，fp32）**，设置可切换快速模式（mobile + int8，~5MB） |
-| AI 客户端 | **async-openai**（备选：reqwest 手写） | 自定义 base_url、流式 chat、多模态；兼容 DeepSeek / Kimi / 通义 |
+| AI 客户端 | **手写 reqwest SSE 客户端**（async-openai 因请求类型序列化问题已弃用） | 自定义 base_url、流式 chat、多模态；兼容 DeepSeek / Kimi / 通义 |
 | 数据库 | **rusqlite**（bundled，WAL）+ **FTS5** | 全文搜索用内置 FTS5 |
 | 中文分词 | **jieba-rs** | 中文检索质量（FTS5 原生分词对中文只有逐字切分）；词典 ~5MB 可换精简版 |
 | 图片处理 | **image** crate | 封面缩略图、备用拼合路径 |
@@ -101,8 +101,8 @@
 - 拼合导出：PictureRecorder 重绘页面位图 + 标记 → PNG（Flutter 侧）
 
 ### 3.6 AI 流式（需求 6.1-6.6）
-- **async-openai**：自定义 base_url / 流式 chat / 多模态 vision；FRB Stream 推送 chunk → Riverpod 状态 → Markdown（含 LaTeX 公式）流式渲染
-- 取消：async-openai 的 abort / 自定义取消令牌
+- **手写 reqwest SSE 客户端**（async-openai 因请求类型序列化问题已弃用）：自定义 base_url / 流式 chat / 多模态 vision；FRB Stream 推送 chunk → Riverpod 状态 → Markdown（含 LaTeX 公式）流式渲染
+- 取消：手写 reqwest SSE 客户端的自定义取消令牌（async-openai 的 abort 方案已弃用）
 - 历史持久化：`ai_history` 表读写（需求 6.5.4）
 
 ### 3.7 数据层与搜索（需求 9、3.5）
@@ -142,7 +142,7 @@
 | 3 阅读器（模式/缩放/翻页/侧栏/搜索/性能） | 3.1 渲染管线 + 3.7 索引 | M2、M6（搜索） |
 | 4 文字选择与文本层标记 | 3.2 字符盒选区 + 3.3 标记 | M3 |
 | 5 图像层标记 | 3.5 CustomPaint 矢量层 | M5 |
-| 6 AI 功能 | 3.6 async-openai 流式 | M4 |
+| 6 AI 功能 | 3.6 手写 reqwest SSE 流式 | M4 |
 | 7 OCR 双引擎 + 图片阅读器 | 3.4 rapidocr-core 集成 | M4（区域 OCR）、M5（整页） |
 | 8 界面与窗口 | 3.9 | M1（骨架）、M3（拖拽浮层） |
 | 9 数据与存储 | 3.7 | M1 |
@@ -157,7 +157,7 @@
 | **M1 骨架与书库** | Flutter 工程 + FRB 管道 + SQLite（含 categories 表）+ 书库（导入/网格/收藏/删除/**分类管理**/**拖拽归类**/检索筛选）+ 无边框标题栏 + 主题 | 3 周 |
 | **M2 PDF 管线** | pdfium 渲染 + 纹理显示 + 虚拟滚动 + 三模式 + 缩放/翻页 + 进度恢复 + 侧栏（缩略图/目录） | 3 周 |
 | **M3 选区与文本层标记** | 字符盒选区 + 工具条 + 高亮/下划线/删除线 + 笔记 + 标注侧栏 + 导出 | 3 周 |
-| **M4 AI 与区域 OCR** | async-openai 流式 + 卡片/侧边栏 + 多模态区域 OCR + 设置 + 历史持久化 | 3 周 |
+| **M4 AI 与区域 OCR** | 手写 reqwest SSE 流式 + 卡片/侧边栏 + 多模态区域 OCR + 设置 + 历史持久化 | 3 周 |
 | **M5 图像层标记与整页 OCR** | 画笔/便签/图章/形状 + 图层管理 + 拼合导出 + rapidocr 整页扫描（**高精度/快速双模式**、原始分辨率输入、预处理增强、四边形矫正）+ 隐形文本层 + 图片阅读器 | 4-5 周 |
 | **M6 全文搜索 + 打磨** | FTS5 + jieba 索引（文字版 PDF + OCR 已扫描页；**导入后后台异步预构建 + 扫描成功增量入索引**；图片书不建索引）+ 书库全局搜索 UI（命中书/页/摘要 + 跳转定位）+ 页内命中词高亮 + 性能/体积调优（LRU 缓存、LTO、内存分析、启动优化） | 3 周 |
 
@@ -173,7 +173,7 @@
 | 位图传输内存峰值（一页 ~9MB RGBA） | 分块传输 / 共享内存；LRU 上限防累积 |
 | rapidocr-core crate 较年轻（API 变动） | 锁定版本 + 备选自研 ort 管线（PP-OCRv4 流程已明确） |
 | **精准优先与"占用小"目标冲突**（server 模型体积 ~90MB / 内存 +200-300MB） | 默认高精度模式满足精准需求（7.1.9）；快速模式（mobile + int8）设置一键切换；模型按需下载、引擎懒加载，不扫描不占内存 |
-| async-openai 对国产服务商多模态格式适配 | 备选：reqwest 手写请求体（成本低） |
+| async-openai 对国产服务商多模态格式适配（**已弃用**：改用手写 reqwest SSE 请求体） | 备选：reqwest 手写请求体（成本低） |
 | jieba 词典体积 | 精简词典 / 按需加载 |
 | Flutter Linux 桌面生态缺口 | 文件对话框 file_picker；窗口 window_manager；异常场景有社区方案 |
 | 完全重写工作量 | 里程碑按模块验收；验收规格以 FEATURES.md 条目为准；行为问题通过原型迭代收敛 |

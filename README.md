@@ -4,7 +4,7 @@
 
 > **当前阶段：M0–M7 全部核心功能已完成。** 书库管理、PDF 管线、选区与文本层标记、AI 对话与识图、整页 OCR 与图像层标记、全文搜索、对照阅读（双语翻译）均已实现，另有 OCR 精度增强（7.1.x 系列）。详见 [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md)。
 >
-> 本分支（`feat/retain-engine`）将对照阅读的翻译引擎整体替换为**内置的 RetainPDF 管线**
+> 本分支（`main`）已将对照阅读的翻译引擎整体替换为**内置的 RetainPDF 管线**
 > （MIT，随包分发，Typst 重排；登记见 [`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md) §2，
 > 实施记录见 `IMPLEMENTATION_STATUS.md` §3.18）。
 
@@ -30,7 +30,7 @@
 - **AI 侧**：OpenAI 兼容协议（BYOK，可配 DeepSeek / Kimi / 通义等），流式对话（Markdown + LaTeX 渲染）+ 自由截图多模态识图。
 - **目标平台**：
   - **Linux 桌面**（Arch / Debian / Ubuntu / Fedora 等，详见 [`docs/LINUX_PACKAGES.md`](docs/LINUX_PACKAGES.md)）；
-  - **Android arm64**（v1：阅读 + 本地 OCR + 划词 AI + 文本级对照，详见 [`docs/ANDROID_V1_PLAN.md`](docs/ANDROID_V1_PLAN.md) 与 [`docs/ANDROID_PACKAGES.md`](docs/ANDROID_PACKAGES.md)）。桌面端的 RetainPDF 版式重排引擎不上移动端。
+  - **Android arm64**（v1：阅读 + 本地 OCR + 划词 AI + 文本级对照，规划与包依赖见 android 分支的 `docs/ANDROID_V1_PLAN.md` 与 `docs/ANDROID_PACKAGES.md`）。桌面端的 RetainPDF 版式重排引擎不上移动端。
 - **零参考**：完全重写，不迁移任何旧代码。
 
 详见 [`docs/FEATURES.md`](docs/FEATURES.md)（需求）、[`docs/TECH_ROADMAP.md`](docs/TECH_ROADMAP.md)（技术路线）与 [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md)（实施状态）。

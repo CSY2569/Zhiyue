@@ -66,7 +66,7 @@ Flutter Linux 桌面构建链需要以下系统库/工具。本机已有：clang
 | `flutter_rust_bridge` | 2.12 | FFI 类型安全绑定 + Stream | 全程 |
 | `pdfium-render` | 0.9 | PDF 渲染 + 文本提取 + 字符盒 | M2 |
 | `rapidocr-core` | 最新 | 本地 OCR（PP-OCRv4 det/cls/rec） | M5 |
-| `async-openai` | 最新 | AI 流式 chat + 多模态（BYOK） | M4 |
+| ~~`async-openai`~~ | 已弃用 | **已弃用**（请求类型序列化被供应商拒绝）；AI 客户端改为手写 reqwest SSE，见 `rust/src/ai/openai.rs` | — |
 | `rusqlite` | 0.32+（bundled, WAL） | SQLite + FTS5 | M1 |
 | `jieba-rs` | 最新 | 中文分词（FTS5） | M6 |
 | `image` | 0.25 | 缩略图 / 图像处理 | M2 |
@@ -74,7 +74,7 @@ Flutter Linux 桌面构建链需要以下系统库/工具。本机已有：clang
 | `anyhow` | 1 | 错误处理 | 全程 |
 | `thiserror` | 1 | 错误类型定义 | 全程 |
 | `tracing` / `tracing-subscriber` | 0.1 / 0.3 | 结构化日志 | 全程 |
-| `reqwest` | 0.12 | AI 备选 / 模型下载 | M4/M5 |
+| `reqwest` | 0.12 | AI 客户端（手写 SSE 流式）/ 模型下载 | M4/M5 |
 
 > 骨架阶段以上依赖仅在 `rust/Cargo.toml` 声明，确保 `cargo check` 通过；真实集成在对应里程碑。版本以实际 `Cargo.toml` 为准。
 
@@ -83,17 +83,16 @@ Flutter Linux 桌面构建链需要以下系统库/工具。本机已有：clang
 | 包 | 用途 |
 |---|---|
 | `flutter_rust_bridge` | Rust 绑定 |
-| `flutter_riverpod` / `riverpod_annotation` | 状态管理 |
+| `flutter_riverpod` | 状态管理 |
 | `go_router` | 路由 |
-| `freezed` / `freezed_annotation` / `json_serializable` / `build_runner` | 不可变数据模型 |
 | `window_manager` | 无边框窗口 |
 | `file_picker` | 文件对话框 |
-| `super_clipboard` | 剪贴板 |
 | `flutter_markdown` | Markdown（GFM）渲染 |
 | `markdown` | Markdown 解析（自定义 LaTeX 行内语法扩展） |
 | `flutter_math_fork` | LaTeX 公式渲染（AI 回答，纯 Dart、离线） |
 | `lucide_flutter` | 图标库：全应用统一 Lucide 细线图标（FEATURES 8.12） |
-| `shared_preferences` | 配置持久化（骨架阶段过渡用） |
+
+dev_dependencies：`flutter_test`、`integration_test`、`flutter_lints ^6.0.0`。
 
 ## 7. 运行时资源（不在骨架阶段下载）
 

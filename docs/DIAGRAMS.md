@@ -1,6 +1,6 @@
 # 智阅 · 架构图与核心时序图
 
-> 基线代码：`feat/retain-engine`（RetainPDF 翻译栈版）。全部图为 Mermaid，可直接粘贴到
+> 基线代码：`main`（RetainPDF 翻译栈版）。全部图为 Mermaid，可直接粘贴到
 > 支持 Mermaid 的渲染器（GitHub / VS Code 预览 / mermaid.live）。
 > 模块名与仓库路径对应：Dart 侧 `lib/features/*`、`lib/data/repositories/*`；
 > Rust 侧 `rust/src/*`；桥接层 flutter_rust_bridge v2（FRB）。
@@ -16,7 +16,7 @@
 | HTTP（流式） | Rust ai → LLM API | AI 动作（翻译/解释/搜索/对话/视觉）、内置搜索（Responses / Anthropic 两协议，用户可选） |
 | HTTP | Rust ai → 搜索端点 | DeepSeek Tools API 联网搜索 |
 | HTTP | pipeline → LLM API | 翻译批次、公式/角色分类（key 由 env 注入，智阅 Rust 侧不代发） |
-| SQLite（schema v9） | Rust 内部 | 书目、阅读进度、标注（含 `source` 窗格列）、AI 会话、OCR 缓存、FTS 索引 |
+| SQLite（schema v11） | Rust 内部 | 书目、阅读进度、标注（含 `source` 窗格列）、AI 会话、OCR 缓存、FTS 索引 |
 
 ## 1. 架构图
 
@@ -51,7 +51,7 @@ flowchart TB
     aimod["ai<br/>OpenAI 兼容客户端 / prompts / 内置与第三方搜索"]
     trans["translate<br/>job 两步运行器 / 引擎定位 / flat_ocr 输入桥"]
     searchmod["search<br/>FTS 全文索引"]
-    db["db<br/>SQLite schema v9（annotations.source）"]
+    db["db<br/>SQLite schema v11（annotations.source）"]
     export["export<br/>标注 Markdown / JSON"]
   end
 
@@ -104,7 +104,7 @@ flowchart TB
 
 - **两个 LLM 调用方**：AI 动作与内置搜索由 Rust `ai` 模块直连 LLM；**翻译请求由 pipeline 子进程自己发**（key 经 env 注入，spec 只写 `credential_ref`），智阅 Rust 侧只解析其 stdout 进度。
 - **pipeline 是独立进程**（随包 CPython，无 venv），崩溃/取消只影响子进程树；PyMuPDF（AGPL）因此被隔离在进程边界外。
-- **译文与原文是两份 PDF**：对照窗格按页宽 tier 渲染 `translated/{book_id}/translated.pdf`，标注用 `annotations.source` 区分窗格（schema v9）。
+- **译文与原文是两份 PDF**：对照窗格按页宽 tier 渲染 `translated/{book_id}/translated.pdf`，标注用 `annotations.source` 区分窗格（schema v11）。
 
 ## 2. 核心时序图
 
@@ -226,7 +226,7 @@ sequenceDiagram
     Note over BTC,API: 取消：cancel_book_translation 杀子进程树并清理任务目录
 ```
 
-### 2.4 划词与双窗格标注（schema v9 source）
+### 2.4 划词与双窗格标注（schema v11 source）
 
 ```mermaid
 sequenceDiagram

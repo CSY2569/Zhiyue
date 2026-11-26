@@ -38,7 +38,7 @@
 | 空闲内存（release，未扫描时） | RSS ~294MB（OCR 引擎懒加载，扫描时按模式 +35~300MB） |
 | 存储占用 | ~790MB（文档 570 + 模型 210 + DB ~9.5MB 含搜索索引 2.9MB） |
 | 全文检索性能 | FTS5 查询 <10ms，命中高亮 <1ms/帧（缓存复用） |
-| 测试规模 | Rust 单测 130 个 + OCR e2e 6 个（真实模型，`--ignored`）+ 集成 2 个 + Flutter widget 测试 202 个，全部通过 |
+| 测试规模 | Rust 单元测试 148 通过 / 12 忽略（cargo test，默认 features；实测于 2026-11-26）+ OCR e2e 6 个（真实模型，`--ignored`）+ 集成 2 个 + Flutter widget 测试见最新章节，全部通过 |
 | 静态检查 | clippy 零警告；flutter analyze 零问题 |
 
 ### 3.1 今日实现：OCR 精度三件套（54ae7ae）- **7.1.10 预处理增强**：识别前按油墨亮度中位数（>80 判"墨是灰的"）触发百分位拉伸、按强边缘比例（<1e-4 判"边缘是软的"）触发 unsharpen 锐化。门限为**密度无关**指标，稀疏文本页不会误触发；干净页像素级不变
@@ -277,7 +277,7 @@
 
 **文档对齐**：bilingual_workflow.html 修正 3.14 反转后自相矛盾的"整段保留原文/公式小图/v6 版本戳/测试基线"描述；IMPLEMENTATION_STATUS 里程碑表与"当前技术状态"计数更新；FEATURES 7.4.2 公式"原页小图"→"原页背景像素"；ARCHITECTURE 模块表补 translate/export、删不存在的 `PdfService`/`SearchIndex` trait、async-openai → 手写 SSE、仓储约束改为与现状一致；TECH_ROADMAP / BILINGUAL_READING_PLAN 加"历史文档"头部注记；README M0–M6 → M0–M7；.gitignore 删未用的 `/assets/models/`；setup.sh 去掉一次性会话措辞。
 
-**验证**：Rust 130 单测 + 2 集成全绿；**clippy 全 target 0 警告**（此前基线 6）；全 feature 构建通过；`flutter analyze` 0 问题；Flutter 202 测试全绿（-1 为删除的 toggleTool 测试，其行为已由 setTool 用例覆盖）。产物重建部署（debug 核心 / release bundle / `dist/` 与 `/Data/Appimage/ZhiYue.AppImage`）。
+**验证**：Rust 单元测试 148 通过 / 12 忽略（cargo test，默认 features；实测于 2026-11-26）+ 2 集成全绿；**clippy 全 target 0 警告**（此前基线 6）；全 feature 构建通过；`flutter analyze` 0 问题；Flutter 202 测试全绿（-1 为删除的 toggleTool 测试，其行为已由 setTool 用例覆盖）。产物重建部署（debug 核心 / release bundle / `dist/` 与 `/Data/Appimage/ZhiYue.AppImage`）。
 
 ### 3.16 重构：移除自研翻译管线 + 设置内可选下载 BabelDOC 引擎（2026-09-18）
 
@@ -322,7 +322,7 @@
 **已知边界**：整本粒度（无分块/随进度）；进度为粗阶段（引擎的 rich 进度条非 TTY 下不可解析）；`--pages` 分块与 dual 导出 UI 待接入；引擎内置版首次翻译若缺资产会自动联网补齐。
 
 
-### 3.18 引擎整体替换：内置 RetainPDF 管线（2026-10-07，分支 feat/retain-engine）
+### 3.18 引擎整体替换：内置 RetainPDF 管线（2026-10-07，分支 feat/retain-engine，已并入 main）
 
 **决策**：BabelDOC（AGPL-3.0，按需下载 ~1.5GB）整体替换为 **RetainPDF 管线**
 （`retainpdf-pipeline` 4.2.6，MIT，随包内置 ~286MB）。上游管线以
@@ -491,7 +491,7 @@ Flutter 201 测试（新增宽度分档单测）+ analyze 0；mock 端到端 6.4
 
 ### 3.23 Android v1：内置 OCR 随包 + 文本级对照（2026-10-20）
 
-按 [`ANDROID_V1_PLAN.md`](ANDROID_V1_PLAN.md) 的 A0–A5 实施。桌面路径不变；
+按 `ANDROID_V1_PLAN.md`（见 android 分支）的 A0–A5 实施。桌面路径不变；
 Android 走独立的平台能力层与文本翻译模块。
 
 **构建链（A0）**
@@ -1030,7 +1030,7 @@ clippy -D warnings 0。release 桌面版实机复测：启动正常、快速连�
 - 实机验证：设备上有 8 本（「3D数学基础」重复），升级后自动收敛为 7 本，
   且保留的是读过的那一本（已读 4/767）。
 
-**验证**：Rust **144** 测试（新增：不同路径同内容只入库一次、v10→v11 迁移加列
+**验证**：Rust 单元测试 148 通过 / 12 忽略（cargo test，默认 features；实测于 2026-11-26）；新增：不同路径同内容只入库一次、v10→v11 迁移加列
 并建索引、启动清理保留已读副本并删除文件）；clippy 0；Flutter **322** 测试
 （新增横屏 5 列 / 竖屏 3 列 / 手机 2 列 / 桌面 5 列 4 个断言）；release APK
 1.8.0 构建通过、16KB 对齐通过；平板实机横屏截图确认 5 列且重复已消失。
@@ -1192,7 +1192,7 @@ release APK 269MB、16KB 对齐通过。
 通过；离屏渲染确认双翻/双滚两页都着色、桌面选区工具条单行、批注内联、书架
 顶部只剩类型筛选。
 
-**移动端对应改动**（3.40）：选区工具条的手机形态改为单行纯图标，手机
+**移动端对应改动**（3.40；对应改动在 android 分支）：选区工具条的手机形态改为单行纯图标，手机
 顶栏内联批注工具。共享部分（单行 `Row`、`MarkToolOptions` 的 `compact` /
 `showExit` 参数）已落在本分支并同步到 `android`。
 
