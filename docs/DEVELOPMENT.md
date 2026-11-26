@@ -174,9 +174,9 @@ Debian / Ubuntu 等价：`apt install clang cmake ninja-build pkg-config libgtk-
 ### 测试（以下三行均为 2026-11-26 实测，Flutter 3.47.3 / cargo 1.97.1）
 | 类型 | 命令 | 实测结果 | 前置 |
 |---|---|---|---|
-| Rust 单测 | `cargo test --manifest-path rust/Cargo.toml` | **148 通过 / 0 失败 / 12 忽略** | 无（默认 features `pdf,ai,ocr`）；需 `libpdfium.so`，否则 PDF 用例失败 |
+| Rust 单测 | `cargo test --manifest-path rust/Cargo.toml` | **158 通过 / 0 失败 / 12 忽略** | 无（默认 features `pdf,ai,ocr`）；需 `libpdfium.so`，否则 PDF 用例失败 |
 | Flutter 静态检查 | `flutter analyze` | **No issues found**（8.7s） | `flutter pub get` |
-| Dart 全量 | `flutter test` | **326 通过 / 0 失败** | 5 个冒烟测试需 `rust/target/release/librbwa_core.so` |
+| Dart 全量 | `flutter test` | **330 通过 / 0 失败** | 5 个冒烟测试需 `rust/target/release/librbwa_core.so` |
 | 集成 | `flutter test -d linux integration_test/scan_middle_page_test.dart` | 1 个 | **硬编码本机书籍数据**，换机不可用 |
 
 Dart 测试构成：33 个 `testWidgets`（UI）、27 个纯 Dart/异步、5 个需真 `.so` 的冒烟（均走 `test/helpers/smoke_helpers.dart` 的 `initIsolatedCore()`，每进程隔离目录 `/tmp/rbwa-test-<pid>`）。
@@ -253,7 +253,7 @@ flutter_rust_bridge **2.12.0** 出现在：`pubspec.yaml:15`、`rust/Cargo.toml:
 
 ## 15. 建议的上手路线
 
-1. ~~先确认工作树~~ **已完成（2026-11-26）**：`cargo test` 148 通过 / 12 忽略、`flutter analyze` 零问题、`flutter test` 326 通过。§12 的识图修复已提交。
+1. ~~先确认工作树~~ **已完成（2026-11-26）**：`cargo test` 158 通过 / 12 忽略、`flutter analyze` 零问题、`flutter test` 330 通过。§12 的识图修复已提交。
 2. **跑通一次端到端改动**：用 §6 的五步加一个最简单的 Rust 命令（例如返回 schema 版本），走完 codegen → repository → UI，验证 FRB 管道与两套 cargo 目录的坑。
 3. **优先修 §13 的文档不一致**，尤其 #3 schema 版本、#9 依赖清单、#1/#2 死链与分支名——这些会直接误导下一个接手的人。
 4. **再动功能**。若要碰翻译，先读 `translate/flat_ocr.rs` 与 `translate/job.rs` 的外部契约；若要碰 AI，先读 `ai/openai.rs` 的手写 SSE 与 §12 的路由修复。
