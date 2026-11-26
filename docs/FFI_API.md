@@ -20,7 +20,7 @@
 |---|---|
 | `rust/Cargo.toml:24` | `flutter_rust_bridge = "=2.12.0"` |
 | `pubspec.yaml:15` | `flutter_rust_bridge: 2.12.0` |
-| codegen CLI | `cargo install flutter_rust_bridge_codegen --version 2.12.0 --locked`（`docs/archive/DEPENDENCIES.md:52`） |
+| codegen CLI | `cargo install flutter_rust_bridge_codegen --version 2.12.0 --locked`（安装脚本见 `scripts/setup.sh`） |
 
 生成物回写该版本：`lib/src/rust/frb_generated.dart:71`（`codegenVersion => '2.12.0'`）、`rust/src/frb_generated.rs:40`（`FLUTTER_RUST_BRIDGE_CODEGEN_VERSION`）。
 
@@ -254,7 +254,7 @@ pub async fn translate_book(book_id: i64, sink: StreamSink<BookTranslateEvent>) 
 flutter_rust_bridge_codegen generate
 ```
 
-配置读 `flutter_rust_bridge.yaml:7-10`：`rust_input: crate::api` → `dart_output: lib/src/rust`、`rust_output: rust/src/frb_generated.rs`。产物是 `rust/src/frb_generated.rs` 与 `lib/src/rust/**`，必须与 `api.rs` 一起提交（`docs/archive/BRANCHING.md:66`、`docs/archive/BRANCH_SPLIT_PLAN.md:248`、`docs/PLATFORMS.md:55` 都复述了这条）。
+配置读 `flutter_rust_bridge.yaml:7-10`：`rust_input: crate::api` → `dart_output: lib/src/rust`、`rust_output: rust/src/frb_generated.rs`。产物是 `rust/src/frb_generated.rs` 与 `lib/src/rust/**`，必须与 `api.rs` 一起提交（同步规则见 [`PLATFORMS.md`](PLATFORMS.md) §3）。
 
 **第 5 步 · repository**：`lib/data/repositories/<x>_repository.dart` 加转发方法，形如 `Future<T> foo(...) => rust.foo(...)`（现有 6 个 repository：`ai` / `library` / `reader` / `search` / `settings` / `translation`）。UI 只依赖 repository，不 import 生成物（§1）。
 
@@ -282,7 +282,7 @@ flutter_rust_bridge_codegen generate
 | `add_translation_glossary` | 2553 | 是 | `lib/data/repositories/translation_repository.dart:37-49` |
 | `delete_translation_glossary` | 2571 | 是 | `lib/data/repositories/translation_repository.dart:51-52` |
 
-结论：**6 条纯移动端命令（2395 / 2428 / 2452 / 2487 / 2494 / 2507）在 main 上是死代码**，删改它们不影响 main 运行期；但它们仍计入 81 条并存在于生成绑定中，下掉之前需与分支策略对齐（`docs/archive/BRANCHING.md`、`docs/archive/BRANCH_SPLIT_PLAN.md`）——待核两条分支的合流方向。同分节后 5 条（2521-2571）虽放在 android 节里，实际是桌面端对照阅读也在用的共享命令，不能随该节一起删。
+结论：**6 条纯移动端命令（2395 / 2428 / 2452 / 2487 / 2494 / 2507）在 main 上是死代码**，删改它们不影响 main 运行期；但它们仍计入 81 条并存在于生成绑定中，下掉之前需与分支策略对齐（取舍见 [`PLATFORMS.md`](PLATFORMS.md)）。同分节后 5 条（2521-2571）虽放在 android 节里，实际是桌面端对照阅读也在用的共享命令，不能随该节一起删。
 
 ---
 

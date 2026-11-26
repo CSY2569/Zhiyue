@@ -6,7 +6,7 @@
 >
 > 本分支（`main`）已将对照阅读的翻译引擎整体替换为**内置的 RetainPDF 管线**
 > （MIT，随包分发，Typst 重排；登记见 [`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md) §2，
-> 实施记录见 [`docs/archive/IMPLEMENTATION_STATUS.md`](docs/archive/IMPLEMENTATION_STATUS.md) §3.18）。
+> RetainPDF 引擎的替换经过见 git log（2026-10 的翻译引擎系列提交）。
 
 ## 架构
 
@@ -62,7 +62,7 @@ ZhiYue/
 │   ├── DEVELOPMENT.md            # 构建 / 测试 / 打包 / 扩展点 / 风险
 │   ├── FEATURES.md               # 需求规格（130 条，不是现状）
 │   ├── THIRD_PARTY.md            # 第三方组件与许可证
-│   └── archive/                  # 历史文档（不再维护）
+│   └── （历史文档已删除，追溯看 git log）
 ├── scripts/              # 构建与安装脚本
 │   ├── setup.sh                  # 工具链安装（pacman 依赖 / FRB codegen）
 │   ├── fetch_pdfium.sh           # 获取 pdfium 动态库（构建前置）
@@ -191,7 +191,7 @@ bash scripts/build_packages.sh
 | M6 全文搜索 | FTS5 + jieba / 后台预构建 + 增量索引 / 失败终态标记 / 全局搜索跳转 / 页内高亮 | ✅ 完成 |
 | 7.1.x OCR 精度 | 预处理增强 / 90° 自适应矫正 / 180° cls 矫正 / 置信度展示 / 手动修正 | ✅ 完成 |
 
-各里程碑的详细实施记录见 [`docs/archive/IMPLEMENTATION_STATUS.md`](docs/archive/IMPLEMENTATION_STATUS.md)。
+各里程碑的功能边界见 [`docs/PRODUCT.md`](docs/PRODUCT.md)；逐项需求见 [`docs/FEATURES.md`](docs/FEATURES.md)。
 
 ## 许可证
 

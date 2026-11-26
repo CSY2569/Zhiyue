@@ -145,6 +145,23 @@ flutter build linux --release       # CMake 内部自动 cargo build
 bash scripts/download_ocr_models.sh --all  # 可选，整页 OCR 需要
 ```
 
+### 工具链依赖（Linux）
+
+| 组件 | 要求 | 用途 |
+|---|---|---|
+| clang | ≥ 14 | FRB / 原生 crate 编译 |
+| cmake | ≥ 3.16 | Rust crate 与 Flutter Linux 插件构建 |
+| ninja | ≥ 1.10 | Flutter Linux 构建后端 |
+| pkg-config | ≥ 0.29 | 原生库探测 |
+| gtk3 / glib2 | 3.x / 2.x | Flutter Linux embedder |
+| zenity | 任意 | `file_picker` 文件对话框 |
+| rustc / cargo | ≥ 1.70（实测 1.97.1） | 核心层编译 |
+| Flutter | stable（实测 3.47.3） | UI 编译；**需自行安装**，脚本只检测不安装 |
+| flutter_rust_bridge_codegen | 2.12.0 | codegen，版本必须与 crate / pubspec 一致 |
+
+Debian / Ubuntu 等价：`apt install clang cmake ninja-build pkg-config libgtk-3-dev libglib2.0-dev zenity`。
+`scripts/setup.sh` 只处理 pacman 系统依赖与 codegen，**缺 Flutter 时只警告不失败**，容易被误认为装好了。
+
 ### ⚠️ 两套 cargo 目标目录（最容易踩的坑）
 - CMake 把产物放进 `build/**/rust_target`（`linux/CMakeLists.txt:59`，`CARGO_TARGET_DIR` 覆盖）。
 - 但 Dart 测试加载器固定读 **`rust/target/release/`**（`lib/src/rust/frb_generated.dart:79` 的 `ioDirectory`）。
@@ -217,7 +234,7 @@ flutter_rust_bridge **2.12.0** 出现在：`pubspec.yaml:15`、`rust/Cargo.toml:
 ## 13. 历史文档口径的修正记录
 
 2026-11-26 统一修正过一批与代码不符的表述（分支名、schema 版本、依赖清单、测试数字、翻译粒度）。
-明细见 [`archive/README.md`](archive/README.md)，**日常不需要读**——只在怀疑某份历史文档口径时才去查。
+旧文档已删除。如需追溯某次改动的根因，看 git log 与提交信息——那里的记录比文档更可靠。
 
 ## 14. 架构层面的真实风险（按影响排序）
 

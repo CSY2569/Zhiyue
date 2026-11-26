@@ -27,9 +27,26 @@
 ```
 
 **核心约束**：
-- Flutter 侧 **API 调用**经 `lib/data/repositories/` 包装 `lib/src/rust/api.dart`（FRB 生成）；跨边界**类型**（model）可直接 import `lib/src/rust/*`。现存两处直接调用 API 的例外：`lib/features/reader/providers/ocr_helpers.dart`、`lib/features/search/search_page.dart`（`main.dart` 的 `RustLib.init()` 除外）。
+- Flutter 侧 **API 调用**经 `lib/data/repositories/` 包装 `lib/src/rust/api.dart`（FRB 生成）；跨边界**类型**（model）可直接 import `lib/src/rust/*`。
+  实测（2026-11-26）：`lib/features/` 内**已无**直接调用生成 API 的地方，全部经仓库层；唯一例外是 `lib/platform/desktop/desktop_host.dart:42` 的 `rust.initCore()`（启动链路，不属于业务调用）。
+
 - Rust 侧**只有** `api.rs` 里的 `pub fn` 会被 FRB 导出；其它模块的 `pub` 项不会跨边界。
 - 跨边界的类型必须在 `rust/src/models/` 定义（FRB 可导出的 plain struct/enum）。
+
+### 1.1 通信契约一览
+
+| 通道 | 方向 | 承载内容 |
+|---|---|---|
+| FRB FFI 调用 | Dart → Rust | 全部业务调用：渲染、字符盒、DB 读写、OCR、AI 触发、翻译触发 |
+| FRB StreamSink | Rust → Dart | `stream_chat` 流式 chunk、`translate_book` 进度事件、`install_engine` 事件 |
+| 子进程 argv + stdout/stderr | Rust → RetainPDF pipeline | 两步 spec 文件路径；stdout JSONL 进度/产物事件；stderr `structured failure json:` |
+| 环境变量 | Rust → pipeline | `RETAIN_TRANSLATION_API_KEY`（密钥不落盘）、`TYPST_BIN`、`TYPST_PACKAGE_PATH`、`OUTPUT_ROOT` |
+| HTTP（流式） | Rust ai → LLM API | AI 动作（翻译/解释/搜索/对话/视觉）、内置搜索（Responses / Anthropic 两协议） |
+| HTTP | Rust ai → 搜索端点 | DeepSeek Tools API 联网搜索 |
+| HTTP | pipeline → LLM API | 翻译批次、公式/角色分类（key 由 env 注入，智阅 Rust 侧不代发） |
+| SQLite（schema v11） | Rust 内部 | 书目、进度、标注（含 `source` 窗格列）、AI 会话、OCR 缓存、FTS 索引 |
+
+> 关键设计：**翻译链路的 LLM 请求由 pipeline 子进程自己发**，智阅 Rust 侧只做编排与进度解析。这条边界把 PyMuPDF（AGPL）隔离在进程之外（见 [`THIRD_PARTY.md`](THIRD_PARTY.md)）。
 
 ## 2. FRB 调用约定
 
@@ -99,8 +116,7 @@ LibraryPage (UI)
 ## 5. 后续里程碑接入点
 
 > 注：本节为立项时的原始接入计划（2026-08）；M1–M7 均已实施，现状以
-> [`archive/IMPLEMENTATION_STATUS.md`](archive/IMPLEMENTATION_STATUS.md) 与
-> [`archive/bilingual_workflow.html`](archive/bilingual_workflow.html) 为准。
+> [`PRODUCT.md`](PRODUCT.md) 与 [`DATA_MODEL.md`](DATA_MODEL.md) 为准。
 
 实现新功能时，按以下位置填入代码：
 
