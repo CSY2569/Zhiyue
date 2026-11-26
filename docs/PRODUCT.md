@@ -212,7 +212,6 @@
 
 **工程债**
 
-- FRB 死字段清理（`FormulaRegion.image_path/placeholder`、`ParagraphKind::Noise`；删除需一次 codegen）
 - `TranslationMode` 的 `WithProgress` / `Manual` 两个死值（引擎不消费）
 - `AiConfig` 中 7 个嵌入 / 向量库预留字段（功能不存在，UI 却在占用版面）
 - `extract_text` 声明 async 却同步阻塞 pdfium（见 [`FFI_API.md`](FFI_API.md) §4 的反例说明）
