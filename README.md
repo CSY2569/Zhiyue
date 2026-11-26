@@ -29,7 +29,7 @@
 - **完全离线 OCR**：rapidocr-core（PP-OCRv4 det/cls/rec，ONNX Runtime 静态链接），高精度 + 快速双模式，模型随安装包内置（~210MB）。
 - **AI 侧**：OpenAI 兼容协议（BYOK，可配 DeepSeek / Kimi / 通义等），流式对话（Markdown + LaTeX 渲染）+ 自由截图多模态识图。
 - **目标平台**（三条线，共用同一套 `lib/` + `rust/`）：
-  - **Windows 桌面**：目标平台之一。runner 尚未创建（`windows/` 目录待补，暂未产出构建产物），桌面功能与 Linux 线共享；
+  - **Windows 桌面**：可构建（2026-11-26 实机验证），与 Linux 线共享同一套代码；对照阅读因缺 RetainPDF 引擎不可用，详见 [`docs/PLATFORMS.md`](docs/PLATFORMS.md)；
   - **Linux 桌面**（Arch / Debian / Ubuntu / Fedora 等，打包与依赖细节见 [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)）；
   - **Android arm64**（v1：阅读 + 本地 OCR + 划词 AI + 文本级对照，规划与包依赖见 android 分支的 `docs/ANDROID_V1_PLAN.md` 与 `docs/ANDROID_PACKAGES.md`）。桌面端的 RetainPDF 版式重排引擎不上移动端。
 - **零参考**：完全重写，不迁移任何旧代码。

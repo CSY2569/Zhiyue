@@ -162,6 +162,9 @@ bash scripts/download_ocr_models.sh --all  # 可选，整页 OCR 需要
 Debian / Ubuntu 等价：`apt install clang cmake ninja-build pkg-config libgtk-3-dev libglib2.0-dev zenity`。
 `scripts/setup.sh` 只处理 pacman 系统依赖与 codegen，**缺 Flutter 时只警告不失败**，容易被误认为装好了。
 
+### Windows 构建
+见 [`PLATFORMS.md`](PLATFORMS.md) §6「Windows 构建」——前提、取 pdfium、命令与已知限制都在那里，此处不重复。
+
 ### ⚠️ 两套 cargo 目标目录（最容易踩的坑）
 - CMake 把产物放进 `build/**/rust_target`（`linux/CMakeLists.txt:59`，`CARGO_TARGET_DIR` 覆盖）。
 - 但 Dart 测试加载器固定读 **`rust/target/release/`**（`lib/src/rust/frb_generated.dart:79` 的 `ioDirectory`）。

@@ -140,7 +140,7 @@
 |---|---|---|
 | Linux 桌面 | ✅ 可构建发行 | deb / rpm / AppImage；pdfium 随包，OCR 模型可选注入 |
 | Android arm64 | ✅ 可构建发行 | 独立 `android` 分支；OCR 模型首次启动从 assets 解压；对照阅读为文本级译文列 |
-| Windows 桌面 | ⚠️ 目标平台，未落地 | 共用同一套 `lib/` + `rust/`，但 `windows/` runner 尚未创建 |
+| Windows 桌面 | ✅ 可构建（2026-11-26 验证） | 共用同一套 `lib/` + `rust/`；`flutter build windows --release` 实测通过，核心与 SQLite 已在 Windows 上跑通。**对照阅读不可用**（无 RetainPDF 引擎） |
 
 平台差异见 [`PLATFORMS.md`](PLATFORMS.md)。
 

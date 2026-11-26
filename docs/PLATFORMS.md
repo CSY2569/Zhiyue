@@ -9,7 +9,7 @@
 | 平台 | 分支 | 构建产物 | 状态 |
 |---|---|---|---|
 | Linux 桌面 | `main`（主干） | `dist/*.deb`、`*.rpm`、`*.AppImage` | ✅ 可构建发行 |
-| Windows 桌面 | `main`（共用） | 待定（`.msix` / `.exe`） | ⚠️ runner 未创建 |
+| Windows 桌面 | `main`（共用） | `build\windows\x64\runner\Release\`（exe + dll） | ✅ 可构建（2026-11-26 实机验证） |
 | Android arm64 | `android` | `dist/ZhiYue-<ver>-arm64-v8a.apk` | ✅ 可构建发行 |
 
 两条分支共享 `lib/`、`rust/`、`test/`。**逐字节唯一的差异文件是 `lib/platform/current.dart`**：
@@ -110,13 +110,42 @@ bash scripts/sync-from-main.sh main
 3. 平台专属的通道 / 原生工程放在该平台目录，并登记到 `.platform/` 清单（若该平台独占分支）。
 4. 需要新差异点时，先给 `PlatformHost` 加成员**并写共享默认实现**，再让各平台覆写——这样未覆写的平台自动继承合理行为。
 
-### Windows 的现状与待办
+### Windows 构建（2026-11-26 实机验证通过）
 
-Windows 是三个目标平台之一，但 `windows/` runner **尚未创建**，因此当前无法构建。要落地需要：
+Windows 桌面版已可构建，**不需要新增 `PlatformHost` 实现**——`DesktopPlatformHost`
+从一开始就按 Linux / Windows 两端设计（`window_manager` + Rust `dirs` 解析数据目录）。
 
-1. `flutter create --platforms=windows .` 生成 `windows/` runner；
-2. 让 pdfium 在 Windows 可用——`scripts/fetch_pdfium.sh` 目前只覆盖 Linux/macOS，需补 `pdfium-win-x64` 分支；
-3. 在 `PlatformHost` 补 Windows 的 `prepareWindow`（窗口装饰）与模型目录解析；
-4. `rust/Cargo.toml` 的 `reqwest`/`rusqlite` 在 Windows 下应可直接编译，但 pdfium 动态库加载路径要单独验证。
+**前提**（一次性）：
 
-> 桌面两端共用同一套代码，因此 Linux 侧的功能改动天然对 Windows 生效——真正需要补的只有 runner 与动态库加载。
+| 依赖 | 要求 | 实测 |
+|---|---|---|
+| Visual Studio | 2022，工作负载「使用 C++ 的桌面开发」 | Build Tools 17.14 + Win SDK 10.0.26100 |
+| Flutter | stable ≥ 3.44.0（`pubspec.lock` 要求） | 3.44.9 / Dart 3.12.2 |
+| Rust | MSVC target `x86_64-pc-windows-msvc` | 已装 |
+| pdfium.dll | 放到 `rust/libpdfium/pdfium.dll` | 7.0 MB |
+| OCR 模型（可选） | `rust/models/` | 缺失时 OCR 报「模型未安装」 |
+
+取 pdfium：
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/fetch_pdfium_windows.ps1
+```
+脚本默认经 `ghfast.top` 镜像下载 GitHub Releases 的 `pdfium-win-x64.tgz`（可用
+`-Mirror` 覆盖，传 `-Mirror ""` 走直连）。**GitHub 不可达时可手工放一份 dll 进去**，
+构建不会因此失败（CMake 只 WARN）。
+
+构建：
+```powershell
+C:\flutter\bin\flutter.bat pub get
+C:\flutter\bin\flutter.bat build windows --release
+```
+产物在 `build\windows\x64\runner\Release\`：`rbwa.exe` + `rbwa_core.dll`（31 MB）
++ `pdfium.dll` + `flutter_windows.dll` + `data\`。首次构建约 400 秒（Rust 要编
+dev 与 release 两个 profile）。
+
+**运行时已验证**：`rbwa_core.dll` 加载成功、SQLite 建在
+`%APPDATA%\RBWA\rbwa.db`、`schema=11`。
+
+**已知限制**：
+- **对照阅读在 Windows 上不可用**：RetainPDF 引擎是随包分发的 Linux CPython 环境，Windows 侧没有；调用会返回「引擎未找到」。
+- OCR 模型不随构建注入，需单独下载。
+- 不要在纯 SSH 会话里验证 UI：没有交互式桌面时 Flutter 拿不到 GPU 上下文（EGL/SwapChain 报错），核心逻辑仍会正常跑，但界面不显示。实机验收要在 VM 桌面里点。
