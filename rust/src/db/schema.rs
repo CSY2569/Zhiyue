@@ -37,7 +37,11 @@
 /// by original path. The same document reaches the app through several paths
 /// (file picker vs. a shared copy in the cache dir), so path-only de-dup let
 /// an identical book appear twice.
-pub const SCHEMA_VERSION: u32 = 11;
+/// 12: `book_outline_overrides` -- user edits of a document's outline
+/// (rename / hide / reorder) plus bookmarks added by the user. pdfium can only
+/// READ an outline, so the edits live here and are merged over the original
+/// tree at read time; the PDF itself is never rewritten.
+pub const SCHEMA_VERSION: u32 = 12;
 
 /// Indexes for per-book AI conversation windows (v3, FEATURES 6.5.4).
 ///
@@ -323,6 +327,30 @@ CREATE TABLE IF NOT EXISTS settings (
     value       TEXT NOT NULL,                 -- JSON-encoded value
     updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- ===========================================================================
+-- 11. book_outline_overrides  (FEATURES 3.4.2, v12)
+--     User edits of a document outline: rename, hide, reorder, and bookmarks
+--     the user adds. pdfium has no outline write API, so edits are stored here
+--     and merged over the original tree when the outline is read. The PDF file
+--     is never modified -- it may be shared or exported as-is.
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS book_outline_overrides (
+    book_id     INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+    -- 'pdf:0.1.2' addresses a node by its sibling-index path in the document
+    -- outline; 'bm:<n>' is an entry the user created.
+    entry_key   TEXT    NOT NULL,
+    parent_key  TEXT,                          -- NULL = top level
+    title       TEXT,                          -- NULL = keep the document's title
+    page        INTEGER,                       -- 0-indexed; -1 = no page target
+    order_index INTEGER,                       -- NULL = keep document order
+    hidden      INTEGER NOT NULL DEFAULT 0,
+    updated_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (book_id, entry_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_outline_overrides_book
+    ON book_outline_overrides(book_id);
 
 -- ===========================================================================
 -- schema_version: migration gate. Checked on every init_core().

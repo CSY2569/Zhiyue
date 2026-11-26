@@ -297,6 +297,13 @@ fn migrate_body(conn: &Connection) -> AppResult<()> {
             }
             record_version(conn)?;
         }
+        Some(11) => {
+            // v12 only ADDS the outline-override table; SCHEMA_SQL above is
+            // idempotent and already created it on the old database, so this
+            // branch just records the new version.
+            tracing::info!("migrating schema 11 -> 12 (book_outline_overrides)");
+            record_version(conn)?;
+        }
         Some(v) => {
             tracing::warn!(
                 recorded = v,
