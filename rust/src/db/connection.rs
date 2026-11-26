@@ -292,7 +292,9 @@ fn migrate_body(conn: &Connection) -> AppResult<()> {
         Some(10) => {
             // v11 adds the content hash used for import de-duplication.
             tracing::info!("migrating schema 10 -> 11 (books.content_hash)");
-            conn.execute_batch("ALTER TABLE books ADD COLUMN content_hash TEXT;")?;
+            if !has_column(conn, "books", "content_hash")? {
+                conn.execute_batch("ALTER TABLE books ADD COLUMN content_hash TEXT;")?;
+            }
             record_version(conn)?;
         }
         Some(v) => {
