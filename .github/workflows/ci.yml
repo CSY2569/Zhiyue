@@ -1,0 +1,81 @@
+# 质量门禁：Rust 核心与 Flutter UI 两条线并行验证。
+# 仓库此前没有任何 CI（详见 docs/DEVELOPMENT_GUIDE.md §8 §14），本文件是最小可用门禁。
+name: CI
+
+on:
+  push:
+    branches: [main, android]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Rust core (cargo test)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      # PDF 测试在运行期从 rust/libpdfium/ 动态加载 libpdfium.so；
+      # *.so 被 .gitignore 排除，所以干净检出必须先取一次。
+      - name: Fetch pdfium
+        run: bash scripts/fetch_pdfium.sh
+
+      - name: cargo test
+        run: cargo test --manifest-path rust/Cargo.toml --locked
+
+  flutter:
+    name: Flutter UI (analyze + test)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      # Pinned to the version this workflow was verified against locally
+      # (flutter analyze: No issues found / flutter test: 326 passed).
+      # pubspec.lock requires Flutter >= 3.44.0, so an older runner image fails.
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.3
+          channel: stable
+          cache: true
+
+      - name: Fetch pdfium
+        run: bash scripts/fetch_pdfium.sh
+
+      # 顺序不能反：Dart 侧的 FFI 冒烟测试通过 FRB 加载器读
+      # rust/target/release/librbwa_core.so（lib/src/rust/frb_generated.dart:79），
+      # 而 flutter build 走的是 CMake 的 build/**/rust_target，两者不同路径。
+      - name: Build Rust core for the FFI smoke tests
+        run: cargo build --release --manifest-path rust/Cargo.toml --locked
+
+      - name: Install Dart dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
