@@ -114,3 +114,7 @@ debug = true
 # itself pulls imageproc transitively; declare it explicitly for the test).
 imageproc = "0.25"
 ab_glyph = "0.2"
+# Integration tests (tests/) are separate binaries: they do not inherit the
+# normal dependencies, so the async command surface needs tokio declared here
+# explicitly for #[tokio::test].
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

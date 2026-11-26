@@ -749,16 +749,26 @@ static OPENED_IMAGE: AtomicBool = AtomicBool::new(false);
 ///
 /// Async: document open is heavyweight and must not block the UI.
 pub async fn open_book(stored_path: String) -> OpenBookResult {
+    // Opening touches the disk, the global PDFIUM_LOCK and SQLite; keep it
+    // off the async worker so a big document does not stall other commands.
+    match tokio::task::spawn_blocking(move || open_book_blocking(&stored_path)).await {
+        Ok(result) => result,
+        Err(e) => open_error(AppError::Internal(format!("打开文档任务失败: {e}"))),
+    }
+}
+
+/// The synchronous body of [open_book].
+fn open_book_blocking(stored_path: &str) -> OpenBookResult {
     // Route by the stored book's type (the path is the copy under the app
     // data dir; unknown books fall back to the pdfium path).
     let book = {
         let conn = db::db();
-        book_repo::find_by_stored_path(&conn, &stored_path)
+        book_repo::find_by_stored_path(&conn, stored_path)
     };
     let is_image = matches!(book.as_ref(), Ok(Some(b)) if b.file_type == BookType::Image);
     OPENED_IMAGE.store(is_image, Ordering::Relaxed);
     let result = if is_image {
-        match pdf::open_image(&stored_path) {
+        match pdf::open_image(stored_path) {
             Ok(count) => OpenBookResult {
                 page_count: count,
                 has_outline: false, // images have no outline
@@ -767,7 +777,7 @@ pub async fn open_book(stored_path: String) -> OpenBookResult {
             Err(e) => open_error(e),
         }
     } else {
-        match pdf::open(&stored_path) {
+        match pdf::open(stored_path) {
             Ok(count) => {
                 let has_outline = pdf::outline().map(|e| !e.is_empty()).unwrap_or(false);
                 // Heal a missing cover: legacy books have no cover_path, and
@@ -824,7 +834,13 @@ pub async fn render_page(book_id: i64, page: i64, zoom: f64, dpi_scale: f64) -> 
     // `book_id` is accepted for API symmetry but the active document is used;
     // the caller must have opened this book via `open_book` first.
     let _ = book_id;
-    page_render_result(current_bitmap(page, zoom as f32, dpi_scale as f32))
+    let (zoom, dpi_scale) = (zoom as f32, dpi_scale as f32);
+    // pdfium rendering takes the global PDFIUM_LOCK and is pure CPU work:
+    // run it on the blocking pool so it never occupies an async worker.
+    match tokio::task::spawn_blocking(move || current_bitmap(page, zoom, dpi_scale)).await {
+        Ok(result) => page_render_result(result),
+        Err(e) => render_task_error(e),
+    }
 }
 
 /// Render a small thumbnail for the sidebar (FEATURES 3.4.1 / 7.3).
@@ -832,7 +848,10 @@ pub async fn render_page(book_id: i64, page: i64, zoom: f64, dpi_scale: f64) -> 
 /// Async: rendering is heavyweight and must not block the UI.
 pub async fn render_thumbnail(book_id: i64, page: i64, max_size: u32) -> PageRenderResult {
     let _ = book_id;
-    page_render_result(current_thumbnail(page, max_size))
+    match tokio::task::spawn_blocking(move || current_thumbnail(page, max_size)).await {
+        Ok(result) => page_render_result(result),
+        Err(e) => render_task_error(e),
+    }
 }
 
 /// Fetch the document outline (FEATURES 3.4.2).
@@ -840,14 +859,18 @@ pub async fn render_thumbnail(book_id: i64, page: i64, max_size: u32) -> PageRen
 /// Async: pdfium bookmark traversal can be slow on large documents.
 pub async fn get_outline(book_id: i64) -> OutlineResult {
     let _ = book_id;
-    match pdf::outline() {
-        Ok(entries) => OutlineResult {
+    match tokio::task::spawn_blocking(pdf::outline).await {
+        Ok(Ok(entries)) => OutlineResult {
             entries,
             error: None,
         },
-        Err(e) => OutlineResult {
+        Ok(Err(e)) => OutlineResult {
             entries: Vec::new(),
             error: Some(e.to_string()),
+        },
+        Err(e) => OutlineResult {
+            entries: Vec::new(),
+            error: Some(format!("读取目录任务失败: {e}")),
         },
     }
 }
@@ -927,6 +950,20 @@ fn current_page_has_text(page: i64) -> bool {
         pdf::page_image_has_text(page).unwrap_or(false)
     } else {
         pdf::page_has_text(page).unwrap_or(false)
+    }
+}
+
+/// Shape a failed `spawn_blocking` join into the FFI render result.
+///
+/// Only reachable if the render task panicked or the runtime is shutting
+/// down; the caller gets an empty bitmap plus a readable message instead of
+/// a stuck frame.
+fn render_task_error(e: tokio::task::JoinError) -> PageRenderResult {
+    PageRenderResult {
+        width: 0,
+        height: 0,
+        rgba: Vec::new(),
+        error: Some(format!("渲染任务失败: {e}")),
     }
 }
 
@@ -1100,11 +1137,15 @@ pub struct ExportResult {
 /// Async: pdfium text traversal is heavyweight and must not block the UI.
 pub async fn extract_text(book_id: i64, page: i64) -> CharBoxResult {
     let _ = book_id;
-    match current_boxes(page) {
-        Ok(boxes) => CharBoxResult { boxes, error: None },
-        Err(e) => CharBoxResult {
+    match tokio::task::spawn_blocking(move || current_boxes(page)).await {
+        Ok(Ok(boxes)) => CharBoxResult { boxes, error: None },
+        Ok(Err(e)) => CharBoxResult {
             boxes: Vec::new(),
             error: Some(e.to_string()),
+        },
+        Err(e) => CharBoxResult {
+            boxes: Vec::new(),
+            error: Some(format!("提取字符框任务失败: {e}")),
         },
     }
 }
@@ -1873,7 +1914,13 @@ pub struct ScanPageResult {
 /// image page). Drives the "扫描识别" prompt in the reader.
 pub async fn page_has_text(book_id: i64, page: i64) -> bool {
     let _ = book_id;
-    current_page_has_text(page)
+    match tokio::task::spawn_blocking(move || current_page_has_text(page)).await {
+        Ok(has_text) => has_text,
+        Err(e) => {
+            tracing::warn!(?e, "page_has_text task failed");
+            false
+        }
+    }
 }
 
 /// The cached scan result for a page, if any (FEATURES 7.1.4). The Flutter
@@ -2933,4 +2980,5 @@ mod tests {
         // Chat is already verbatim regardless of the flag.
         assert_eq!(wrap_input(AiActionType::Chat, typed, false, "n"), typed);
     }
+
 }

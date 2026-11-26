@@ -247,10 +247,39 @@
 | ID | 内容 | 做法 | 验收 |
 |---|---|---|---|
 | D1 | `TranslationMode` 的 `WithProgress` / `Manual` 是死值 | 删枚举变体 + 跑 codegen；DB 里若有历史值做一次清洗 | 编译过，`models/translate.rs` 的 roundtrip 测试改后仍绿 |
-| D2 | `extract_text` 声明 async 却同步阻塞 pdfium | 包 `spawn_blocking`，与 `api.rs:1060` 同写法 | 加一个并发用例证明不再占死 worker |
+| D2 | **6 条** async 命令同步阻塞 pdfium（不止 `extract_text`） | 全部包进 `spawn_blocking`；`open_book` 拆出同步体 | ✅ 2026-11-26 完成，见下 |
 | D3 | 6 条移动端专用命令在 main 上是死代码 | 与分支策略一起定：标注为 android-only 或下掉 | 需先有分支决策（§6 Q5） |
 | D4 | `db/repository` 与 `pdf` 模块缺单测 | 按 repository 逐个补 CRUD 与边界用例 | 新测试能在 CI 跑绿 |
 | D5 | 无性能回归基准 | 把 OCR 页级耗时、FTS 查询、启动时间做成可重复 bench 脚本 | 一条命令出结果，可对比历史 |
+
+---
+
+### D2 完成记录（2026-11-26）
+
+原以为只有 `extract_text` 一处，实测是**同一类问题的 6 处**——它们的注释都写着
+"must not block the UI"，却都在 FRB 的 async worker 上同步调用 pdfium：
+
+| 命令 | 行号 | 处理 |
+|---|---|---|
+| `open_book` | 754 | 整体搬进 `open_book_blocking()`，由 `spawn_blocking` 调用 |
+| `render_page` | 840 | 包 `spawn_blocking`（**每页都走的热路径**） |
+| `render_thumbnail` | 851 | 同上 |
+| `get_outline` | 862 | `spawn_blocking(pdf::outline)` |
+| `extract_text` | 1140 | 同上 |
+| `page_has_text` | 1917 | 同上 |
+
+新增 `rust/tests/api_roundtrip.rs`（项目第一个 Rust 集成测试），两个用例：
+
+1. `import_open_render_and_extract_round_trip` —— 端到端走通 import → open →
+   render → 取字符框 → 缩略图 → 目录 → close，保护阻塞池往返不破。
+2. `pdfium_commands_do_not_starve_the_async_worker` —— **能真正区分阻塞与否**：
+   在 current-thread runtime 上跑心跳任务，命令若阻塞 worker 心跳就冻结。已实测
+   反向验证：去掉 `extract_text` 的修复后，该用例报
+   "only 0 heartbeat ticks across 126584 calls in 3s"。
+
+**仍未处理（同类问题，但函数体是 async，需结构性改造）**：`import_book`（文件复制 +
+pdfium 打开 + 封面生成）与 `scan_page`（OCR 推理）。二者也在 async worker 上跑重活，
+建议单独立一项。
 
 ---
 
