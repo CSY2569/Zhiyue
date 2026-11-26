@@ -1,4 +1,5 @@
 import 'package:lucide_flutter/lucide_flutter.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -76,5 +77,85 @@ void main() {
     expect(find.text('Section 1.2'), findsOneWidget);
     // Fully expanded: the chapter shows the collapse chevron.
     expect(find.byIcon(LucideIcons.chevronDown), findsOneWidget);
+  });
+
+  // -------------------------------------------------------------------
+  // Outline editing (T3). The merge logic is unit-tested in Rust; these
+  // cover the UI -> repository wiring: which node key is addressed, and
+  // whether the reset action reaches the book-wide command.
+  // -------------------------------------------------------------------
+
+  testWidgets('context menu hides the node it was opened on',
+      (tester) async {
+    final fake = FakeReaderRepository(outlineEntries: _outline);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        defaultViewer(),
+        readerRepositoryProvider.overrideWithValue(fake),
+        settingsRepositoryProvider.overrideWithValue(
+            FakeSettings({'outline_expand_all': 'false'})),
+      ],
+      child: const MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 240,
+            height: 600,
+            child: OutlineTree(onJump: _noop),
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // Desktop opens the menu on right-click (touch uses long-press).
+    final row = tester.getCenter(find.text('Chapter 1'));
+    final gesture = await tester.startGesture(
+      row,
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryMouseButton,
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.text('隐藏此项'), findsOneWidget);
+    await tester.tap(find.text('隐藏此项'));
+    await tester.pumpAndSettle();
+
+    expect(fake.outlineSaves, hasLength(1));
+    expect(fake.outlineSaves.single['entryKey'], 'pdf:0');
+    expect(fake.outlineSaves.single['hidden'], isTrue);
+    // A rename/hide must not touch book-wide state.
+    expect(fake.outlineResets, 0);
+  });
+
+  testWidgets('header menu restores the original outline', (tester) async {
+    final fake = FakeReaderRepository(outlineEntries: _outline);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        defaultViewer(),
+        readerRepositoryProvider.overrideWithValue(fake),
+        settingsRepositoryProvider.overrideWithValue(
+            FakeSettings({'outline_expand_all': 'false'})),
+      ],
+      child: const MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 240,
+            height: 600,
+            child: OutlineTree(onJump: _noop),
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(LucideIcons.ellipsisVertical));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('恢复原始目录'));
+    await tester.pumpAndSettle();
+
+    expect(fake.outlineResets, 1);
+    // Reset is book-wide: it must not go through the per-node save.
+    expect(fake.outlineSaves, isEmpty);
   });
 }
