@@ -59,6 +59,12 @@ class AiRepository {
   Future<List<AiMessage>> listAiMessages(int threadId) =>
       rust.listAiMessages(threadId: threadId);
 
+  /// Drop every message of [threadId] but keep the window itself, so the user
+  /// starts over inside the same conversation. The screenshots of the removed
+  /// turns are deleted on the Rust side as well.
+  Future<int> clearThreadMessages(int threadId) =>
+      rust.clearThreadMessages(threadId: threadId);
+
   /// Persist a new conversation window (id -1 on failure). [bookId] binds
   /// the window to a book (null = the no-book window); one window per book
   /// is enforced in the database (6.5.4).

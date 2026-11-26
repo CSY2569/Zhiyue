@@ -533,6 +533,7 @@ void main() {
       searchFetchPages: 0,
       ocrMode: 'high_precision',
       includeBookHistory: true,
+      historyWindow: 0,
       enableReasoning: false,
       reasoningEffort: 'medium',
       temperature: 0.7,

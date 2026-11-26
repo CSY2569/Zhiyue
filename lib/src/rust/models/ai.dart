@@ -74,6 +74,13 @@ class AiConfig {
   /// from the start; off = every turn is answered independently).
   final bool includeBookHistory;
 
+  /// How many recent *turns* of thread history to send (0 = no limit).
+  /// One turn is a user message plus its answer, so `2` keeps the last two
+  /// exchanges. Only meaningful when [include_book_history] is on; the
+  /// default of 0 preserves the pre-existing "send everything" behaviour,
+  /// so an older config reads back unchanged.
+  final int historyWindow;
+
   /// Thinking mode (reasoning models): the request carries
   /// `reasoning_effort` per the official API docs when enabled.
   final bool enableReasoning;
@@ -137,6 +144,7 @@ class AiConfig {
     required this.webSearchEnabled,
     required this.ocrMode,
     required this.includeBookHistory,
+    required this.historyWindow,
     required this.enableReasoning,
     required this.reasoningEffort,
     required this.temperature,
@@ -174,6 +182,7 @@ class AiConfig {
       webSearchEnabled.hashCode ^
       ocrMode.hashCode ^
       includeBookHistory.hashCode ^
+      historyWindow.hashCode ^
       enableReasoning.hashCode ^
       reasoningEffort.hashCode ^
       temperature.hashCode ^
@@ -213,6 +222,7 @@ class AiConfig {
           webSearchEnabled == other.webSearchEnabled &&
           ocrMode == other.ocrMode &&
           includeBookHistory == other.includeBookHistory &&
+          historyWindow == other.historyWindow &&
           enableReasoning == other.enableReasoning &&
           reasoningEffort == other.reasoningEffort &&
           temperature == other.temperature &&

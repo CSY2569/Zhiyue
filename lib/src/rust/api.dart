@@ -13,7 +13,7 @@ import 'ocr.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'pdf/types.dart';
 
-// These functions are ignored because they are not marked as `pub`: `ai_client`, `builtin_search_stream`, `compose_system`, `current_bitmap`, `current_boxes`, `current_page_has_text`, `current_thumbnail`, `drain_stream`, `ensure_api_key`, `err`, `hash_file`, `history_with_system`, `import_book_inner`, `index_ocr_result`, `index_state`, `init_result`, `ok`, `open_error`, `page_render_result`, `rebuild_cover_file`, `resolve_ai_image_path`, `save_ai_image`, `save_cover_thumbnail`, `save_rgba_as_png`, `search_system_prompt`, `system_message`, `system_prompt_for`, `try_init_at`, `try_init`, `wrap_input`, `wrap_untrusted_input`
+// These functions are ignored because they are not marked as `pub`: `ai_client`, `builtin_search_stream`, `compose_system`, `current_bitmap`, `current_boxes`, `current_page_has_text`, `current_thumbnail`, `drain_stream`, `ensure_api_key`, `ensure_vision_api_key`, `err`, `hash_file`, `history_with_system`, `import_book_inner`, `index_ocr_result`, `index_state`, `init_result`, `ok`, `open_book_blocking`, `open_error`, `page_render_result`, `rebuild_cover_file`, `render_task_error`, `resolve_ai_image_path`, `save_ai_image`, `save_cover_thumbnail`, `save_rgba_as_png`, `search_system_prompt`, `system_message`, `system_prompt_for`, `try_init_at`, `try_init`, `wrap_input`, `wrap_untrusted_input`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ActionPrompt`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`
 
@@ -450,6 +450,15 @@ Future<int> appendAiMessage({
 /// Delete one conversation window (its messages cascade; their persisted
 /// screenshots are removed from disk too). Returns 1 if the window existed,
 /// 0 otherwise (6.5.3 per-window deletion).
+/// Clear every message of a thread but keep the thread itself, so the panel
+/// stays where it is and merely starts a fresh conversation. Screenshots of
+/// the removed turns are deleted too -- they are useless once their rows are
+/// gone, and they are the bulk of the on-disk footprint.
+///
+/// Returns 1 on success (including "already empty"), 0 on failure.
+Future<int> clearThreadMessages({required PlatformInt64 threadId}) =>
+    RustLib.instance.api.crateApiClearThreadMessages(threadId: threadId);
+
 Future<int> deleteAiThread({required PlatformInt64 threadId}) =>
     RustLib.instance.api.crateApiDeleteAiThread(threadId: threadId);
 

@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 507000550;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1025670755;
 
 // Section: executor
 
@@ -425,6 +425,40 @@ fn wire__crate__api__clear_book_translation_impl(
                 transform_result_sse::<_, ()>((move || {
                     let output_ok =
                         Result::<_, ()>::Ok(crate::api::clear_book_translation(api_book_id))?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__clear_thread_messages_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "clear_thread_messages",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_thread_id = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok =
+                        Result::<_, ()>::Ok(crate::api::clear_thread_messages(api_thread_id))?;
                     Ok(output_ok)
                 })())
             }
@@ -3129,6 +3163,7 @@ impl SseDecode for crate::models::ai::AiConfig {
         let mut var_webSearchEnabled = <bool>::sse_decode(deserializer);
         let mut var_ocrMode = <String>::sse_decode(deserializer);
         let mut var_includeBookHistory = <bool>::sse_decode(deserializer);
+        let mut var_historyWindow = <i32>::sse_decode(deserializer);
         let mut var_enableReasoning = <bool>::sse_decode(deserializer);
         let mut var_reasoningEffort = <String>::sse_decode(deserializer);
         let mut var_temperature = <f64>::sse_decode(deserializer);
@@ -3165,6 +3200,7 @@ impl SseDecode for crate::models::ai::AiConfig {
             web_search_enabled: var_webSearchEnabled,
             ocr_mode: var_ocrMode,
             include_book_history: var_includeBookHistory,
+            history_window: var_historyWindow,
             enable_reasoning: var_enableReasoning,
             reasoning_effort: var_reasoningEffort,
             temperature: var_temperature,
@@ -4526,81 +4562,82 @@ fn pde_ffi_dispatcher_primary_impl(
         9 => wire__crate__api__cancel_translation_impl(port, ptr, rust_vec_len, data_len),
         10 => wire__crate__api__clear_book_text_translation_impl(port, ptr, rust_vec_len, data_len),
         11 => wire__crate__api__clear_book_translation_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__clear_translation_artifacts_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__close_book_impl(port, ptr, rust_vec_len, data_len),
-        14 => {
+        12 => wire__crate__api__clear_thread_messages_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__clear_translation_artifacts_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__close_book_impl(port, ptr, rust_vec_len, data_len),
+        15 => {
             wire__crate__api__configure_native_library_dir_impl(port, ptr, rust_vec_len, data_len)
         }
-        15 => wire__crate__api__count_text_translated_pages_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__create_ai_thread_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__create_annotation_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__create_category_impl(port, ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__create_image_annotation_impl(port, ptr, rust_vec_len, data_len),
-        20 => {
+        16 => wire__crate__api__count_text_translated_pages_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__create_ai_thread_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__create_annotation_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__create_category_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__create_image_annotation_impl(port, ptr, rust_vec_len, data_len),
+        21 => {
             wire__crate__api__dedupe_books_by_content_hash_impl(port, ptr, rust_vec_len, data_len)
         }
-        21 => wire__crate__api__delete_ai_thread_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__delete_annotation_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__delete_book_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__delete_category_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__delete_image_annotation_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__delete_translation_glossary_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__ensure_book_index_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__export_annotations_json_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__export_annotations_markdown_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__extract_text_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__extract_translated_text_impl(port, ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__get_ai_config_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__get_book_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__get_book_translation_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__get_engine_status_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__get_outline_impl(port, ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__get_page_ocr_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__get_page_text_blocks_impl(port, ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__get_page_text_translation_impl(port, ptr, rust_vec_len, data_len),
-        40 => wire__crate__api__get_progress_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__get_setting_impl(port, ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__get_translation_config_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__import_book_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__init_core_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__init_core_with_data_dir_impl(port, ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__init_core_with_db_path_impl(port, ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__install_engine_impl(port, ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__list_ai_messages_impl(port, ptr, rust_vec_len, data_len),
-        49 => wire__crate__api__list_ai_threads_impl(port, ptr, rust_vec_len, data_len),
-        50 => wire__crate__api__list_annotations_impl(port, ptr, rust_vec_len, data_len),
-        51 => wire__crate__api__list_books_impl(port, ptr, rust_vec_len, data_len),
-        52 => wire__crate__api__list_categories_impl(port, ptr, rust_vec_len, data_len),
-        53 => wire__crate__api__list_image_annotations_impl(port, ptr, rust_vec_len, data_len),
-        54 => wire__crate__api__list_reading_progress_impl(port, ptr, rust_vec_len, data_len),
-        55 => wire__crate__api__list_translation_glossary_impl(port, ptr, rust_vec_len, data_len),
-        56 => wire__crate__api__ocr_mode_as_str_impl(port, ptr, rust_vec_len, data_len),
-        57 => wire__crate__api__open_book_impl(port, ptr, rust_vec_len, data_len),
-        58 => wire__crate__api__page_has_text_impl(port, ptr, rust_vec_len, data_len),
-        59 => wire__crate__api__rename_category_impl(port, ptr, rust_vec_len, data_len),
-        60 => wire__crate__api__render_page_impl(port, ptr, rust_vec_len, data_len),
-        61 => wire__crate__api__render_thumbnail_impl(port, ptr, rust_vec_len, data_len),
-        62 => wire__crate__api__render_translated_page_impl(port, ptr, rust_vec_len, data_len),
-        63 => wire__crate__api__repair_covers_impl(port, ptr, rust_vec_len, data_len),
-        64 => wire__crate__api__save_progress_impl(port, ptr, rust_vec_len, data_len),
-        65 => wire__crate__api__scan_page_impl(port, ptr, rust_vec_len, data_len),
-        66 => wire__crate__api__search_books_impl(port, ptr, rust_vec_len, data_len),
-        67 => wire__crate__api__search_index_status_impl(port, ptr, rust_vec_len, data_len),
-        68 => wire__crate__api__set_ai_config_impl(port, ptr, rust_vec_len, data_len),
-        69 => wire__crate__api__set_setting_impl(port, ptr, rust_vec_len, data_len),
-        70 => wire__crate__api__set_translation_config_impl(port, ptr, rust_vec_len, data_len),
-        71 => wire__crate__api__start_book_translation_impl(port, ptr, rust_vec_len, data_len),
-        72 => wire__crate__api__stream_chat_impl(port, ptr, rust_vec_len, data_len),
-        73 => wire__crate__api__stream_vision_png_impl(port, ptr, rust_vec_len, data_len),
-        74 => wire__crate__api__template_default_text_impl(port, ptr, rust_vec_len, data_len),
-        75 => wire__crate__api__toggle_favorite_impl(port, ptr, rust_vec_len, data_len),
-        76 => wire__crate__api__touch_last_opened_impl(port, ptr, rust_vec_len, data_len),
-        77 => wire__crate__api__translate_book_impl(port, ptr, rust_vec_len, data_len),
-        78 => wire__crate__api__translate_page_text_impl(port, ptr, rust_vec_len, data_len),
-        79 => wire__crate__api__uninstall_engine_impl(port, ptr, rust_vec_len, data_len),
-        80 => wire__crate__api__update_annotation_content_impl(port, ptr, rust_vec_len, data_len),
-        81 => wire__crate__api__update_image_annotation_impl(port, ptr, rust_vec_len, data_len),
-        82 => wire__crate__api__update_page_ocr_lines_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__delete_ai_thread_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__delete_annotation_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__delete_book_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__delete_category_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__delete_image_annotation_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__delete_translation_glossary_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__ensure_book_index_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__export_annotations_json_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__export_annotations_markdown_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__extract_text_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__extract_translated_text_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__get_ai_config_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__get_book_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__get_book_translation_impl(port, ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__get_engine_status_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__get_outline_impl(port, ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__get_page_ocr_impl(port, ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__get_page_text_blocks_impl(port, ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__get_page_text_translation_impl(port, ptr, rust_vec_len, data_len),
+        41 => wire__crate__api__get_progress_impl(port, ptr, rust_vec_len, data_len),
+        42 => wire__crate__api__get_setting_impl(port, ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__get_translation_config_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__import_book_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__init_core_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__init_core_with_data_dir_impl(port, ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__init_core_with_db_path_impl(port, ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__install_engine_impl(port, ptr, rust_vec_len, data_len),
+        49 => wire__crate__api__list_ai_messages_impl(port, ptr, rust_vec_len, data_len),
+        50 => wire__crate__api__list_ai_threads_impl(port, ptr, rust_vec_len, data_len),
+        51 => wire__crate__api__list_annotations_impl(port, ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__list_books_impl(port, ptr, rust_vec_len, data_len),
+        53 => wire__crate__api__list_categories_impl(port, ptr, rust_vec_len, data_len),
+        54 => wire__crate__api__list_image_annotations_impl(port, ptr, rust_vec_len, data_len),
+        55 => wire__crate__api__list_reading_progress_impl(port, ptr, rust_vec_len, data_len),
+        56 => wire__crate__api__list_translation_glossary_impl(port, ptr, rust_vec_len, data_len),
+        57 => wire__crate__api__ocr_mode_as_str_impl(port, ptr, rust_vec_len, data_len),
+        58 => wire__crate__api__open_book_impl(port, ptr, rust_vec_len, data_len),
+        59 => wire__crate__api__page_has_text_impl(port, ptr, rust_vec_len, data_len),
+        60 => wire__crate__api__rename_category_impl(port, ptr, rust_vec_len, data_len),
+        61 => wire__crate__api__render_page_impl(port, ptr, rust_vec_len, data_len),
+        62 => wire__crate__api__render_thumbnail_impl(port, ptr, rust_vec_len, data_len),
+        63 => wire__crate__api__render_translated_page_impl(port, ptr, rust_vec_len, data_len),
+        64 => wire__crate__api__repair_covers_impl(port, ptr, rust_vec_len, data_len),
+        65 => wire__crate__api__save_progress_impl(port, ptr, rust_vec_len, data_len),
+        66 => wire__crate__api__scan_page_impl(port, ptr, rust_vec_len, data_len),
+        67 => wire__crate__api__search_books_impl(port, ptr, rust_vec_len, data_len),
+        68 => wire__crate__api__search_index_status_impl(port, ptr, rust_vec_len, data_len),
+        69 => wire__crate__api__set_ai_config_impl(port, ptr, rust_vec_len, data_len),
+        70 => wire__crate__api__set_setting_impl(port, ptr, rust_vec_len, data_len),
+        71 => wire__crate__api__set_translation_config_impl(port, ptr, rust_vec_len, data_len),
+        72 => wire__crate__api__start_book_translation_impl(port, ptr, rust_vec_len, data_len),
+        73 => wire__crate__api__stream_chat_impl(port, ptr, rust_vec_len, data_len),
+        74 => wire__crate__api__stream_vision_png_impl(port, ptr, rust_vec_len, data_len),
+        75 => wire__crate__api__template_default_text_impl(port, ptr, rust_vec_len, data_len),
+        76 => wire__crate__api__toggle_favorite_impl(port, ptr, rust_vec_len, data_len),
+        77 => wire__crate__api__touch_last_opened_impl(port, ptr, rust_vec_len, data_len),
+        78 => wire__crate__api__translate_book_impl(port, ptr, rust_vec_len, data_len),
+        79 => wire__crate__api__translate_page_text_impl(port, ptr, rust_vec_len, data_len),
+        80 => wire__crate__api__uninstall_engine_impl(port, ptr, rust_vec_len, data_len),
+        81 => wire__crate__api__update_annotation_content_impl(port, ptr, rust_vec_len, data_len),
+        82 => wire__crate__api__update_image_annotation_impl(port, ptr, rust_vec_len, data_len),
+        83 => wire__crate__api__update_page_ocr_lines_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -4667,6 +4704,7 @@ impl flutter_rust_bridge::IntoDart for crate::models::ai::AiConfig {
             self.web_search_enabled.into_into_dart().into_dart(),
             self.ocr_mode.into_into_dart().into_dart(),
             self.include_book_history.into_into_dart().into_dart(),
+            self.history_window.into_into_dart().into_dart(),
             self.enable_reasoning.into_into_dart().into_dart(),
             self.reasoning_effort.into_into_dart().into_dart(),
             self.temperature.into_into_dart().into_dart(),
@@ -5907,6 +5945,7 @@ impl SseEncode for crate::models::ai::AiConfig {
         <bool>::sse_encode(self.web_search_enabled, serializer);
         <String>::sse_encode(self.ocr_mode, serializer);
         <bool>::sse_encode(self.include_book_history, serializer);
+        <i32>::sse_encode(self.history_window, serializer);
         <bool>::sse_encode(self.enable_reasoning, serializer);
         <String>::sse_encode(self.reasoning_effort, serializer);
         <f64>::sse_encode(self.temperature, serializer);

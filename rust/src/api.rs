@@ -1450,6 +1450,34 @@ fn resolve_ai_image_path(rel: &str) -> Option<String> {
 /// Delete one conversation window (its messages cascade; their persisted
 /// screenshots are removed from disk too). Returns 1 if the window existed,
 /// 0 otherwise (6.5.3 per-window deletion).
+/// Clear every message of a thread but keep the thread itself, so the panel
+/// stays where it is and merely starts a fresh conversation. Screenshots of
+/// the removed turns are deleted too -- they are useless once their rows are
+/// gone, and they are the bulk of the on-disk footprint.
+///
+/// Returns 1 on success (including "already empty"), 0 on failure.
+pub fn clear_thread_messages(thread_id: i64) -> i32 {
+    let images: Vec<String> = {
+        let conn = db::db();
+        let images: Vec<String> = ai_repo::list_messages(&conn, thread_id)
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|m| m.image_path)
+            .collect();
+        match ai_repo::clear_messages(&conn, thread_id) {
+            Ok(_) => images,
+            Err(e) => {
+                tracing::warn!(?e, "clear_thread_messages failed");
+                return 0;
+            }
+        }
+    };
+    for path in images {
+        let _ = std::fs::remove_file(&path);
+    }
+    1
+}
+
 pub fn delete_ai_thread(thread_id: i64) -> i32 {
     // Collect the screenshots before the rows cascade so the files can be
     // cleaned up (they are not worth keeping after the conversation).
@@ -1658,9 +1686,21 @@ fn system_message(content: String) -> AiMessage {
 /// Prepend [system] to the thread history, or use it alone when the user
 /// turned `include_book_history` off. Both the main text path and the
 /// built-in-search path assemble messages through this helper.
+///
+/// `history_window` caps how many trailing turns are sent (0 = no cap). One
+/// turn is a user message plus its answer, so the window keeps `2 * N`
+/// messages; the cap exists because long threads otherwise grow the request
+/// without bound and eventually overflow the model's context.
 fn history_with_system(config: &AiConfig, history: &[AiMessage], system: String) -> Vec<AiMessage> {
     let mut messages = if config.include_book_history {
-        history.to_vec()
+        let window = config.history_window.max(0) as usize;
+        if window == 0 {
+            history.to_vec()
+        } else {
+            let keep = window * 2;
+            let start = history.len().saturating_sub(keep);
+            history[start..].to_vec()
+        }
     } else {
         Vec::new()
     };

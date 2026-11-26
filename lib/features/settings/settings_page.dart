@@ -76,6 +76,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   String _apiProtocol = 'chat_completions';
   String _ocrMode = 'high_precision';
   bool _includeBookHistory = true;
+
+  /// How many recent turns of thread history go into each request;
+  /// 0 = no cap (the pre-existing behaviour).
+  int _historyWindow = 0;
   bool _enableReasoning = false;
   String _reasoningEffort = 'medium';
   double _temperature = 0.7;
@@ -152,6 +156,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     _webSearch = config.webSearchEnabled;
     _ocrMode = config.ocrMode == 'fast' ? 'fast' : 'high_precision';
     _includeBookHistory = config.includeBookHistory;
+    _historyWindow = config.historyWindow < 0 ? 0 : config.historyWindow;
     _enableReasoning = config.enableReasoning;
     _reasoningEffort =
         const {'low', 'medium', 'high'}.contains(config.reasoningEffort)
@@ -229,6 +234,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       apiProtocol: _apiProtocol,
       ocrMode: _ocrMode,
       includeBookHistory: _includeBookHistory,
+      historyWindow: _historyWindow,
       enableReasoning: _enableReasoning,
       reasoningEffort: _reasoningEffort,
       temperature: _temperature,
@@ -602,10 +608,26 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 children: [
                   SettingsSwitchRow(
                     title: '携带书籍对话上下文',
-                    description: '每次回复携带本书与 AI 的全部对话历史（追问从开始到本次）。关闭后每轮独立回答',
+                    description: '每次回复携带本书与 AI 的对话历史（追加提问从本次窗口的第一轮到本次）。关闭后每轮独立回答',
                     value: _includeBookHistory,
                     onChanged: (v) => setState(() => _includeBookHistory = v),
                   ),
+                  if (_includeBookHistory)
+                    SettingsControlRow(
+                      title: '历史窗口',
+                      description: _historyWindow == 0
+                          ? '发送全部历史轮次；长对话会不断撑大请求体'
+                          : '只发送最近 $_historyWindow 轮（1 轮 = 一次提问 + 一次回答）',
+                      child: Slider(
+                        value: _historyWindow.toDouble(),
+                        min: 0,
+                        max: 50,
+                        divisions: 10,
+                        label: _historyWindow == 0 ? '全部' : '$_historyWindow 轮',
+                        onChanged: (v) =>
+                            setState(() => _historyWindow = v.round()),
+                      ),
+                    ),
                   SettingsSwitchRow(
                     title: '思考模式',
                     description: '按官方 API 发送 reasoning_effort，需使用支持思考的模型（如 o 系列 / GPT-5 / DeepSeek-R1）',

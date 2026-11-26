@@ -557,6 +557,24 @@ class AiNotifier extends Notifier<AiState> {
     );
   }
 
+  /// Clear the messages of [threadId] but keep the window, so the next turn
+  /// starts a fresh conversation without losing the window's title or its place
+  /// in the list. Distinct from [clearThreads] (which drops every window) and
+  /// from deletion.
+  Future<void> clearWindowMessages(int threadId) async {
+    final clearingStreaming = state.streamingThreadId == threadId;
+    if (clearingStreaming) _session.cancel();
+    for (final thread in state.threads) {
+      if (thread.id == threadId) thread.messages.clear();
+    }
+    state = state.copyWith(
+      threads: [...state.threads],
+      streamingText: '',
+      clearStreaming: clearingStreaming,
+    );
+    _enqueue(() => _repo.clearThreadMessages(threadId).then((_) {}));
+  }
+
   /// Delete one conversation window (per-window deletion, 6.5.3). Its
   /// persisted rows cascade; deleting the active window clears it (and the
   /// card showing it).

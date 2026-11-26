@@ -115,6 +115,17 @@ pub fn append_message(
 
 /// Delete one conversation window (its messages go with it via cascade).
 /// Returns whether a row was actually removed.
+/// Delete every message of [thread_id] but keep the thread row itself, so
+/// the window stays where it is and simply starts over. Returns the number of
+/// rows removed.
+pub fn clear_messages(conn: &Connection, thread_id: i64) -> AppResult<usize> {
+    let removed = conn.execute(
+        "DELETE FROM ai_messages WHERE thread_id = ?1",
+        rusqlite::params![thread_id],
+    )?;
+    Ok(removed)
+}
+
 pub fn delete_thread(conn: &Connection, thread_id: i64) -> AppResult<bool> {
     let n = conn.execute("DELETE FROM ai_threads WHERE id = ?1", params![thread_id])?;
     Ok(n > 0)

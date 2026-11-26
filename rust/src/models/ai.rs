@@ -163,6 +163,13 @@ pub struct AiConfig {
     /// from the start; off = every turn is answered independently).
     #[serde(default = "default_true")]
     pub include_book_history: bool,
+    /// How many recent *turns* of thread history to send (0 = no limit).
+    /// One turn is a user message plus its answer, so `2` keeps the last two
+    /// exchanges. Only meaningful when [include_book_history] is on; the
+    /// default of 0 preserves the pre-existing "send everything" behaviour,
+    /// so an older config reads back unchanged.
+    #[serde(default)]
+    pub history_window: i32,
     /// Thinking mode (reasoning models): the request carries
     /// `reasoning_effort` per the official API docs when enabled.
     #[serde(default)]
@@ -278,6 +285,7 @@ impl Default for AiConfig {
             web_search_enabled: false,
             ocr_mode: default_ocr_mode(),
             include_book_history: default_true(),
+            history_window: 0,
             enable_reasoning: false,
             reasoning_effort: default_reasoning_effort(),
             temperature: default_temperature(),
@@ -328,12 +336,30 @@ mod tests {
         assert_eq!(cfg.search_builtin_protocol, "responses");
         assert_eq!(cfg.search_third_party_protocol, "bocha");
         assert_eq!(cfg.search_fetch_pages, 0);
+        // `history_window` postdates this JSON too: it must default to 0
+        // (no cap), i.e. exactly the behaviour this config had when it was
+        // written -- not to some new truncation the user never opted into.
+        assert_eq!(cfg.history_window, 0);
 
         // Round-trip through the current serializer keeps working.
         let back: AiConfig = serde_json::from_str(&serde_json::to_string(&cfg).unwrap()).unwrap();
         assert_eq!(back.api_key, "sk-test");
         assert_eq!(back.translate_target_lang, "中文");
         assert!(!back.search_use_builtin);
+        assert_eq!(back.history_window, 0);
+    }
+
+    /// The window is only a cap: 0 keeps everything (pre-existing behaviour),
+    /// a positive value keeps that many trailing turns.
+    #[test]
+    fn history_window_round_trips_and_defaults_to_unlimited() {
+        let mut cfg = AiConfig::default();
+        assert_eq!(cfg.history_window, 0, "default must not truncate history");
+
+        cfg.history_window = 12;
+        let json = serde_json::to_string(&cfg).unwrap();
+        let back: AiConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.history_window, 12);
     }
 
     #[test]
@@ -357,6 +383,7 @@ mod tests {
             web_search_enabled: true,
             ocr_mode: "fast".into(),
             include_book_history: false,
+            history_window: 7,
             enable_reasoning: true,
             reasoning_effort: "high".into(),
             temperature: 0.3,
@@ -396,6 +423,7 @@ mod tests {
         assert!(back.web_search_enabled);
         assert_eq!(back.ocr_mode, "fast");
         assert!(!back.include_book_history);
+        assert_eq!(back.history_window, 7);
         assert!(back.enable_reasoning);
         assert_eq!(back.reasoning_effort, "high");
         assert!((back.temperature - 0.3).abs() < 1e-9);

@@ -92,6 +92,17 @@ class _AiPanelSideState extends ConsumerState<AiPanelSide> {
                       onPressed: () =>
                           ref.read(aiProvider.notifier).showWindowList(),
                     ),
+                  // Inside one conversation: drop its messages but keep the
+                  // window. The broom next to it drops every window instead.
+                  if (active != null)
+                    IconButton(
+                      icon: const Icon(LucideIcons.eraser, size: 16),
+                      tooltip: '清空当前对话（保留窗口）',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => ref
+                          .read(aiProvider.notifier)
+                          .clearWindowMessages(active.id),
+                    ),
                   if (state.threads.isNotEmpty)
                     TextButton.icon(
                       onPressed: () =>
