@@ -103,6 +103,44 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('drag leaving the page freezes the selection at the edge',
+      (tester) async {
+    // Double-page mode puts one SelectionLayer on each page, so a drag never
+    // *belongs* to the facing page. The hazard is the opposite: the layer
+    // clamps pointer positions to [0,1], so a pointer sitting in the gutter
+    // used to keep extending the range onto the page's last character even
+    // though the user never reached it. Leaving the box must freeze instead.
+    await tester.pumpWidget(harness(oneLine()));
+    final topLeft = tester.getTopLeft(find.byType(SelectionLayer));
+
+    // The first move has to pass the 18px touch slop, otherwise the pan never
+    // starts and there is nothing to freeze.
+    final g = await tester.startGesture(topLeft + const Offset(10, 11));
+    await g.moveTo(topLeft + const Offset(30, 11));
+    await g.moveTo(topLeft + const Offset(35, 11));
+    await tester.pump();
+    final inside = stateOf(tester).selection;
+    expect(inside, isNotNull, reason: 'the drag must have started a selection');
+    final insideSel = inside!;
+
+    // Move well outside the page: to the right of the 100x100 box.
+    await g.moveTo(topLeft + const Offset(160, 11));
+    await tester.pump();
+    final outside = stateOf(tester).selection;
+
+    await g.up();
+    await tester.pump();
+
+    expect(outside, isNotNull);
+    expect(
+      outside!.currentIndex,
+      insideSel.currentIndex,
+      reason: 'leaving the page must not extend the selection',
+    );
+    expect(outside.text, insideSel.text);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('backward drag selects the same range (reverse direction)',
       (tester) async {
     await tester.pumpWidget(harness(oneLine()));

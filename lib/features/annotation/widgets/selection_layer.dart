@@ -162,6 +162,24 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
     ];
   }
 
+  /// Whether [local] lies outside this page's box.
+  ///
+  /// A drag that leaves the page -- into the gutter or onto the facing page in
+  /// double-page mode -- must freeze the selection rather than keep extending
+  /// it. [_toNorm] clamps to [0,1], so without this check the pointer sitting
+  /// in the gutter would keep selecting the page's last line even though the
+  /// user never reached it. Selection is per page by construction (each
+  /// `_PageItem` owns one layer), so freezing here is exactly "选区不跨页".
+  bool _outsidePage(Offset local) {
+    final render = context.findRenderObject() as RenderBox?;
+    final size = render?.size ?? Size.zero;
+    if (size.isEmpty) return true;
+    return local.dx < 0 ||
+        local.dy < 0 ||
+        local.dx > size.width ||
+        local.dy > size.height;
+  }
+
   /// Convert a local pointer position to normalized page coordinates.
   Offset _toNorm(Offset local) {
     final render = context.findRenderObject() as RenderBox?;
@@ -282,6 +300,9 @@ class _SelectionLayerState extends ConsumerState<SelectionLayer> {
   void _updateSelection(Offset position) {
     final boxes = _boxes;
     if (boxes == null || _dragAnchor == null) return;
+    // Pointer left the page: keep the range as it was at the last in-bounds
+    // position. Extending by clamping would jump to the edge line instead.
+    if (_outsidePage(position)) return;
     final norm = _toNorm(position);
     final idx = _lineLayouts != null
         ? lineIndexAt(boxes, _lineLayouts!, norm)
