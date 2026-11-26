@@ -28,7 +28,8 @@
 - **分工原则**：所有重活与数据在 Rust 侧（PDF 渲染、OCR、AI 网络、数据库、搜索索引）；Flutter 只做绘制与交互。
 - **完全离线 OCR**：rapidocr-core（PP-OCRv4 det/cls/rec，ONNX Runtime 静态链接），高精度 + 快速双模式，模型随安装包内置（~210MB）。
 - **AI 侧**：OpenAI 兼容协议（BYOK，可配 DeepSeek / Kimi / 通义等），流式对话（Markdown + LaTeX 渲染）+ 自由截图多模态识图。
-- **目标平台**：
+- **目标平台**（三条线，共用同一套 `lib/` + `rust/`）：
+  - **Windows 桌面**：目标平台之一。runner 尚未创建（`windows/` 目录待补，暂未产出构建产物），桌面功能与 Linux 线共享；
   - **Linux 桌面**（Arch / Debian / Ubuntu / Fedora 等，详见 [`docs/LINUX_PACKAGES.md`](docs/LINUX_PACKAGES.md)）；
   - **Android arm64**（v1：阅读 + 本地 OCR + 划词 AI + 文本级对照，规划与包依赖见 android 分支的 `docs/ANDROID_V1_PLAN.md` 与 `docs/ANDROID_PACKAGES.md`）。桌面端的 RetainPDF 版式重排引擎不上移动端。
 - **零参考**：完全重写，不迁移任何旧代码。
@@ -37,11 +38,11 @@
 
 ## 分支策略
 
-按目标平台分为两条长期分支（详见 [`docs/BRANCHING.md`](docs/BRANCHING.md)）：
+三个目标平台映射到两条长期分支——Windows 与 Linux 桌面共用 `main`，Android 独占 `android`（详见 [`docs/BRANCHING.md`](docs/BRANCHING.md)）：
 
 | 分支 | 职责 | 构建产物 |
 |---|---|---|
-| `main` | Linux / Windows 桌面版（主干） | deb / rpm / AppImage |
+| `main` | Linux / Windows 桌面版（主干） | deb / rpm / AppImage（Windows 产物待 runner 建立） |
 | `android` | Android arm64 版 | APK |
 
 两条分支共享 `lib/` 与 `rust/`；平台无关的修复先落 `main`，再合并到

@@ -243,22 +243,24 @@ git checkout android && bash scripts/sync-from-main.sh main
 
 ## 13. 文档现状：不一致清单与修复状态
 
-`docs/` 有 250 KB 存量文档，多处曾滞后于代码。下表 §1–§11 已于 2026-11-26 修正（26 insertions / 27 deletions，仅文本）；**§4 / §6 / §8 / §10 / §12 仍是遗留问题**，需要判断而非机械替换。
+`docs/` 有 250 KB 存量文档，多处曾滞后于代码。下表 12 项已于 2026-11-26 全部处理完毕：§1–§3、§5、§7、§9、§11 为机械修正；§4、§6、§8、§10 按项目方的裁决处理。
+
+**2026-11-26 的裁决（记录在案）**：目标平台确认为 **Windows / Linux / Android 三个**（Windows runner 尚未创建）；翻译粒度**以代码为准**，只保留整本粒度；版本号保留历史标签、另加口径说明；`BILINGUAL_READING_PLAN.md` **整篇降级为历史归档**；`IMPLEMENTATION_STATUS.md` 文首**新增按子系统索引表**、日志本身不动。
 
 | # | 问题 | 状态 |
 |---|---|---|
 | 1 | README 声称本分支是 `feat/retain-engine`，该分支已不存在 | ✅ 已改为 `main`（另修 `DIAGRAMS.md:3` 同源表述） |
 | 2 | 死链：`docs/ANDROID_V1_PLAN.md`、`ANDROID_PACKAGES.md` 在 main 上不存在 | ✅ 已改为「见 android 分支」的纯文本引用 |
 | 3 | schema 版本过期：文档写 v9，实际 11（`schema.rs:40`） | ✅ `DIAGRAMS.md` 5 处 + `FEATURES.md:230` 已改 v11 |
-| 4 | 目标平台自相矛盾：`IMPLEMENTATION_STATUS.md:15` 与 `FEATURES.md:287` 仍写「Linux 桌面唯一」 | ⚠️ **遗留**：需产品判断 Android 是否算正式目标平台 |
+| 4 | 目标平台自相矛盾：「Linux 桌面唯一」的表述与 Android 线冲突 | ✅ 已确认为**三个目标平台**（Windows / Linux / Android）；改了 `IMPLEMENTATION_STATUS.md` 概况、`FEATURES.md` 10.6、`README.md` 目标平台与分支表，并注明 Windows runner 尚未创建 |
 | 5 | 测试规模数字互不相同（Rust 130/144，Flutter 202/323/326/327） | ✅ 汇总行统一为实测值（Rust 148/12、Flutter 见最新章节）；各章历史快照保留为历史记录 |
-| 6 | 翻译能力口径冲突：表格称「整本/随进度/手动」三种已完成，正文称后两种待后续 | ⚠️ **遗留**：需确认 RetainPDF 引擎收缩后到底支持哪几种 |
+| 6 | 翻译能力口径冲突：表格称「整本/随进度/手动」三种已完成，正文称后两种待后续 | ✅ 已按代码定案：引擎 v1 只做整本粒度、语言固定简体中文（`translate/job.rs:19`）；`TranslationMode` 另两值仅存于数据结构与 DB 兼容层 |
 | 7 | 跨分支引用未标注：`:1195` 引「3.40」，本分支无该节 | ✅ 已加「对应改动在 android 分支」 |
-| 8 | 版本号体系冲突：章节标题写 1.8.0/1.9.x，`pubspec` 为 1.0.0 | ⚠️ **遗留**：属历史章节标签，批量改会破坏记录 |
+| 8 | 版本号体系冲突：章节标题写 1.8.0/1.9.x，`pubspec` 为 1.0.0 | ✅ 保留历史标签，在 `IMPLEMENTATION_STATUS.md` §1 新增「版本号口径」一条，说明那些是开发期内部里程碑标签、不是发布版本 |
 | 9 | `DEPENDENCIES.md` 列了已弃用的 `freezed` / `async-openai` / `super_clipboard` | ✅ 已按 `pubspec.yaml` 实际依赖重写，弃用项标明 |
-| 10 | `BILINGUAL_READING_PLAN.md` 自述「已实施完毕」又「自研管线已移除」，指向 3 个已删文件 | ⚠️ **遗留**：建议整篇降级为历史归档并在开头加醒目标记 |
+| 10 | `BILINGUAL_READING_PLAN.md` 自述「已实施完毕」又「自研管线已移除」，指向 3 个已删文件 | ✅ 整篇降级为**历史归档**，H1 即带「⚠️ 历史归档，不是实现依据」，逐项列出已失效内容并指向现行文档；伴读 `bilingual_workflow.html` 的三种模式表述同步改正 |
 | 11 | `TECH_ROADMAP.md` 选型表以 async-openai 为 AI 客户端 | ✅ 已改为手写 reqwest SSE，保留旧方案作为「已弃用」记录 |
-| 12 | `IMPLEMENTATION_STATUS.md` 96% 篇幅是按日期追加的日志（§3.1–§3.39），无按子系统索引 | ⚠️ **遗留**：建议在文首加「按子系统索引」表，别重排日志 |
+| 12 | `IMPLEMENTATION_STATUS.md` 96% 篇幅是按日期追加的日志（§3.1–§3.39），无按子系统索引 | ✅ 文首新增 **§0「按子系统索引」**（12 个子系统 → 代码位置 + 相关章节行号），日志本身一字未动 |
 
 **可信度排序建议**：代码 > `IMPLEMENTATION_STATUS.md` §3 各篇（描述具体缺陷与根因，信息量最高）> `README.md` > 其余文档。`FEATURES.md` 是需求规格而非实现状态（`:5` 明言），不要当完成度清单读。
 
