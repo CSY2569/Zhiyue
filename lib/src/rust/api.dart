@@ -230,6 +230,46 @@ Future<PageRenderResult> renderThumbnail({
 Future<OutlineResult> getOutline({required PlatformInt64 bookId}) =>
     RustLib.instance.api.crateApiGetOutline(bookId: bookId);
 
+/// Save one user edit of the outline (rename / hide / reorder / bookmark).
+///
+/// `entry_key` addresses a document node as `pdf:0.1.2` (sibling-index path)
+/// or names a user bookmark as `bm:<anything unique>`. Passing `None` for
+/// `title` / `page` / `order_index` keeps the document's own value; `hidden`
+/// removes the node from the merged tree without touching the file.
+///
+/// Returns 1 on success, 0 on failure.
+Future<int> saveOutlineOverride({
+  required PlatformInt64 bookId,
+  required String entryKey,
+  String? parentKey,
+  String? title,
+  PlatformInt64? page,
+  PlatformInt64? orderIndex,
+  required bool hidden,
+}) => RustLib.instance.api.crateApiSaveOutlineOverride(
+  bookId: bookId,
+  entryKey: entryKey,
+  parentKey: parentKey,
+  title: title,
+  page: page,
+  orderIndex: orderIndex,
+  hidden: hidden,
+);
+
+/// Remove one user edit, restoring the document's own value for that node.
+Future<int> deleteOutlineOverride({
+  required PlatformInt64 bookId,
+  required String entryKey,
+}) => RustLib.instance.api.crateApiDeleteOutlineOverride(
+  bookId: bookId,
+  entryKey: entryKey,
+);
+
+/// Drop every edit for the book (`恢复原始目录`). Returns the number of
+/// overrides removed.
+Future<int> resetOutline({required PlatformInt64 bookId}) =>
+    RustLib.instance.api.crateApiResetOutline(bookId: bookId);
+
 /// Load the saved reading position for a book. Returns `None` on first open.
 Future<ReadingProgress?> getProgress({required PlatformInt64 bookId}) =>
     RustLib.instance.api.crateApiGetProgress(bookId: bookId);

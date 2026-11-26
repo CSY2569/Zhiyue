@@ -20,6 +20,7 @@ use std::sync::OnceLock;
 
 use crate::db;
 use crate::db::repository::book::NewBook;
+use crate::db::repository::outline as outline_repo;
 use crate::db::repository::progress as progress_repo;
 use crate::db::repository::search as search_repo;
 use crate::db::repository::settings as settings_repo;
@@ -858,20 +859,89 @@ pub async fn render_thumbnail(book_id: i64, page: i64, max_size: u32) -> PageRen
 ///
 /// Async: pdfium bookmark traversal can be slow on large documents.
 pub async fn get_outline(book_id: i64) -> OutlineResult {
-    let _ = book_id;
-    match tokio::task::spawn_blocking(pdf::outline).await {
-        Ok(Ok(entries)) => OutlineResult {
-            entries,
-            error: None,
-        },
-        Ok(Err(e)) => OutlineResult {
-            entries: Vec::new(),
-            error: Some(e.to_string()),
-        },
-        Err(e) => OutlineResult {
-            entries: Vec::new(),
-            error: Some(format!("读取目录任务失败: {e}")),
-        },
+    // pdfium gives the document's own outline; the user's edits (rename /
+    // hide / reorder / added bookmarks) are merged over it so the UI only ever
+    // sees one tree. The PDF file is untouched (v12, pdf::outline_edit).
+    let base = match tokio::task::spawn_blocking(pdf::outline).await {
+        Ok(Ok(entries)) => entries,
+        Ok(Err(e)) => {
+            return OutlineResult {
+                entries: Vec::new(),
+                error: Some(e.to_string()),
+            }
+        }
+        Err(e) => {
+            return OutlineResult {
+                entries: Vec::new(),
+                error: Some(format!("读取目录任务失败: {e}")),
+            }
+        }
+    };
+    let overrides = {
+        let conn = db::db();
+        outline_repo::list(&conn, book_id).unwrap_or_default()
+    };
+    OutlineResult {
+        entries: pdf::outline_edit::merge(base, &overrides),
+        error: None,
+    }
+}
+
+/// Save one user edit of the outline (rename / hide / reorder / bookmark).
+///
+/// `entry_key` addresses a document node as `pdf:0.1.2` (sibling-index path)
+/// or names a user bookmark as `bm:<anything unique>`. Passing `None` for
+/// `title` / `page` / `order_index` keeps the document's own value; `hidden`
+/// removes the node from the merged tree without touching the file.
+///
+/// Returns 1 on success, 0 on failure.
+#[allow(clippy::too_many_arguments)] // mirrors the override's column set
+pub fn save_outline_override(
+    book_id: i64,
+    entry_key: String,
+    parent_key: Option<String>,
+    title: Option<String>,
+    page: Option<i64>,
+    order_index: Option<i64>,
+    hidden: bool,
+) -> i32 {
+    let entry = crate::pdf::outline_edit::OutlineOverride {
+        entry_key,
+        parent_key,
+        title,
+        page,
+        order_index,
+        hidden,
+    };
+    let conn = db::db();
+    match outline_repo::upsert(&conn, book_id, &entry) {
+        Ok(_) => 1,
+        Err(e) => {
+            tracing::warn!(?e, "save_outline_override failed");
+            0
+        }
+    }
+}
+
+/// Remove one user edit, restoring the document's own value for that node.
+pub fn delete_outline_override(book_id: i64, entry_key: String) -> i32 {
+    let conn = db::db();
+    match outline_repo::delete(&conn, book_id, &entry_key) {
+        Ok(true) => 1,
+        _ => 0,
+    }
+}
+
+/// Drop every edit for the book (`恢复原始目录`). Returns the number of
+/// overrides removed.
+pub fn reset_outline(book_id: i64) -> i32 {
+    let conn = db::db();
+    match outline_repo::delete_all(&conn, book_id) {
+        Ok(n) => n as i32,
+        Err(e) => {
+            tracing::warn!(?e, "reset_outline failed");
+            -1
+        }
     }
 }
 

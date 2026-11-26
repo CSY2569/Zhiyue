@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1025670755;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -588438472;
 
 // Section: executor
 
@@ -979,6 +979,43 @@ fn wire__crate__api__delete_image_annotation_impl(
                 transform_result_sse::<_, ()>((move || {
                     let output_ok = Result::<_, ()>::Ok(crate::api::delete_image_annotation(
                         api_annotation_id,
+                    ))?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__delete_outline_override_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "delete_outline_override",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_book_id = <i64>::sse_decode(&mut deserializer);
+            let api_entry_key = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(crate::api::delete_outline_override(
+                        api_book_id,
+                        api_entry_key,
                     ))?;
                     Ok(output_ok)
                 })())
@@ -2331,6 +2368,86 @@ fn wire__crate__api__repair_covers_impl(
             move |context| {
                 transform_result_sse::<_, ()>((move || {
                     let output_ok = Result::<_, ()>::Ok(crate::api::repair_covers())?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__reset_outline_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "reset_outline",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_book_id = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(crate::api::reset_outline(api_book_id))?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__save_outline_override_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "save_outline_override",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_book_id = <i64>::sse_decode(&mut deserializer);
+            let api_entry_key = <String>::sse_decode(&mut deserializer);
+            let api_parent_key = <Option<String>>::sse_decode(&mut deserializer);
+            let api_title = <Option<String>>::sse_decode(&mut deserializer);
+            let api_page = <Option<i64>>::sse_decode(&mut deserializer);
+            let api_order_index = <Option<i64>>::sse_decode(&mut deserializer);
+            let api_hidden = <bool>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(crate::api::save_outline_override(
+                        api_book_id,
+                        api_entry_key,
+                        api_parent_key,
+                        api_title,
+                        api_page,
+                        api_order_index,
+                        api_hidden,
+                    ))?;
                     Ok(output_ok)
                 })())
             }
@@ -4581,63 +4698,66 @@ fn pde_ffi_dispatcher_primary_impl(
         24 => wire__crate__api__delete_book_impl(port, ptr, rust_vec_len, data_len),
         25 => wire__crate__api__delete_category_impl(port, ptr, rust_vec_len, data_len),
         26 => wire__crate__api__delete_image_annotation_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__delete_translation_glossary_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__ensure_book_index_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__export_annotations_json_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__export_annotations_markdown_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__extract_text_impl(port, ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__extract_translated_text_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__get_ai_config_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__get_book_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__get_book_translation_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__get_engine_status_impl(port, ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__get_outline_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__get_page_ocr_impl(port, ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__get_page_text_blocks_impl(port, ptr, rust_vec_len, data_len),
-        40 => wire__crate__api__get_page_text_translation_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__get_progress_impl(port, ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__get_setting_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__get_translation_config_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__import_book_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__init_core_impl(port, ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__init_core_with_data_dir_impl(port, ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__init_core_with_db_path_impl(port, ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__install_engine_impl(port, ptr, rust_vec_len, data_len),
-        49 => wire__crate__api__list_ai_messages_impl(port, ptr, rust_vec_len, data_len),
-        50 => wire__crate__api__list_ai_threads_impl(port, ptr, rust_vec_len, data_len),
-        51 => wire__crate__api__list_annotations_impl(port, ptr, rust_vec_len, data_len),
-        52 => wire__crate__api__list_books_impl(port, ptr, rust_vec_len, data_len),
-        53 => wire__crate__api__list_categories_impl(port, ptr, rust_vec_len, data_len),
-        54 => wire__crate__api__list_image_annotations_impl(port, ptr, rust_vec_len, data_len),
-        55 => wire__crate__api__list_reading_progress_impl(port, ptr, rust_vec_len, data_len),
-        56 => wire__crate__api__list_translation_glossary_impl(port, ptr, rust_vec_len, data_len),
-        57 => wire__crate__api__ocr_mode_as_str_impl(port, ptr, rust_vec_len, data_len),
-        58 => wire__crate__api__open_book_impl(port, ptr, rust_vec_len, data_len),
-        59 => wire__crate__api__page_has_text_impl(port, ptr, rust_vec_len, data_len),
-        60 => wire__crate__api__rename_category_impl(port, ptr, rust_vec_len, data_len),
-        61 => wire__crate__api__render_page_impl(port, ptr, rust_vec_len, data_len),
-        62 => wire__crate__api__render_thumbnail_impl(port, ptr, rust_vec_len, data_len),
-        63 => wire__crate__api__render_translated_page_impl(port, ptr, rust_vec_len, data_len),
-        64 => wire__crate__api__repair_covers_impl(port, ptr, rust_vec_len, data_len),
-        65 => wire__crate__api__save_progress_impl(port, ptr, rust_vec_len, data_len),
-        66 => wire__crate__api__scan_page_impl(port, ptr, rust_vec_len, data_len),
-        67 => wire__crate__api__search_books_impl(port, ptr, rust_vec_len, data_len),
-        68 => wire__crate__api__search_index_status_impl(port, ptr, rust_vec_len, data_len),
-        69 => wire__crate__api__set_ai_config_impl(port, ptr, rust_vec_len, data_len),
-        70 => wire__crate__api__set_setting_impl(port, ptr, rust_vec_len, data_len),
-        71 => wire__crate__api__set_translation_config_impl(port, ptr, rust_vec_len, data_len),
-        72 => wire__crate__api__start_book_translation_impl(port, ptr, rust_vec_len, data_len),
-        73 => wire__crate__api__stream_chat_impl(port, ptr, rust_vec_len, data_len),
-        74 => wire__crate__api__stream_vision_png_impl(port, ptr, rust_vec_len, data_len),
-        75 => wire__crate__api__template_default_text_impl(port, ptr, rust_vec_len, data_len),
-        76 => wire__crate__api__toggle_favorite_impl(port, ptr, rust_vec_len, data_len),
-        77 => wire__crate__api__touch_last_opened_impl(port, ptr, rust_vec_len, data_len),
-        78 => wire__crate__api__translate_book_impl(port, ptr, rust_vec_len, data_len),
-        79 => wire__crate__api__translate_page_text_impl(port, ptr, rust_vec_len, data_len),
-        80 => wire__crate__api__uninstall_engine_impl(port, ptr, rust_vec_len, data_len),
-        81 => wire__crate__api__update_annotation_content_impl(port, ptr, rust_vec_len, data_len),
-        82 => wire__crate__api__update_image_annotation_impl(port, ptr, rust_vec_len, data_len),
-        83 => wire__crate__api__update_page_ocr_lines_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__delete_outline_override_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__delete_translation_glossary_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__ensure_book_index_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__export_annotations_json_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__export_annotations_markdown_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__extract_text_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__extract_translated_text_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__get_ai_config_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__get_book_impl(port, ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__get_book_translation_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__get_engine_status_impl(port, ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__get_outline_impl(port, ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__get_page_ocr_impl(port, ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__get_page_text_blocks_impl(port, ptr, rust_vec_len, data_len),
+        41 => wire__crate__api__get_page_text_translation_impl(port, ptr, rust_vec_len, data_len),
+        42 => wire__crate__api__get_progress_impl(port, ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__get_setting_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__get_translation_config_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__import_book_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__init_core_impl(port, ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__init_core_with_data_dir_impl(port, ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__init_core_with_db_path_impl(port, ptr, rust_vec_len, data_len),
+        49 => wire__crate__api__install_engine_impl(port, ptr, rust_vec_len, data_len),
+        50 => wire__crate__api__list_ai_messages_impl(port, ptr, rust_vec_len, data_len),
+        51 => wire__crate__api__list_ai_threads_impl(port, ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__list_annotations_impl(port, ptr, rust_vec_len, data_len),
+        53 => wire__crate__api__list_books_impl(port, ptr, rust_vec_len, data_len),
+        54 => wire__crate__api__list_categories_impl(port, ptr, rust_vec_len, data_len),
+        55 => wire__crate__api__list_image_annotations_impl(port, ptr, rust_vec_len, data_len),
+        56 => wire__crate__api__list_reading_progress_impl(port, ptr, rust_vec_len, data_len),
+        57 => wire__crate__api__list_translation_glossary_impl(port, ptr, rust_vec_len, data_len),
+        58 => wire__crate__api__ocr_mode_as_str_impl(port, ptr, rust_vec_len, data_len),
+        59 => wire__crate__api__open_book_impl(port, ptr, rust_vec_len, data_len),
+        60 => wire__crate__api__page_has_text_impl(port, ptr, rust_vec_len, data_len),
+        61 => wire__crate__api__rename_category_impl(port, ptr, rust_vec_len, data_len),
+        62 => wire__crate__api__render_page_impl(port, ptr, rust_vec_len, data_len),
+        63 => wire__crate__api__render_thumbnail_impl(port, ptr, rust_vec_len, data_len),
+        64 => wire__crate__api__render_translated_page_impl(port, ptr, rust_vec_len, data_len),
+        65 => wire__crate__api__repair_covers_impl(port, ptr, rust_vec_len, data_len),
+        66 => wire__crate__api__reset_outline_impl(port, ptr, rust_vec_len, data_len),
+        67 => wire__crate__api__save_outline_override_impl(port, ptr, rust_vec_len, data_len),
+        68 => wire__crate__api__save_progress_impl(port, ptr, rust_vec_len, data_len),
+        69 => wire__crate__api__scan_page_impl(port, ptr, rust_vec_len, data_len),
+        70 => wire__crate__api__search_books_impl(port, ptr, rust_vec_len, data_len),
+        71 => wire__crate__api__search_index_status_impl(port, ptr, rust_vec_len, data_len),
+        72 => wire__crate__api__set_ai_config_impl(port, ptr, rust_vec_len, data_len),
+        73 => wire__crate__api__set_setting_impl(port, ptr, rust_vec_len, data_len),
+        74 => wire__crate__api__set_translation_config_impl(port, ptr, rust_vec_len, data_len),
+        75 => wire__crate__api__start_book_translation_impl(port, ptr, rust_vec_len, data_len),
+        76 => wire__crate__api__stream_chat_impl(port, ptr, rust_vec_len, data_len),
+        77 => wire__crate__api__stream_vision_png_impl(port, ptr, rust_vec_len, data_len),
+        78 => wire__crate__api__template_default_text_impl(port, ptr, rust_vec_len, data_len),
+        79 => wire__crate__api__toggle_favorite_impl(port, ptr, rust_vec_len, data_len),
+        80 => wire__crate__api__touch_last_opened_impl(port, ptr, rust_vec_len, data_len),
+        81 => wire__crate__api__translate_book_impl(port, ptr, rust_vec_len, data_len),
+        82 => wire__crate__api__translate_page_text_impl(port, ptr, rust_vec_len, data_len),
+        83 => wire__crate__api__uninstall_engine_impl(port, ptr, rust_vec_len, data_len),
+        84 => wire__crate__api__update_annotation_content_impl(port, ptr, rust_vec_len, data_len),
+        85 => wire__crate__api__update_image_annotation_impl(port, ptr, rust_vec_len, data_len),
+        86 => wire__crate__api__update_page_ocr_lines_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

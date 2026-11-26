@@ -30,6 +30,10 @@ pub struct CharBox {
 
 /// A bookmark / outline entry (FEATURES 3.4.2). `page` is 0-indexed; -1 means
 /// the destination is not a page (e.g. a URL action).
+///
+/// `Clone` is needed by the outline merge, which copies a subtree when a user
+/// bookmark has to be re-parented.
+#[derive(Clone)]
 pub struct OutlineEntry {
     pub title: String,
     pub page: i64,

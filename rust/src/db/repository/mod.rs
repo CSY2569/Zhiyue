@@ -11,6 +11,7 @@ pub mod book;
 pub mod category;
 pub mod image_annotation;
 pub mod ocr;
+pub mod outline;
 pub mod progress;
 pub mod search;
 pub mod settings;

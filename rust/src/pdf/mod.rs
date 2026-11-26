@@ -14,6 +14,7 @@
 //! feature. The actual pdfium/image-backed implementations are gated behind
 //! `#[cfg(feature = "pdf")]`; without it, all functions return an error.
 
+pub mod outline_edit;
 pub mod types;
 
 #[cfg(feature = "pdf")]
