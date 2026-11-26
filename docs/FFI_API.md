@@ -196,10 +196,10 @@
 
 **其余哨兵值**：
 
-- `i32` 布尔语义：`1` 成功 / `0` 失败（`set_setting:187`、`delete_book:604`、`clear_translation_artifacts:2150` 的 `.map(|_| 1).unwrap_or(0)`）。
-- id 语义：失败返回 `-1`（`create_ai_thread` 的 `id: -1, error: Some(...)`，`api.rs:1351-1355`；`add_translation_glossary` 的 `.unwrap_or(-1)`，`api.rs:2569`）。
+- `i32` 布尔语义：`1` 成功 / `0` 失败（`set_setting:187`、`delete_book:604`、`clear_translation_artifacts:2150` 的 `.map(|_| 1).unwrap_or(0)`，`api.rs:2149-2150`）。
+- id 语义：失败返回 `-1`（`create_ai_thread` 的 `id: -1, error: Some(...)`，`api.rs:1354-1356`；`add_translation_glossary` 的 `.unwrap_or(-1)`，`api.rs:2567`）。
 - `Option<T>` 只表示「没有」，不表示「出错」：`get_book:255`、`get_progress:860`、`get_page_ocr:1881`、`get_page_text_translation:2428`。
-- 流式命令的错误走 sink：`sink.add_error(String)`（`api.rs:1723`、`api.rs:1726`）；整书翻译则把错误塞进最后一个事件（`rust/src/translate/job.rs:151-162`）。
+- 流式命令的错误走 sink：`sink.add_error(String)`（`api.rs:1725`、`api.rs:1733`）；整书翻译则把错误塞进最后一个事件（`rust/src/translate/job.rs:151-162`）。
 
 ---
 
@@ -228,9 +228,9 @@ pub async fn translate_book(book_id: i64, sink: StreamSink<BookTranslateEvent>) 
 }
 ```
 
-必须成对的原因：绑定签名由 `api.rs` 的语法形态直接生成，`cfg` 不对称会让 `--no-default-features` 构建少一个函数，Dart 侧（单套生成物）在运行期找不到绑定。配套写法是 `let _ = param;` 消掉 unused 警告（例 `api.rs:2413`、`api.rs:2470`、`api.rs:2500`）。
+必须成对的原因：绑定签名由 `api.rs` 的语法形态直接生成，`cfg` 不对称会让 `--no-default-features` 构建少一个函数，Dart 侧（单套生成物）在运行期找不到绑定。配套写法是 `let _ = param;` 消掉 unused 警告（例 `api.rs:2414`、`api.rs:2471`、`api.rs:2514`）。
 
-**全局状态用 `OnceLock` / `Atomic`**，不要用 `static mut` 或 Mutex 跨 await 持有：`INITIALIZED`（`api.rs:34`）、翻译任务的 `RUNNING` / `CANCEL`（`rust/src/translate/job.rs:147-148` 附近）。
+**全局状态用 `OnceLock` / `Atomic`**，不要用 `static mut` 或 Mutex 跨 await 持有：`INITIALIZED`（`api.rs:34`）、翻译任务的 `RUNNING` / `CANCEL`（`rust/src/translate/job.rs:32-33`）。
 
 ---
 

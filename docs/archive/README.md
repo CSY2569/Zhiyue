@@ -17,5 +17,6 @@
 | `PLATFORM_DIFFERENCES.md` | 两端差异对照 | 已并入 `PLATFORMS.md` |
 | `DEPENDENCIES.md` | 工具链依赖说明 | 已并入 `DEVELOPMENT.md`；且原文列了已弃用的包 |
 | `LINUX_PACKAGES.md` | Linux 分发包说明 | 打包命令已并入 `DEVELOPMENT.md` |
+| `plans/2026-10-08-reading-themes.md` | 内置阅读主题的实施计划（1309 行） | 计划已落地，阅读主题现已实现；保留为任务拆分的样例 |
 
 > 需要查历史变更时，`IMPLEMENTATION_STATUS.md` 的「按子系统索引」表（文首 §0）是唯一高效的入口。
