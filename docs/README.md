@@ -8,6 +8,7 @@
 
 | 文档 | 内容 | 适合谁 |
 |---|---|---|
+| [`OVERVIEW.md`](OVERVIEW.md) | **软件说明**：解决什么问题、给谁用、完整使用流程、明确做不到的事 | 所有人，尤其第一次接触的人 |
 | [`PRODUCT.md`](PRODUCT.md) | **功能现状**：按用户可见功能组织，标注真实实现状态与明确未实现的项 | 所有人，尤其产品与测试 |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | 分层与职责边界、FRB 调用约定、数据流、错误处理 | 开发 |
 | [`DATA_MODEL.md`](DATA_MODEL.md) | 13 张表 + FTS5、ER 关系、索引、迁移链、**`ai_config` 全字段说明** | 开发 |
